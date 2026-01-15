@@ -162,7 +162,6 @@ class Post(Base):
     # 关系
     author = relationship("User", back_populates="posts")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
-    likes = relationship("Like", back_populates="post", cascade="all, delete-orphan", primaryjoin="and_(Post.id==Like.target_id, Like.target_type=='post')")
     post_tags = relationship("PostTag", back_populates="post", cascade="all, delete-orphan")
 
     # 索引
@@ -217,7 +216,6 @@ class Like(Base):
 
     # 关系
     user = relationship("User", back_populates="likes")
-    post = relationship("Post", back_populates="likes", foreign_keys=[target_id], primaryjoin="and_(Like.target_id==Post.id, Like.target_type=='post')", viewonly=True)
 
     # 索引和约束
     __table_args__ = (
