@@ -2,6 +2,8 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from loguru import logger
 
 from ..config import get_settings, validate_config, print_config
@@ -9,7 +11,7 @@ from ..database.mysql import get_mysql_db
 from ..database.mongodb import get_mongodb_client
 from ..database.redis_client import get_redis_client
 from .routes import trip, poi, map as map_routes
-from .routes import auth
+from .routes import auth, plans, user
 
 # 获取配置
 settings = get_settings()
@@ -34,9 +36,16 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(auth.router, prefix="/api")  # 认证路由
-app.include_router(trip.router, prefix="/api")
-app.include_router(poi.router, prefix="/api")
-app.include_router(map_routes.router, prefix="/api")
+app.include_router(user.router, prefix="/api")  # 用户管理路由
+app.include_router(plans.router, prefix="/api")  # 计划管理路由
+app.include_router(trip.router, prefix="/api")  # 旅行规划路由
+app.include_router(poi.router, prefix="/api")  # 景点查询路由
+app.include_router(map_routes.router, prefix="/api")  # 地图服务路由
+
+# 配置静态文件服务（用于访问上传的文件）
+storage_path = Path("storage")
+storage_path.mkdir(exist_ok=True)
+app.mount("/storage", StaticFiles(directory=str(storage_path)), name="storage")
 
 
 @app.on_event("startup")
