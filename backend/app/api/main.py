@@ -11,7 +11,7 @@ from ..database.mysql import get_mysql_db
 from ..database.mongodb import get_mongodb_client
 from ..database.redis_client import get_redis_client
 from .routes import trip, poi, map as map_routes
-from .routes import auth, plans, user
+from .routes import auth, plans, user, dialog
 
 # 获取配置
 settings = get_settings()
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")  # 认证路由
 app.include_router(user.router, prefix="/api")  # 用户管理路由
 app.include_router(plans.router, prefix="/api")  # 计划管理路由
+app.include_router(dialog.router, prefix="/api")  # 对话管理路由
 app.include_router(trip.router, prefix="/api")  # 旅行规划路由
 app.include_router(poi.router, prefix="/api")  # 景点查询路由
 app.include_router(map_routes.router, prefix="/api")  # 地图服务路由
