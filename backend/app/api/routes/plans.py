@@ -328,7 +328,7 @@ async def delete_plan(
 @router.get("/{plan_id}/export")
 async def export_plan(
     plan_id: str,
-    format: str = Query("json", regex="^(json|pdf)$", description="导出格式"),
+    format: str = Query("json", pattern="^(json|pdf)$", description="导出格式"),
     current_user: CurrentUser = Depends(get_current_user)
 ):
     """

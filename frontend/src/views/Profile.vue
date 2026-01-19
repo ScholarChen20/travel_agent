@@ -1,0 +1,227 @@
+<template>
+  <div class="profile-container">
+    <a-page-header title="个人中心" style="background: white; margin-bottom: 16px" />
+
+    <div style="padding: 0 24px; max-width: 1200px; margin: 0 auto">
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="8">
+          <a-card>
+            <div style="text-align: center">
+              <a-avatar :size="100" :src="profile?.avatar">
+                {{ profile?.username[0] }}
+              </a-avatar>
+              <a-upload
+                :show-upload-list="false"
+                :before-upload="uploadAvatar"
+                accept="image/*"
+              >
+                <a-button type="link" style="margin-top: 8px">
+                  <UploadOutlined /> 更换头像
+                </a-button>
+              </a-upload>
+              <h2 style="margin-top: 16px">{{ profile?.nickname || profile?.username }}</h2>
+              <p style="color: #999">@{{ profile?.username }}</p>
+              <a-tag v-if="profile?.role === 'admin'" color="red">管理员</a-tag>
+              <a-tag v-if="profile?.is_verified" color="green">已验证</a-tag>
+            </div>
+
+            <a-divider />
+
+            <a-descriptions :column="1" size="small">
+              <a-descriptions-item label="邮箱">
+                {{ profile?.email }}
+              </a-descriptions-item>
+              <a-descriptions-item label="位置">
+                {{ profile?.location || '未设置' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="注册时间">
+                {{ profile?.created_at }}
+              </a-descriptions-item>
+            </a-descriptions>
+          </a-card>
+
+          <a-card title="统计数据" style="margin-top: 16px">
+            <a-statistic-countdown
+              v-if="stats"
+              title="旅行计划"
+              :value="stats.plans_count"
+              format="D"
+            />
+            <a-row :gutter="16" style="margin-top: 16px">
+              <a-col :span="12">
+                <a-statistic title="帖子" :value="stats?.posts_count" />
+              </a-col>
+              <a-col :span="12">
+                <a-statistic title="获赞" :value="stats?.likes_received" />
+              </a-col>
+            </a-row>
+            <a-row :gutter="16" style="margin-top: 16px">
+              <a-col :span="12">
+                <a-statistic title="关注" :value="stats?.following_count" />
+              </a-col>
+              <a-col :span="12">
+                <a-statistic title="粉丝" :value="stats?.followers_count" />
+              </a-col>
+            </a-row>
+          </a-card>
+        </a-col>
+
+        <a-col :xs="24" :md="16">
+          <a-card title="个人资料">
+            <a-form :model="profileForm" layout="vertical">
+              <a-form-item label="昵称">
+                <a-input v-model:value="profileForm.nickname" />
+              </a-form-item>
+              <a-form-item label="个人简介">
+                <a-textarea v-model:value="profileForm.bio" :rows="3" />
+              </a-form-item>
+              <a-form-item label="位置">
+                <a-input v-model:value="profileForm.location" />
+              </a-form-item>
+              <a-form-item>
+                <a-button type="primary" @click="updateProfile" :loading="updating">
+                  保存
+                </a-button>
+              </a-form-item>
+            </a-form>
+          </a-card>
+
+          <a-card title="访问过的城市" style="margin-top: 16px">
+            <a-tag v-for="city in visitedCities" :key="city" color="blue" style="margin: 4px">
+              {{ city }}
+            </a-tag>
+            <a-empty v-if="visitedCities.length === 0" description="还没有访问记录" />
+          </a-card>
+
+          <a-card title="修改密码" style="margin-top: 16px">
+            <a-form :model="passwordForm" layout="vertical">
+              <a-form-item label="当前密码">
+                <a-input-password v-model:value="passwordForm.old_password" />
+              </a-form-item>
+              <a-form-item label="新密码">
+                <a-input-password v-model:value="passwordForm.new_password" />
+              </a-form-item>
+              <a-form-item>
+                <a-button type="primary" @click="changePassword" :loading="changingPassword">
+                  修改密码
+                </a-button>
+              </a-form-item>
+            </a-form>
+          </a-card>
+        </a-col>
+      </a-row>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
+import { UploadOutlined } from '@ant-design/icons-vue'
+import { userService } from '@/services/user'
+
+const profile = ref<any>(null)
+const stats = ref<any>(null)
+const visitedCities = ref<string[]>([])
+const updating = ref(false)
+const changingPassword = ref(false)
+
+const profileForm = ref({
+  nickname: '',
+  bio: '',
+  location: ''
+})
+
+const passwordForm = ref({
+  old_password: '',
+  new_password: ''
+})
+
+onMounted(async () => {
+  await loadProfile()
+  await loadStats()
+  await loadVisitedCities()
+})
+
+async function loadProfile() {
+  try {
+    profile.value = await userService.getProfile()
+    profileForm.value = {
+      nickname: profile.value.nickname || '',
+      bio: profile.value.bio || '',
+      location: profile.value.location || ''
+    }
+  } catch (error) {
+    message.error('加载个人资料失败')
+  }
+}
+
+async function loadStats() {
+  try {
+    stats.value = await userService.getStats()
+  } catch (error) {
+    message.error('加载统计数据失败')
+  }
+}
+
+async function loadVisitedCities() {
+  try {
+    visitedCities.value = await userService.getVisitedCities()
+  } catch (error) {
+    message.error('加载访问城市失败')
+  }
+}
+
+async function updateProfile() {
+  updating.value = true
+  try {
+    await userService.updateProfile(profileForm.value)
+    await loadProfile()
+    message.success('更新成功')
+  } catch (error) {
+    message.error('更新失败')
+  } finally {
+    updating.value = false
+  }
+}
+
+async function uploadAvatar(file: File) {
+  try {
+    const result = await userService.uploadAvatar(file)
+    profile.value.avatar = result.avatar_url
+    message.success('头像上传成功')
+  } catch (error) {
+    message.error('头像上传失败')
+  }
+  return false
+}
+
+async function changePassword() {
+  if (!passwordForm.value.old_password || !passwordForm.value.new_password) {
+    message.error('请填写完整')
+    return
+  }
+  if (passwordForm.value.new_password.length < 6) {
+    message.error('新密码至少6位')
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    await userService.changePassword(passwordForm.value)
+    message.success('密码修改成功')
+    passwordForm.value = { old_password: '', new_password: '' }
+  } catch (error) {
+    message.error('密码修改失败')
+  } finally {
+    changingPassword.value = false
+  }
+}
+</script>
+
+<style scoped>
+.profile-container {
+  min-height: 100vh;
+  background: #f0f2f5;
+}
+</style>

@@ -17,12 +17,12 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr, Field
 from loguru import logger
 
-from ..services.auth_service import get_auth_service
-from ..database.mysql import get_mysql_db
-from ..database.redis_client import get_redis_client
-from ..database.models import User, UserProfile
-from ..middleware.auth_middleware import get_current_user, CurrentUser
-from ..config import get_settings
+from ...services.auth_service import get_auth_service
+from ...database.mysql import get_mysql_db
+from ...database.redis_client import get_redis_client
+from ...database.models import User, UserProfile
+from ...middleware.auth_middleware import get_current_user, CurrentUser
+from ...config import get_settings
 
 
 router = APIRouter(prefix="/auth", tags=["认证"])
@@ -102,8 +102,8 @@ async def verify_captcha(session_id: str, code: str) -> bool:
         logger.warning(f"验证码不存在或已过期: {session_id}")
         return False
 
-    # 验证码不区分大小写
-    if stored_code.lower() != code.lower():
+    # 验证码不区分大小写（转换为字符串后比较）
+    if str(stored_code).lower() != str(code).lower():
         logger.warning(f"验证码错误: {session_id}")
         return False
 
@@ -149,96 +149,136 @@ async def register(request: RegisterRequest):
     5. 生成JWT Token
     6. 存储Token到Redis
     """
+    logger.info(f"收到注册请求: {request.username}, {request.email}")
     auth_service = get_auth_service()
     settings = get_settings()
     mysql_db = get_mysql_db()
     redis_client = get_redis_client()
+    logger.debug(f"注册请求参数: {request.json()}")
 
-    # 1. 验证验证码
-    if not await verify_captcha(request.captcha_session_id, request.captcha_code):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证码错误或已过期"
-        )
+    try:
+        # 1. 验证验证码
+        logger.info(f"验证验证码: {request.captcha_session_id}, {request.captcha_code}")
+        if not await verify_captcha(request.captcha_session_id, request.captcha_code):
+            logger.warning(f"验证码验证失败: {request.captcha_session_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="验证码错误或已过期"
+            )
+        logger.info(f"验证码验证成功: {request.captcha_session_id}")
 
-    # 2. 验证密码强度
-    is_valid, error_msg = auth_service.validate_password_strength(request.password)
-    if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg
-        )
+        # 2. 验证密码强度
+        logger.info(f"验证密码强度: {request.username}")
+        is_valid, error_msg = auth_service.validate_password_strength(request.password)
+        if not is_valid:
+            logger.warning(f"密码强度验证失败: {request.username}, error: {error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        logger.info(f"密码强度验证成功: {request.username}")
 
-    # 3. 检查用户名和邮箱是否已存在
-    with mysql_db.get_session() as session:
-        existing_user = session.query(User).filter(
-            (User.username == request.username) | (User.email == request.email)
-        ).first()
+        # 3. 检查用户名和邮箱是否已存在
+        logger.info(f"检查用户名和邮箱是否已存在: {request.username}, {request.email}")
+        with mysql_db.get_session() as session:
+            existing_user = session.query(User).filter(
+                (User.username == request.username) | (User.email == request.email)
+            ).first()
 
-        if existing_user:
-            if existing_user.username == request.username:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="用户名已被使用"
-                )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="邮箱已被注册"
-                )
+            if existing_user:
+                if existing_user.username == request.username:
+                    logger.warning(f"用户名已被使用: {request.username}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="用户名已被使用"
+                    )
+                else:
+                    logger.warning(f"邮箱已被注册: {request.email}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="邮箱已被注册"
+                    )
+            logger.info(f"用户名和邮箱可用: {request.username}, {request.email}")
 
-        # 4. 创建用户
-        password_hash = auth_service.hash_password(request.password)
+            # 4. 创建用户
+            logger.info(f"创建用户: {request.username}")
+            password_hash = auth_service.hash_password(request.password)
 
-        new_user = User(
-            username=request.username,
-            email=request.email,
-            password_hash=password_hash,
-            role="user",
-            is_active=True,
-            is_verified=False
-        )
+            new_user = User(
+                username=request.username,
+                email=request.email,
+                password_hash=password_hash,
+                role="user",
+                is_active=True,
+                is_verified=False
+            )
 
-        session.add(new_user)
-        session.flush()  # 获取用户ID
+            session.add(new_user)
+            session.flush()  # 获取用户ID
+            logger.info(f"用户创建成功，ID: {new_user.id}")
 
-        # 5. 创建用户档案
-        user_profile = UserProfile(
-            user_id=new_user.id,
-            travel_preferences=[],
-            visited_cities=[],
-            travel_stats={"total_trips": 0, "total_cities": 0}
-        )
-        session.add(user_profile)
+            # 5. 创建用户档案
+            logger.info(f"创建用户档案: {new_user.id}")
+            user_profile = UserProfile(
+                user_id=new_user.id,
+                travel_preferences=[],
+                visited_cities=[],
+                travel_stats={"total_trips": 0, "total_cities": 0}
+            )
+            session.add(user_profile)
+            logger.info(f"用户档案创建成功: {new_user.id}")
 
-        # 6. 生成JWT Token
+            # 保存用户信息用于后续操作
+            user_id = new_user.id
+            username = new_user.username
+            role = new_user.role
+            user_data = serialize_user(new_user)
+            logger.info(f"用户信息保存成功: {username}, {user_id}")
+
+        # 6. 生成JWT Token（数据库事务已提交）
+        logger.info(f"生成JWT Token: {user_id}")
         token_data = auth_service.create_access_token(
-            user_id=new_user.id,
-            username=new_user.username,
-            role=new_user.role,
+            user_id=user_id,
+            username=username,
+            role=role,
             device_id="default"
         )
+        logger.info(f"JWT Token生成成功: {user_id}")
 
         # 7. 存储Token到Redis
+        logger.info(f"存储JWT Token到Redis: {user_id}")
         await redis_client.hset(
-            f"jwt:user:{new_user.id}",
+            f"jwt:user:{user_id}",
             "default",
             token_data["access_token"]
         )
+        logger.info(f"JWT Token存储成功: {user_id}")
+        
         await redis_client.expire(
-            f"jwt:user:{new_user.id}",
+            f"jwt:user:{user_id}",
             settings.jwt_access_token_expire_days * 86400
         )
+        logger.info(f"JWT Token过期时间设置成功: {user_id}")
 
-        logger.info(f"新用户注册成功: {new_user.username} (ID: {new_user.id})")
+        logger.info(f"新用户注册成功: {username} (ID: {user_id})")
 
         return TokenResponse(
             access_token=token_data["access_token"],
             token_type=token_data["token_type"],
             expires_in=token_data["expires_in"],
             expires_at=token_data["expires_at"],
-            user=serialize_user(new_user)
+            user=user_data
         )
+    except HTTPException:
+        # 重新抛出HTTPException，保持原有行为
+        raise
+    except Exception as e:
+        # 捕获所有其他异常，返回500错误
+        logger.error(f"注册失败: {request.username}, error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"注册失败: {str(e)}"
+        ) from e
 
 
 @router.post("/login", response_model=TokenResponse)
