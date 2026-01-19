@@ -1,5 +1,54 @@
 <template>
   <div class="home-container">
+    <!-- 顶部导航栏 -->
+    <div class="top-nav">
+      <div class="nav-content">
+        <div class="nav-left">
+          <span class="logo">✈️ 智能旅行助手</span>
+        </div>
+        <div class="nav-right">
+          <template v-if="authStore.isAuthenticated">
+            <a-button type="link" @click="$router.push('/chat')" class="nav-link">
+              💬 对话
+            </a-button>
+            <a-button type="link" @click="$router.push('/plans')" class="nav-link">
+              📋 我的计划
+            </a-button>
+            <a-button type="link" @click="$router.push('/social')" class="nav-link">
+              🌐 动态
+            </a-button>
+            <a-dropdown>
+              <a-avatar :src="authStore.user?.avatar" style="cursor: pointer">
+                {{ authStore.user?.username[0] }}
+              </a-avatar>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item @click="$router.push('/profile')">
+                    <UserOutlined /> 个人中心
+                  </a-menu-item>
+                  <a-menu-item v-if="authStore.isAdmin" @click="$router.push('/admin')">
+                    <SettingOutlined /> 管理后台
+                  </a-menu-item>
+                  <a-menu-divider />
+                  <a-menu-item @click="handleLogout">
+                    <LogoutOutlined /> 退出登录
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </template>
+          <template v-else>
+            <a-button type="link" @click="$router.push('/login')" class="nav-link">
+              登录
+            </a-button>
+            <a-button type="primary" @click="$router.push('/register')" class="nav-button">
+              注册
+            </a-button>
+          </template>
+        </div>
+      </div>
+    </div>
+
     <!-- 背景装饰 -->
     <div class="bg-decoration">
       <div class="circle circle-1"></div>
@@ -207,11 +256,14 @@
 import { ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { UserOutlined, SettingOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import { generateTripPlan } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 import type { TripFormData } from '@/types'
 import type { Dayjs } from 'dayjs'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const loadingProgress = ref(0)
 const loadingStatus = ref('')
@@ -313,15 +365,70 @@ const handleSubmit = async () => {
     }, 1000)
   }
 }
+
+function handleLogout() {
+  authStore.logout()
+  message.success('已退出登录')
+  router.push('/')
+}
 </script>
 
 <style scoped>
 .home-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 60px 20px;
+  padding: 0;
   position: relative;
   overflow: hidden;
+}
+
+/* 顶部导航栏 */
+.top-nav {
+  position: relative;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.nav-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-left .logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-link {
+  color: #333;
+  font-weight: 500;
+}
+
+.nav-link:hover {
+  color: #667eea;
+}
+
+.nav-button {
+  border-radius: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+}
+
+.home-container > *:not(.top-nav) {
+  padding: 60px 20px;
 }
 
 /* 背景装饰 */
