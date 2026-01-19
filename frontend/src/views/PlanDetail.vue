@@ -1,13 +1,13 @@
 <template>
   <div class="plan-detail-container">
     <a-page-header
-      :title="plansStore.currentPlan?.title"
+      :title="plansStore.currentPlan.value?.title"
       @back="$router.back()"
       style="background: white; margin-bottom: 16px"
     >
       <template #extra>
         <a-button @click="toggleFavorite">
-          <HeartFilled v-if="plansStore.currentPlan?.is_favorite" style="color: #ff4d4f" />
+          <HeartFilled v-if="plansStore.currentPlan.value?.is_favorite" style="color: #ff4d4f" />
           <HeartOutlined v-else />
         </a-button>
         <a-button @click="exportPlan">
@@ -18,31 +18,31 @@
 
     <div style="padding: 0 24px">
       <a-spin :spinning="loading">
-        <a-card v-if="plansStore.currentPlan">
+        <a-card v-if="plansStore.currentPlan.value">
           <a-descriptions bordered :column="2">
             <a-descriptions-item label="目的地">
-              {{ plansStore.currentPlan.destination }}
+              {{ plansStore.currentPlan.value.destination }}
             </a-descriptions-item>
             <a-descriptions-item label="预算">
-              ¥{{ plansStore.currentPlan.budget || '未设置' }}
+              ¥{{ plansStore.currentPlan.value.budget || '未设置' }}
             </a-descriptions-item>
             <a-descriptions-item label="开始日期">
-              {{ plansStore.currentPlan.start_date }}
+              {{ plansStore.currentPlan.value.start_date }}
             </a-descriptions-item>
             <a-descriptions-item label="结束日期">
-              {{ plansStore.currentPlan.end_date }}
+              {{ plansStore.currentPlan.value.end_date }}
             </a-descriptions-item>
             <a-descriptions-item label="创建时间" :span="2">
-              {{ plansStore.currentPlan.created_at }}
+              {{ plansStore.currentPlan.value.created_at }}
             </a-descriptions-item>
           </a-descriptions>
 
           <a-divider>行程详情</a-divider>
 
-          <div v-if="plansStore.currentPlan.plan_data">
+          <div v-if="plansStore.currentPlan.value.plan_data">
             <a-timeline>
               <a-timeline-item
-                v-for="(day, index) in plansStore.currentPlan.plan_data.itinerary"
+                v-for="(day, index) in plansStore.currentPlan.value.plan_data.itinerary"
                 :key="index"
               >
                 <template #dot>
@@ -104,10 +104,10 @@ async function loadPlan() {
 }
 
 async function toggleFavorite() {
-  if (!plansStore.currentPlan) return
+  if (!plansStore.currentPlan.value) return
   try {
-    await plansService.toggleFavorite(plansStore.currentPlan.id)
-    plansStore.toggleFavorite(plansStore.currentPlan.id)
+    await plansService.toggleFavorite(plansStore.currentPlan.value.id)
+    plansStore.toggleFavorite(plansStore.currentPlan.value.id)
     message.success('操作成功')
   } catch (error) {
     message.error('操作失败')
@@ -115,13 +115,13 @@ async function toggleFavorite() {
 }
 
 async function exportPlan() {
-  if (!plansStore.currentPlan) return
+  if (!plansStore.currentPlan.value) return
   try {
-    const blob = await plansService.exportPlan(plansStore.currentPlan.id, 'json')
+    const blob = await plansService.exportPlan(plansStore.currentPlan.value.id, 'json')
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `plan_${plansStore.currentPlan.id}.json`
+    a.download = `plan_${plansStore.currentPlan.value.id}.json`
     a.click()
     window.URL.revokeObjectURL(url)
     message.success('导出成功')

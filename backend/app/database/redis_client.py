@@ -21,8 +21,8 @@ class RedisClient:
         """
         self.url = url
 
-        # 创建连接池
-        self.pool = redis.ConnectionPool.from_url(
+        # 创建Redis客户端
+        self.client: Redis = redis.Redis.from_url(
             url,
             max_connections=50,  # 最大连接数
             decode_responses=True,  # 自动解码为字符串
@@ -30,9 +30,6 @@ class RedisClient:
             socket_connect_timeout=5,  # 连接超时（秒）
             retry_on_timeout=True  # 超时时自动重试
         )
-
-        # 创建Redis客户端
-        self.client: Redis = redis.Redis(connection_pool=self.pool)
 
         logger.info(f"Redis客户端已创建：{self._safe_url()}")
 
@@ -303,14 +300,10 @@ class RedisClient:
     # ========== 连接管理 ==========
 
     async def close(self):
-        """关闭连接池"""
+        """关闭Redis客户端"""
         if self.client:
             await self.client.close()
             logger.info("Redis客户端已关闭")
-
-        if self.pool:
-            await self.pool.disconnect()
-            logger.info("Redis连接池已关闭")
 
     # ========== 通用辅助方法 ==========
 
@@ -336,8 +329,9 @@ class RedisClient:
         await self.client.flushdb()
 
 
-# 全局Redis客户端实例（单例模式）
+# 全局Redis客户端实例（单例）
 _redis_client: Optional[RedisClient] = None
+_redis_url: Optional[str] = None
 
 
 def get_redis_client() -> RedisClient:
@@ -347,9 +341,11 @@ def get_redis_client() -> RedisClient:
     Returns:
         RedisClient: Redis客户端实例
     """
-    global _redis_client
+    global _redis_client, _redis_url
     if _redis_client is None:
-        raise RuntimeError("Redis客户端未初始化，请先调用init_redis_client()")
+        if _redis_url is None:
+            raise RuntimeError("Redis客户端未初始化，请先调用init_redis_client()")
+        _redis_client = RedisClient(_redis_url)
     return _redis_client
 
 
@@ -363,7 +359,8 @@ def init_redis_client(url: str) -> RedisClient:
     Returns:
         RedisClient: Redis客户端实例
     """
-    global _redis_client
+    global _redis_client, _redis_url
+    _redis_url = url  # 保存URL，用于懒加载
     if _redis_client is None:
         _redis_client = RedisClient(url)
     return _redis_client

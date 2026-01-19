@@ -1,8 +1,9 @@
 """FastAPI主应用"""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pathlib import Path
 from loguru import logger
 
@@ -28,11 +29,27 @@ app = FastAPI(
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.get_cors_origins_list(),
+    allow_origins=settings.get_cors_origins_list() + ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# 全局异常处理器 - 确保所有错误响应都包含CORS头
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"全局异常捕获: {type(exc).__name__}: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"服务器内部错误: {str(exc)}"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 # 注册路由
 app.include_router(auth.router, prefix="/api")  # 认证路由

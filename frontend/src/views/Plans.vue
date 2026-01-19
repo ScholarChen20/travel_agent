@@ -9,9 +9,9 @@
     </a-page-header>
 
     <div style="padding: 0 24px">
-      <a-spin :spinning="plansStore.isLoading">
+      <a-spin :spinning="plansStore.isLoading.value">
         <a-row :gutter="[16, 16]">
-          <a-col v-for="plan in plansStore.plans" :key="plan.id" :xs="24" :sm="12" :lg="8">
+          <a-col v-for="plan in plansStore.plans.value" :key="plan.id" :xs="24" :sm="12" :lg="8">
             <a-card hoverable @click="viewPlan(plan.id)">
               <template #cover>
                 <div style="height: 200px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 24px">
@@ -41,7 +41,7 @@
           </a-col>
         </a-row>
 
-        <a-empty v-if="plansStore.plans.length === 0" description="还没有旅行���划" style="margin-top: 60px">
+        <a-empty v-if="plansStore.plans.value.length === 0" description="还没有旅行计划" style="margin-top: 60px">
           <a-button type="primary" @click="$router.push('/')">创建第一个计划</a-button>
         </a-empty>
       </a-spin>
@@ -65,14 +65,14 @@ onMounted(async () => {
 })
 
 async function loadPlans() {
-  plansStore.isLoading = true
+  plansStore.isLoading.value = true
   try {
     const plans = await plansService.getPlans()
     plansStore.setPlans(plans)
   } catch (error) {
     message.error('加载计划失败')
   } finally {
-    plansStore.isLoading = false
+    plansStore.isLoading.value = false
   }
 }
 

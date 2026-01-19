@@ -57,6 +57,8 @@ class AuthService:
         Returns:
             str: 哈希后的密码
         """
+        # bcrypt限制密码长度为72字节，需要手动截断
+        password = password[:72]
         return self.pwd_context.hash(password)
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
@@ -235,12 +237,11 @@ class AuthService:
         code = ''.join(secrets.choice('0123456789') for _ in range(4))
 
         # 生成图片
-        image = self.captcha_generator.generate(code)
-
-        # 转换为Base64
         image_bytes = io.BytesIO()
-        image_bytes.write(image.getvalue())
+        self.captcha_generator.write(code, image_bytes)
         image_bytes.seek(0)
+        
+        # 转换为Base64
         image_base64 = base64.b64encode(image_bytes.getvalue()).decode('utf-8')
 
         return code, f"data:image/png;base64,{image_base64}"

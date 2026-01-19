@@ -4,7 +4,12 @@
       "Bash(chmod:*)",
       "Bash(npm run type-check)",
       "Bash(npm run)",
-      "Bash(npx vue-tsc:*)"
+      "Bash(npx vue-tsc:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(dir:*)",
+      "Bash(redis-cli ping:*)",
+      "Bash(redis-cli:*)"
     ]
   }
 }

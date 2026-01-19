@@ -7,10 +7,10 @@
             <PlusOutlined /> 新建对话
           </a-button>
         </div>
-        <a-list :data-source="dialogStore.sessions" :loading="loading">
+        <a-list :data-source="dialogStore.sessions.value" :loading="loading">
           <template #renderItem="{ item }">
             <a-list-item
-              :class="{ active: item.id === dialogStore.currentSessionId }"
+              :class="{ active: item.id === dialogStore.currentSessionId.value }"
               @click="selectSession(item.id)"
               style="cursor: pointer"
             >
@@ -30,18 +30,18 @@
 
       <a-layout-content style="display: flex; flex-direction: column">
         <div class="messages-container" ref="messagesRef">
-          <div v-for="msg in dialogStore.messages" :key="msg.id" :class="['message', msg.role]">
-            <div class="message-content">
-              <a-avatar v-if="msg.role === 'user'" style="background-color: #1890ff">
-                <UserOutlined />
-              </a-avatar>
-              <a-avatar v-else style="background-color: #52c41a">
-                <RobotOutlined />
-              </a-avatar>
-              <div class="message-text">{{ msg.content }}</div>
+            <div v-for="msg in dialogStore.messages.value" :key="msg.id" :class="['message', msg.role]">
+              <div class="message-content">
+                <a-avatar v-if="msg.role === 'user'" style="background-color: #1890ff">
+                  <UserOutlined />
+                </a-avatar>
+                <a-avatar v-else style="background-color: #52c41a">
+                  <RobotOutlined />
+                </a-avatar>
+                <div class="message-text">{{ msg.content }}</div>
+              </div>
             </div>
           </div>
-        </div>
 
         <div class="input-container">
           <a-input-search
@@ -95,7 +95,7 @@ async function loadSessions() {
   try {
     const sessions = await dialogService.getSessions()
     dialogStore.setSessions(sessions)
-    if (sessions.length > 0 && !dialogStore.currentSessionId) {
+    if (sessions.length > 0 && !dialogStore.currentSessionId.value) {
       await selectSession(sessions[0].id)
     }
   } catch (error) {
@@ -133,7 +133,7 @@ async function deleteSession(sessionId: string) {
   try {
     await dialogService.deleteSession(sessionId)
     dialogStore.removeSession(sessionId)
-    if (dialogStore.currentSessionId === sessionId) {
+    if (dialogStore.currentSessionId.value === sessionId) {
       dialogStore.setCurrentSession(null)
       if (ws) {
         ws.close()
@@ -150,10 +150,10 @@ function connectWebSocket(sessionId: string) {
     ws.close()
   }
 
-  ws = dialogService.createWebSocket(sessionId, authStore.token!)
+  ws = dialogService.createWebSocket(sessionId, authStore.token.value!)
 
   ws.onopen = () => {
-    dialogStore.isConnected = true
+    dialogStore.isConnected.value = true
   }
 
   ws.onmessage = (event) => {
@@ -165,7 +165,7 @@ function connectWebSocket(sessionId: string) {
   }
 
   ws.onclose = () => {
-    dialogStore.isConnected = false
+    dialogStore.isConnected.value = false
   }
 
   ws.onerror = () => {
@@ -174,7 +174,7 @@ function connectWebSocket(sessionId: string) {
 }
 
 async function sendMessage() {
-  if (!inputMessage.value.trim() || !dialogStore.currentSessionId) return
+  if (!inputMessage.value.trim() || !dialogStore.currentSessionId.value) return
 
   const userMessage = inputMessage.value
   inputMessage.value = ''
@@ -189,7 +189,7 @@ async function sendMessage() {
     })
     scrollToBottom()
 
-    const response = await dialogService.chat(dialogStore.currentSessionId, {
+    const response = await dialogService.chat(dialogStore.currentSessionId.value, {
       message: userMessage
     })
 

@@ -7,7 +7,7 @@
           <span class="logo">✈️ 智能旅行助手</span>
         </div>
         <div class="nav-right">
-          <template v-if="authStore.isAuthenticated">
+          <template v-if="authStore.isAuthenticated.value">
             <a-button type="link" @click="$router.push('/chat')" class="nav-link">
               💬 对话
             </a-button>
@@ -18,15 +18,15 @@
               🌐 动态
             </a-button>
             <a-dropdown>
-              <a-avatar :src="authStore.user?.avatar" style="cursor: pointer">
-                {{ authStore.user?.username[0] }}
+              <a-avatar :src="authStore.user.value?.avatar" style="cursor: pointer">
+                {{ authStore.user.value?.username[0] }}
               </a-avatar>
               <template #overlay>
                 <a-menu>
                   <a-menu-item @click="$router.push('/profile')">
                     <UserOutlined /> 个人中心
                   </a-menu-item>
-                  <a-menu-item v-if="authStore.isAdmin" @click="$router.push('/admin')">
+                  <a-menu-item v-if="authStore.isAdmin.value" @click="$router.push('/admin')">
                     <SettingOutlined /> 管理后台
                   </a-menu-item>
                   <a-menu-divider />
@@ -268,7 +268,18 @@ const loading = ref(false)
 const loadingProgress = ref(0)
 const loadingStatus = ref('')
 
-const formData = reactive<TripFormData & { start_date: Dayjs | null; end_date: Dayjs | null }>({
+interface FormData {
+  city: string
+  start_date: Dayjs | null
+  end_date: Dayjs | null
+  travel_days: number
+  transportation: string
+  accommodation: string
+  preferences: string[]
+  free_text_input: string
+}
+
+const formData = reactive<FormData>({
   city: '',
   start_date: null,
   end_date: null,

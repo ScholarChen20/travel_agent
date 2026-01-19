@@ -9,9 +9,9 @@
     </a-page-header>
 
     <div style="padding: 0 24px; max-width: 800px; margin: 0 auto">
-      <a-spin :spinning="socialStore.isLoading">
+      <a-spin :spinning="socialStore.isLoading.value">
         <a-list
-          :data-source="socialStore.feed"
+          :data-source="socialStore.feed.value"
           item-layout="vertical"
         >
           <template #renderItem="{ item }">
@@ -127,19 +127,19 @@ onMounted(async () => {
 })
 
 async function loadFeed() {
-  socialStore.isLoading = true
+  socialStore.isLoading.value = true
   try {
     const feed = await socialService.getFeed()
     socialStore.setFeed(feed)
   } catch (error) {
     message.error('加载动态失败')
   } finally {
-    socialStore.isLoading = false
+    socialStore.isLoading.value = false
   }
 }
 
 async function toggleLike(postId: string) {
-  const post = socialStore.feed.find(p => p.id === postId)
+  const post = socialStore.feed.value.find((p: any) => p.id === postId)
   if (!post) return
 
   try {

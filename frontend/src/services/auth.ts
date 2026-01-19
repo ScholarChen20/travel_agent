@@ -10,6 +10,8 @@ interface RegisterRequest {
   email: string
   password: string
   nickname?: string
+  captcha_code: string
+  captcha_session_id: string
 }
 
 interface LoginResponse {
@@ -27,6 +29,11 @@ interface LoginResponse {
 }
 
 export const authService = {
+  async getCaptcha() {
+    const response = await axios.get('/api/auth/captcha')
+    return response.data
+  },
+
   async login(data: LoginRequest): Promise<LoginResponse> {
     const formData = new FormData()
     formData.append('username', data.username)
