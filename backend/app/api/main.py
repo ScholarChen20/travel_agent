@@ -7,9 +7,9 @@ from pathlib import Path
 from loguru import logger
 
 from ..config import get_settings, validate_config, print_config
-from ..database.mysql import get_mysql_db
-from ..database.mongodb import get_mongodb_client
-from ..database.redis_client import get_redis_client
+from ..database.mysql import get_mysql_db, init_mysql_db
+from ..database.mongodb import get_mongodb_client, init_mongodb_client
+from ..database.redis_client import get_redis_client, init_redis_client
 from .routes import trip, poi, map as map_routes
 from .routes import auth, plans, user, dialog, social, admin
 
@@ -78,6 +78,7 @@ async def startup_event():
     try:
         # 1. 初始化MySQL
         print("\n1️⃣ 连接MySQL...")
+        init_mysql_db(settings.mysql_url)
         mysql_db = get_mysql_db()
         if mysql_db.health_check():
             print(f"   ✅ MySQL连接成功: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
@@ -87,6 +88,7 @@ async def startup_event():
 
         # 2. 初始化MongoDB
         print("\n2️⃣ 连接MongoDB...")
+        init_mongodb_client(settings.mongodb_uri, settings.mongodb_database)
         mongodb_client = get_mongodb_client()
         if await mongodb_client.health_check():
             print(f"   ✅ MongoDB连接成功: {settings.mongodb_database}")
@@ -99,6 +101,7 @@ async def startup_event():
 
         # 3. 初始化Redis
         print("\n3️⃣ 连接Redis...")
+        init_redis_client(settings.redis_url)
         redis_client = get_redis_client()
         if await redis_client.ping():
             print(f"   ✅ Redis连接成功")

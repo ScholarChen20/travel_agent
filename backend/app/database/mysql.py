@@ -3,8 +3,7 @@
 from contextlib import contextmanager
 from typing import Generator
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import Pool
 from loguru import logger
 

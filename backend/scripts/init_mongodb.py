@@ -16,7 +16,7 @@ sys.path.insert(0, str(project_root))
 
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.errors import CollectionInvalid
-from app.config import get_settings
+from backend.app.config import get_settings
 
 
 def init_mongodb():

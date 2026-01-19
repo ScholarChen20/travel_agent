@@ -17,12 +17,12 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr, Field
 from loguru import logger
 
-from ..services.auth_service import get_auth_service
-from ..database.mysql import get_mysql_db
-from ..database.redis_client import get_redis_client
-from ..database.models import User, UserProfile
-from ..middleware.auth_middleware import get_current_user, CurrentUser
-from ..config import get_settings
+from backend.app.services.auth_service import get_auth_service
+from backend.app.database.mysql import get_mysql_db
+from backend.app.database.redis_client import get_redis_client
+from backend.app.database.models import User, UserProfile
+from backend.app.middleware.auth_middleware import get_current_user, CurrentUser
+from backend.app.config import get_settings
 
 
 router = APIRouter(prefix="/auth", tags=["认证"])
