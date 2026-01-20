@@ -174,20 +174,26 @@ async def upload_avatar(
     最大文件大小：5MB
     """
     try:
+        logger.info(f"开始处理头像上传请求: 用户={current_user.username}, 文件名={file.filename}, MIME类型={file.content_type}")
+        
         # 验证文件类型
         allowed_types = ["image/jpeg", "image/png", "image/gif"]
         if file.content_type not in allowed_types:
+            logger.warning(f"文件类型不支持: {file.content_type}, 允许的类型: {allowed_types}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="不支持的文件格式，请上传JPEG、PNG或GIF图片"
             )
 
         # 验证文件大小（5MB）
+        logger.info("开始读取文件内容")
         file_content = await file.read()
         file_size = len(file_content)
         max_size = 5 * 1024 * 1024  # 5MB
+        logger.info(f"文件大小: {file_size}字节, 最大允许: {max_size}字节")
 
         if file_size > max_size:
+            logger.warning(f"文件大小超过限制: {file_size}字节 > {max_size}字节")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="文件大小超过5MB限制"
@@ -195,23 +201,26 @@ async def upload_avatar(
 
         # 重置文件指针
         await file.seek(0)
+        logger.info("文件指针已重置")
 
-        # 上传文件
+        # 上传文件到OSS（如果启用）或本地存储
+        logger.info("开始上传文件到存储服务")
         storage_service = get_storage_service()
         avatar_url = await storage_service.upload_avatar(file, current_user.id)
+        logger.info(f"文件上传成功，URL: {avatar_url}")
 
         # 更新用户头像URL
+        logger.info("开始更新用户头像URL")
         user_service = get_user_service()
         user_service.update_avatar(current_user.id, avatar_url)
-
-        logger.info(f"头像已上传: {current_user.username} -> {avatar_url}")
+        logger.info(f"用户头像URL已更新: {current_user.username} -> {avatar_url}")
 
         return AvatarUploadResponse(avatar_url=avatar_url)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"上传头像失败: {str(e)}")
+        logger.error(f"上传头像失败: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="上传头像失败"

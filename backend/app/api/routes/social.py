@@ -32,8 +32,8 @@ router = APIRouter(prefix="/social", tags=["社交功能"])
 
 class CreatePostRequest(BaseModel):
     """创建帖子请求"""
-    title: str = Field(..., min_length=1, max_length=200, description="标题")
-    content: str = Field(..., min_length=10, max_length=5000, description="内容")
+    title: Optional[str] = Field(None, min_length=1, max_length=200, description="标题")
+    content: str = Field(..., min_length=1, max_length=5000, description="内容")
     media_urls: Optional[List[str]] = Field(None, description="媒体文件URL列表")
     tags: Optional[List[str]] = Field(None, description="标签列表")
     location: Optional[str] = Field(None, description="位置")
@@ -102,9 +102,12 @@ async def create_post(
     try:
         social_service = get_social_service()
 
+        # Use first 50 chars of content as title if not provided
+        title = request.title or request.content[:50]
+
         post_id = await social_service.create_post(
             user_id=current_user.id,
-            title=request.title,
+            title=title,
             content=request.content,
             media_urls=request.media_urls,
             tags=request.tags,

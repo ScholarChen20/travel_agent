@@ -107,11 +107,17 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, HeartOutlined, HeartFilled, CommentOutlined } from '@ant-design/icons-vue'
+import { useAuthStore } from '@/stores/auth'
 import { useSocialStore } from '@/stores/social'
 import { socialService } from '@/services/social'
 
 const router = useRouter()
 const socialStore = useSocialStore()
+const authStore = useAuthStore()
+
+// 调试信息
+// console.log('用户Token:', authStore.token)
+console.log('当前用户:', authStore.user)
 
 const showCreateModal = ref(false)
 const creating = ref(false)
@@ -127,14 +133,16 @@ onMounted(async () => {
 })
 
 async function loadFeed() {
-  socialStore.isLoading.value = true
+  // socialStore.isLoading.value = true
   try {
     const feed = await socialService.getFeed()
+    console.log('动态列表:', feed)
     socialStore.setFeed(feed)
   } catch (error) {
+    console.error('加载动态失败:', error)
     message.error('加载动态失败')
   } finally {
-    socialStore.isLoading.value = false
+    // socialStore.isLoading.value = false
   }
 }
 
@@ -194,17 +202,19 @@ async function createPost() {
       }
     }
 
-    const post = await socialService.createPost({
+    await socialService.createPost({
       content: postForm.value.content,
       tags: postForm.value.tags,
       media_urls: uploadedUrls
     })
 
-    socialStore.addToFeed(post)
     message.success('发布成功')
     showCreateModal.value = false
     postForm.value = { content: '', tags: [], media_urls: [] }
     fileList.value = []
+
+    // Reload feed to show the new post
+    await loadFeed()
   } catch (error) {
     message.error('发布失败')
   } finally {

@@ -78,6 +78,18 @@ class Settings(BaseSettings):
     # ============ 新增：限流配置 ============
     rate_limit_per_minute: int = 60
 
+    # ============ 新增：OSS云存储配置 ============
+    # 阿里云OSS配置
+    oss_enabled: bool = True  # 是否启用OSS（False则使用本地存储）
+    oss_access_key_id: str = "LTAI5tChzi1g1csczkKBbec9"  # 从.env读取
+    oss_access_key_secret: str = "b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX"  # 从.env读取
+    region: str = "cn-beijing"  # 从.env读取
+    oss_endpoint: str = "https://oss-cn-beijing.aliyuncs.com"  # OSS地域节点
+    oss_bucket_name: str = "java-webai-1"  # Bucket名称
+    oss_url_prefix: str = ""  # 可选：自定义域名前缀，如 https://cdn.example.com
+    oss_avatar_dir: str = "avatars"  # 头像存储目录
+    oss_media_dir: str = "media"  # 媒体文件存储目录
+
     # 日志配置
     log_level: str = "INFO"
 
@@ -174,6 +186,19 @@ def validate_config():
     if not settings.redis_password:
         warnings.append("REDIS_PASSWORD未配置，将尝试无密码连接Redis")
 
+    # ============ 新增：验证OSS配置 ============
+    if settings.oss_enabled:
+        if not settings.oss_access_key_id:
+            errors.append("OSS_ACCESS_KEY_ID未配置，但OSS已启用")
+        if not settings.oss_access_key_secret:
+            errors.append("OSS_ACCESS_KEY_SECRET未配置，但OSS已启用")
+        if not settings.oss_bucket_name:
+            errors.append("OSS_BUCKET_NAME未配置")
+        if not settings.oss_endpoint:
+            errors.append("OSS_ENDPOINT未配置")
+    else:
+        warnings.append("OSS云存储未启用，将使用本地存储")
+
     if errors:
         error_msg = "配置错误:\n" + "\n".join(f"  - {e}" for e in errors)
         raise ValueError(error_msg)
@@ -218,6 +243,15 @@ def print_config():
     print(f"  JWT算法: {settings.jwt_algorithm}")
     print(f"  Token有效期: {settings.jwt_access_token_expire_days}天")
     print(f"  验证码有效期: {settings.captcha_expiry_seconds}秒")
+
+    # ============ 新增：打印OSS配置 ============
+    print("\n存储配置:")
+    print(f"  OSS云存储: {'✅ 已启用' if settings.oss_enabled else '❌ 未启用（使用本地存储）'}")
+    if settings.oss_enabled:
+        print(f"  OSS AccessKey: {'已配置' if settings.oss_access_key_id else '❌ 未配置'}")
+        print(f"  OSS Endpoint: {settings.oss_endpoint}")
+        print(f"  OSS Bucket: {settings.oss_bucket_name}")
+        print(f"  OSS URL前缀: {settings.oss_url_prefix or '使用默认OSS域名'}")
 
     print(f"\n日志级别: {settings.log_level}")
 

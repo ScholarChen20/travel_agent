@@ -32,10 +32,15 @@ interface Comment {
 
 export const socialService = {
   async getFeed(limit = 20, offset = 0): Promise<Post[]> {
-    const response = await axios.get('/api/social/feed', {
-      params: { limit, offset }
-    })
-    return response.data
+    try {
+      const response = await axios.get('/api/social/posts', {
+        params: { limit, offset }
+      })
+      return response.data.posts
+    } catch (error) {
+      console.error('API请求失败:', error)
+      throw error
+    }
   },
 
   async createPost(data: CreatePostRequest): Promise<Post> {
@@ -57,14 +62,15 @@ export const socialService = {
   },
 
   async unlikePost(postId: string): Promise<void> {
-    await axios.delete(`/api/social/posts/${postId}/like`)
+    // Backend uses same endpoint to toggle like/unlike
+    await axios.post(`/api/social/posts/${postId}/like`)
   },
 
   async getComments(postId: string, limit = 50, offset = 0): Promise<Comment[]> {
     const response = await axios.get(`/api/social/posts/${postId}/comments`, {
       params: { limit, offset }
     })
-    return response.data
+    return response.data.comments
   },
 
   async addComment(postId: string, content: string): Promise<Comment> {
@@ -77,7 +83,7 @@ export const socialService = {
   async uploadMedia(file: File): Promise<{ url: string }> {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await axios.post('/api/social/media/upload', formData, {
+    const response = await axios.post('/api/social/posts/media', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     return response.data
@@ -88,20 +94,21 @@ export const socialService = {
   },
 
   async unfollowUser(userId: number): Promise<void> {
-    await axios.delete(`/api/social/users/${userId}/follow`)
+    // Backend uses same endpoint to toggle follow/unfollow
+    await axios.post(`/api/social/users/${userId}/follow`)
   },
 
   async getUserPosts(userId: number, limit = 20, offset = 0): Promise<Post[]> {
     const response = await axios.get(`/api/social/users/${userId}/posts`, {
       params: { limit, offset }
     })
-    return response.data
+    return response.data.posts
   },
 
   async getPopularTags(limit = 20): Promise<Array<{ tag: string; count: number }>> {
-    const response = await axios.get('/api/social/tags/popular', {
+    const response = await axios.get('/api/social/tags', {
       params: { limit }
     })
-    return response.data
+    return response.data.tags
   }
 }

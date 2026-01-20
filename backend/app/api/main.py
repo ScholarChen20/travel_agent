@@ -71,6 +71,15 @@ app.mount("/storage", StaticFiles(directory=str(storage_path)), name="storage")
 @app.on_event("startup")
 async def startup_event():
     """应用启动事件"""
+    # 配置loguru日志
+    logger.remove()  # 移除默认处理器
+    logger.add(
+        sink=lambda msg: print(msg, end=""),
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level=settings.log_level.upper(),
+        colorize=True
+    )
+
     print("\n" + "="*60)
     print(f"🚀 {settings.app_name} v{settings.app_version}")
     print("="*60)

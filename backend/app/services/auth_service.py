@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import secrets
 import jwt
-from passlib.context import CryptContext
 from captcha.image import ImageCaptcha
+import bcrypt
 import io
 import base64
 from loguru import logger
@@ -27,13 +27,6 @@ class AuthService:
     def __init__(self):
         """初始化认证服务"""
         self.settings = get_settings()
-
-        # 密码哈希上下文（bcrypt）
-        self.pwd_context = CryptContext(
-            schemes=["bcrypt"],
-            deprecated="auto",
-            bcrypt__rounds=12  # bcrypt成本因子
-        )
 
         # 验证码生成器
         self.captcha_generator = ImageCaptcha(
@@ -57,9 +50,17 @@ class AuthService:
         Returns:
             str: 哈希后的密码
         """
-        # bcrypt限制密码长度为72字节，需要手动截断
-        password = password[:72]
-        return self.pwd_context.hash(password)
+        # bcrypt限制密码长度为72字节，需要手动截断（按字节计算）
+        password_bytes = password.encode('utf-8')[:72]
+        
+        # 调试日志
+        logger.debug(f"原始密码长度: {len(password)} 字符, {len(password.encode('utf-8'))} 字节")
+        logger.debug(f"截断后密码长度: {len(password_bytes)} 字节")
+        
+        # 使用bcrypt库进行哈希
+        salt = bcrypt.gensalt(rounds=12)
+        hashed_bytes = bcrypt.hashpw(password_bytes, salt)
+        return hashed_bytes.decode('utf-8')
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """
@@ -73,7 +74,10 @@ class AuthService:
             bool: 密码是否匹配
         """
         try:
-            return self.pwd_context.verify(plain_password, hashed_password)
+            # 同样需要按字节截断，保持与hash_password一致
+            password_bytes = plain_password.encode('utf-8')[:72]
+            hashed_bytes = hashed_password.encode('utf-8')
+            return bcrypt.checkpw(password_bytes, hashed_bytes)
         except Exception as e:
             logger.error(f"密码验证失败: {str(e)}")
             return False
@@ -146,7 +150,7 @@ class AuthService:
 
         # Token负载
         payload = {
-            "sub": user_id,  # Subject: 用户ID
+            "sub": str(user_id),  # Subject: 用户ID（必须是字符串类型）
             "username": username,
             "role": role,
             "device_id": device_id,

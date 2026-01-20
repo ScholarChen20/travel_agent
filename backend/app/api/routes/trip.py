@@ -81,7 +81,7 @@ async def plan_trip(
                     session_id=session_id,
                     city=request.city,
                     start_date=request.start_date,
-                    trip_plan=trip_plan,
+                    trip_plan=trip_plan.model_dump(),
                     preferences={
                         "travel_days": request.travel_days,
                         "end_date": request.end_date
@@ -95,11 +95,9 @@ async def plan_trip(
                 logger.error(f"⚠️  保存计划失败: {str(e)}")
 
         # 构建响应
-        response_data = {
-            **trip_plan,
-            "plan_id": plan_id,  # 仅登录用户有此字段
-            "session_id": session_id  # 仅登录用户有此字段
-        }
+        response_data = trip_plan.model_dump()
+        response_data["plan_id"] = plan_id  # 仅登录用户有此字段
+        response_data["session_id"] = session_id  # 仅登录用户有此字段
 
         return TripPlanResponse(
             success=True,
