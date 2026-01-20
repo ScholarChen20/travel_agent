@@ -149,6 +149,13 @@ async def register(request: RegisterRequest):
     5. 生成JWT Token
     6. 存储Token到Redis
     """
+    print(f"========== 注册接口被调用 ==========")
+    print(f"用户名: {request.username}")
+    print(f"邮箱: {request.email}")
+    print(f"密码长度: {len(request.password)} 字符")
+    print(f"密码字节数: {len(request.password.encode('utf-8'))} 字节")
+    print(f"=====================================")
+
     logger.info(f"收到注册请求: {request.username}, {request.email}")
     auth_service = get_auth_service()
     settings = get_settings()

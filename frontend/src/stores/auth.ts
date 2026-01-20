@@ -12,8 +12,9 @@ interface User {
 }
 
 export const useAuthStore = defineStore('auth', () => {
+  // 从localStorage加载token和user信息
   const token = ref<string | null>(localStorage.getItem('token'))
-  const user = ref<User | null>(null)
+  const user = ref<User | null>(JSON.parse(localStorage.getItem('user') || 'null'))
   const isLoading = ref(false)
 
   const isAuthenticated = computed(() => !!token.value)
@@ -30,6 +31,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   function setUser(newUser: User | null) {
     user.value = newUser
+    if (newUser) {
+      localStorage.setItem('user', JSON.stringify(newUser))
+    } else {
+      localStorage.removeItem('user')
+    }
   }
 
   function logout() {

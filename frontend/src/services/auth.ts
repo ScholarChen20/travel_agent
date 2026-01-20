@@ -3,6 +3,9 @@ import axios from '@/utils/axios'
 interface LoginRequest {
   username: string
   password: string
+  captcha_code: string
+  captcha_session_id: string
+  device_id?: string
 }
 
 interface RegisterRequest {
@@ -35,10 +38,7 @@ export const authService = {
   },
 
   async login(data: LoginRequest): Promise<LoginResponse> {
-    const formData = new FormData()
-    formData.append('username', data.username)
-    formData.append('password', data.password)
-    const response = await axios.post('/api/auth/login', formData)
+    const response = await axios.post('/api/auth/login', data)
     return response.data
   },
 

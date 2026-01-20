@@ -7,7 +7,7 @@
           <span class="logo">✈️ 智能旅行助手</span>
         </div>
         <div class="nav-right">
-          <template v-if="authStore.isAuthenticated.value">
+          <template v-if="authStore.isAuthenticated">
             <a-button type="link" @click="$router.push('/chat')" class="nav-link">
               💬 对话
             </a-button>

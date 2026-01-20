@@ -7,7 +7,7 @@
         <a-col :xs="24" :md="8">
           <a-card>
             <div style="text-align: center">
-              <a-avatar :size="100" :src="profile?.avatar">
+              <a-avatar :size="100" :src="profile?.avatar_url">
                 {{ profile?.username[0] }}
               </a-avatar>
               <a-upload
@@ -19,7 +19,7 @@
                   <UploadOutlined /> 更换头像
                 </a-button>
               </a-upload>
-              <h2 style="margin-top: 16px">{{ profile?.nickname || profile?.username }}</h2>
+              <h2 style="margin-top: 16px">{{ profile?.profile?.nickname || profile?.username }}</h2>
               <p style="color: #999">@{{ profile?.username }}</p>
               <a-tag v-if="profile?.role === 'admin'" color="red">管理员</a-tag>
               <a-tag v-if="profile?.is_verified" color="green">已验证</a-tag>
@@ -32,7 +32,7 @@
                 {{ profile?.email }}
               </a-descriptions-item>
               <a-descriptions-item label="位置">
-                {{ profile?.location || '未设置' }}
+                {{ profile?.profile?.location || '未设置' }}
               </a-descriptions-item>
               <a-descriptions-item label="注册时间">
                 {{ profile?.created_at }}
@@ -41,26 +41,22 @@
           </a-card>
 
           <a-card title="统计数据" style="margin-top: 16px">
-            <a-statistic-countdown
+            <a-statistic
               v-if="stats"
               title="旅行计划"
-              :value="stats.plans_count"
-              format="D"
+              :value="stats.total_trips"
             />
             <a-row :gutter="16" style="margin-top: 16px">
               <a-col :span="12">
-                <a-statistic title="帖子" :value="stats?.posts_count" />
+                <a-statistic title="已完成" :value="stats?.completed_trips" />
               </a-col>
               <a-col :span="12">
-                <a-statistic title="获赞" :value="stats?.likes_received" />
+                <a-statistic title="收藏" :value="stats?.favorite_trips" />
               </a-col>
             </a-row>
             <a-row :gutter="16" style="margin-top: 16px">
               <a-col :span="12">
-                <a-statistic title="关注" :value="stats?.following_count" />
-              </a-col>
-              <a-col :span="12">
-                <a-statistic title="粉丝" :value="stats?.followers_count" />
+                <a-statistic title="访问城市" :value="stats?.total_cities" />
               </a-col>
             </a-row>
           </a-card>
@@ -147,9 +143,9 @@ async function loadProfile() {
   try {
     profile.value = await userService.getProfile()
     profileForm.value = {
-      nickname: profile.value.nickname || '',
-      bio: profile.value.bio || '',
-      location: profile.value.location || ''
+      nickname: profile.value.profile?.nickname || '',
+      bio: profile.value.profile?.bio || '',
+      location: profile.value.profile?.location || ''
     }
   } catch (error) {
     message.error('加载个人资料失败')
@@ -166,7 +162,8 @@ async function loadStats() {
 
 async function loadVisitedCities() {
   try {
-    visitedCities.value = await userService.getVisitedCities()
+    const response = await userService.getVisitedCities()
+    visitedCities.value = response.cities || []
   } catch (error) {
     message.error('加载访问城市失败')
   }
@@ -188,7 +185,7 @@ async function updateProfile() {
 async function uploadAvatar(file: File) {
   try {
     const result = await userService.uploadAvatar(file)
-    profile.value.avatar = result.avatar_url
+    profile.value.avatar_url = result.avatar_url
     message.success('头像上传成功')
   } catch (error) {
     message.error('头像上传失败')
