@@ -18,9 +18,9 @@
               🌐 动态
             </a-button>
             <a-dropdown>
-              <a-avatar :src="authStore.user.value?.avatar" style="cursor: pointer">
-                {{ authStore.user.value?.username[0] }}
-              </a-avatar>
+                <a-avatar :src="authStore.user.value?.avatar_url" style="cursor: pointer">
+                  {{ authStore.user.value?.username[0] }}
+                </a-avatar>
               <template #overlay>
                 <a-menu>
                   <a-menu-item @click="$router.push('/profile')">

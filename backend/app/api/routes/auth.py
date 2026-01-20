@@ -586,3 +586,31 @@ async def reset_password(request: ResetPasswordRequest):
         logger.info(f"密码重置成功: {user.email}")
 
         return MessageResponse(message="密码重置成功，请使用新密码登录")
+
+
+@router.get("/me", response_model=dict)
+async def get_current_user_info(
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """
+    获取当前登录用户信息
+    
+    Returns:
+        dict: 当前登录用户的详细信息
+    """
+    mysql_db = get_mysql_db()
+    
+    with mysql_db.get_session() as session:
+        # 根据CurrentUser中的用户ID查询完整用户信息
+        user = session.query(User).filter(User.id == current_user.id).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="用户不存在"
+            )
+        
+        logger.info(f"获取用户信息: {user.username} (ID: {user.id})")
+        
+        # 使用serialize_user函数返回标准化的用户信息
+        return serialize_user(user)

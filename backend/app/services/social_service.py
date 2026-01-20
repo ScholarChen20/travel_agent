@@ -191,26 +191,32 @@ class SocialService:
             }).sort("like_count", -1).limit(popular_limit)
 
             async for post in popular_cursor:
-                if post not in posts:
-                    formatted_post = await self._format_post(post, user_id)
-                    posts.append(formatted_post)
+                formatted_post = await self._format_post(post, user_id)
+                posts.append(formatted_post)
 
             # 3. 推荐内容 (20%)
             # 基于用户偏好（简化版：随机推荐）
             recommended_cursor = collection.find({
                 "moderation_status": "approved"
-            }).sort("created_at", -1).skip(offset).limit(recommended_limit)
+            }).sort("created_at", -1).limit(recommended_limit)
 
             async for post in recommended_cursor:
-                if post not in posts:
-                    formatted_post = await self._format_post(post, user_id)
-                    posts.append(formatted_post)
+                formatted_post = await self._format_post(post, user_id)
+                posts.append(formatted_post)
+
+            # 去重 - 基于post_id
+            seen_post_ids = set()
+            unique_posts = []
+            for post in posts:
+                if post['id'] not in seen_post_ids:
+                    seen_post_ids.add(post['id'])
+                    unique_posts.append(post)
 
             # 按时间排序
-            posts.sort(key=lambda x: x["created_at"], reverse=True)
+            unique_posts.sort(key=lambda x: x["created_at"], reverse=True)
 
             # 应用分页
-            return posts[offset:offset + limit]
+            return unique_posts[:limit]
 
         except Exception as e:
             logger.error(f"获取Feed流失败: {str(e)}")

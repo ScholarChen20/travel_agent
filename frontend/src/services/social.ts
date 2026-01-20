@@ -32,10 +32,17 @@ interface Comment {
 
 export const socialService = {
   async getFeed(limit = 20, offset = 0): Promise<Post[]> {
-    const response = await axios.get('/api/social/posts', {
-      params: { limit, offset }
-    })
-    return response.data.posts
+    console.log('发起API请求:', '/api/social/posts', { limit, offset })
+    try {
+      const response = await axios.get('/api/social/posts', {
+        params: { limit, offset }
+      })
+      console.log('API响应:', response.data)
+      return response.data.posts
+    } catch (error) {
+      console.error('API请求失败:', error)
+      throw error
+    }
   },
 
   async createPost(data: CreatePostRequest): Promise<Post> {

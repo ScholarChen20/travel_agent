@@ -2,7 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { message } from 'ant-design-vue'
 
-const API_BASE_URL = 'http://localhost:8000'
+export const API_BASE_URL = 'http://localhost:8000'
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -15,13 +15,19 @@ const axiosInstance = axios.create({
 // Request interceptor - add Authorization header
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const authStore = useAuthStore()
-    if (authStore.token) {
-      config.headers.Authorization = `Bearer ${authStore.token}`
+    // 直接从localStorage获取令牌，因为useAuthStore只能在Vue组件中使用
+    const token = localStorage.getItem('token')
+    console.log('请求配置:', config)
+    console.log('从localStorage获取的Token:', token)
+    
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+      console.log('已添加Authorization头:', config.headers.Authorization)
     }
     return config
   },
   (error: AxiosError) => {
+    console.error('请求拦截器错误:', error)
     return Promise.reject(error)
   }
 )
@@ -32,10 +38,11 @@ axiosInstance.interceptors.response.use(
     return response
   },
   async (error: AxiosError) => {
-    const authStore = useAuthStore()
-
+    // 直接操作localStorage，因为useAuthStore只能在Vue组件中使用
     if (error.response?.status === 401) {
-      authStore.logout()
+      // 清除localStorage中的用户数据
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
       message.error('登录已过期，请重新登录')
       window.location.href = '/login'
       return Promise.reject(error)
@@ -51,8 +58,6 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    const errorMessage = (error.response?.data as any)?.detail || error.message || '请求失败'
-    message.error(errorMessage)
     return Promise.reject(error)
   }
 )

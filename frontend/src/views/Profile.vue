@@ -113,9 +113,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { UploadOutlined } from '@ant-design/icons-vue'
-import { userService } from '@/services/user'
 import { API_BASE_URL } from '@/utils/axios'
+import { userService } from '@/services/user'
+import { useAuthStore } from '@/stores/auth'
+import { UploadOutlined } from '@ant-design/icons-vue'
 
 const profile = ref<any>(null)
 const stats = ref<any>(null)
@@ -134,6 +135,8 @@ const passwordForm = ref({
   new_password: ''
 })
 
+const authStore = useAuthStore()
+
 onMounted(async () => {
   await loadProfile()
   await loadStats()
@@ -145,9 +148,9 @@ async function loadProfile() {
     const response = await userService.getProfile()
     
     // 解析travel_preferences数组，提取nickname、bio、location
-    const preferences = {}
+    const preferences: { [key: string]: string } = {}
     if (response.profile?.travel_preferences) {
-      response.profile.travel_preferences.forEach(pref => {
+      response.profile.travel_preferences.forEach((pref: string) => {
         const [key, value] = pref.split(':')
         if (key && value) {
           preferences[key] = value
@@ -178,6 +181,19 @@ async function loadProfile() {
       bio: preferences.bio || '',
       location: preferences.location || ''
     }
+    
+    // 更新authStore中的用户信息，确保首页头像同步更新
+    if (authStore.user.value) {
+      authStore.setUser({
+        id: response.id,
+        username: response.username,
+        email: response.email,
+        nickname: preferences.nickname,
+        avatar_url: avatarUrl,
+        role: response.role,
+        is_verified: response.is_verified
+      })
+    }
   } catch (error) {
     message.error('加载个人资料失败')
   }
@@ -194,7 +210,7 @@ async function loadStats() {
 async function loadVisitedCities() {
   try {
     const response = await userService.getVisitedCities()
-    visitedCities.value = response.cities || []
+    visitedCities.value = response || []
   } catch (error) {
     message.error('加载访问城市失败')
   }

@@ -4,13 +4,22 @@ interface UserProfile {
   id: number
   username: string
   email: string
-  nickname?: string
-  avatar?: string
-  bio?: string
-  location?: string
   role: 'user' | 'admin'
+  avatar_url?: string
   is_verified: boolean
+  is_active: boolean
   created_at: string
+  last_login_at?: string
+  profile: {
+    travel_preferences: string[]
+    visited_cities: string[]
+    travel_stats: {
+      total_trips: number
+      total_cities: number
+      favorite_trips: number
+      completed_trips: number
+    }
+  }
 }
 
 interface UpdateProfileRequest {

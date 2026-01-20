@@ -25,7 +25,7 @@ interface LoginResponse {
     username: string
     email: string
     nickname?: string
-    avatar?: string
+    avatar_url?: string
     role: 'user' | 'admin'
     is_verified: boolean
   }
