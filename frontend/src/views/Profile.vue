@@ -183,17 +183,23 @@ async function loadProfile() {
     }
     
     // 更新authStore中的用户信息，确保首页头像同步更新
-    if (authStore.user.value) {
-      authStore.setUser({
-        id: response.id,
-        username: response.username,
-        email: response.email,
-        nickname: preferences.nickname,
-        avatar_url: avatarUrl,
-        role: response.role,
-        is_verified: response.is_verified
-      })
-    }
+    console.log('Profile.vue: 更新authStore中的用户信息')
+    console.log('Profile.vue: 新的用户信息 - id:', response.id)
+    console.log('Profile.vue: 新的用户信息 - username:', response.username)
+    console.log('Profile.vue: 新的用户信息 - avatar_url:', avatarUrl)
+    
+    // 无论authStore.user.value是否存在，都更新用户信息
+    authStore.setUser({
+      id: response.id,
+      username: response.username,
+      email: response.email,
+      nickname: preferences.nickname,
+      avatar_url: avatarUrl,
+      role: response.role,
+      is_verified: response.is_verified
+    })
+    
+    console.log('Profile.vue: 更新后的authStore.user.value:', authStore.user.value)
   } catch (error) {
     message.error('加载个人资料失败')
   }

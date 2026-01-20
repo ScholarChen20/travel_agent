@@ -17,12 +17,8 @@ axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // 直接从localStorage获取令牌，因为useAuthStore只能在Vue组件中使用
     const token = localStorage.getItem('token')
-    console.log('请求配置:', config)
-    console.log('从localStorage获取的Token:', token)
-    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
-      console.log('已添加Authorization头:', config.headers.Authorization)
     }
     return config
   },

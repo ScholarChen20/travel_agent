@@ -18,15 +18,16 @@
               🌐 动态
             </a-button>
             <a-dropdown>
-                <a-avatar :src="authStore.user.value?.avatar_url" style="cursor: pointer">
-                  {{ authStore.user.value?.username[0] }}
+                <img v-if="userAvatar" :src="userAvatar" style="width: 40px; height: 40px; border-radius: 50%; cursor: pointer;" alt="头像" />
+                <a-avatar v-else style="width: 40px; height: 40px; cursor: pointer;">
+                  {{ authStore.user.value?.username?.[0] }}
                 </a-avatar>
               <template #overlay>
                 <a-menu>
                   <a-menu-item @click="$router.push('/profile')">
                     <UserOutlined /> 个人中心
                   </a-menu-item>
-                  <a-menu-item v-if="authStore.isAdmin.value" @click="$router.push('/admin')">
+                  <a-menu-item v-if="authStore.isAdmin" @click="$router.push('/admin')">
                     <SettingOutlined /> 管理后台
                   </a-menu-item>
                   <a-menu-divider />
@@ -253,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { UserOutlined, SettingOutlined, LogoutOutlined } from '@ant-design/icons-vue'
@@ -261,9 +262,42 @@ import { generateTripPlan } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 import type { TripFormData } from '@/types'
 import type { Dayjs } from 'dayjs'
+import {userService} from "@/services/user.ts";
 
 const router = useRouter()
 const authStore = useAuthStore()
+
+// 使用ref存储头像URL
+const userAvatar = ref<string | undefined>()
+
+// 在组件挂载后异步获取用户信息
+onMounted(async () => {
+  try {
+    // 尝试从authStore获取用户信息
+    if (authStore.user.value?.avatar_url) {
+      userAvatar.value = authStore.user.value.avatar_url
+      console.log('从authStore获取头像URL:', userAvatar.value)
+    } else {
+      // 如果authStore中没有，则直接从API获取
+      const response = await userService.getProfile()
+      userAvatar.value = response.avatar_url
+      console.log('从API获取头像URL:', userAvatar.value)
+      
+      // 更新authStore中的用户信息
+      if (authStore.user.value) {
+        authStore.setUser({
+          ...authStore.user.value,
+          avatar_url: response.avatar_url
+        })
+      }
+    }
+  } catch (error) {
+    console.error('获取头像URL失败:', error)
+  }
+})
+
+
+
 const loading = ref(false)
 const loadingProgress = ref(0)
 const loadingStatus = ref('')

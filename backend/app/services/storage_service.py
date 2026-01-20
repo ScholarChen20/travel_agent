@@ -50,8 +50,8 @@ class StorageService:
                 self.oss_enabled = False
             else:
                 try:
-                    # 使用静态凭证认证
-                    credentials = oss.credentials.StaticCredentials(
+                    # 使用静态凭证认证（注意：是 Credentials 不是 StaticCredentials）
+                    credentials = oss.credentials.Credentials(
                         access_key_id=self.settings.oss_access_key_id,
                         access_key_secret=self.settings.oss_access_key_secret
                     )

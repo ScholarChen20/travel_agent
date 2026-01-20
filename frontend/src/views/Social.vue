@@ -116,8 +116,7 @@ const socialStore = useSocialStore()
 const authStore = useAuthStore()
 
 // 调试信息
-console.log('用户认证状态:', authStore.isAuthenticated)
-console.log('用户Token:', authStore.token)
+// console.log('用户Token:', authStore.token)
 console.log('当前用户:', authStore.user)
 
 const showCreateModal = ref(false)
@@ -134,17 +133,16 @@ onMounted(async () => {
 })
 
 async function loadFeed() {
-  socialStore.isLoading.value = true
+  // socialStore.isLoading.value = true
   try {
-    console.log('开始加载动态...')
     const feed = await socialService.getFeed()
-    console.log('加载动态成功:', feed)
+    console.log('动态列表:', feed)
     socialStore.setFeed(feed)
   } catch (error) {
     console.error('加载动态失败:', error)
     message.error('加载动态失败')
   } finally {
-    socialStore.isLoading.value = false
+    // socialStore.isLoading.value = false
   }
 }
 

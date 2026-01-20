@@ -18,16 +18,20 @@ app.use(Antd)
 
 // 初始化authStore
 const authStore = useAuthStore()
+
+
+// 只有当token存在且user不存在时，才尝试获取用户信息
 if (authStore.isAuthenticated && !authStore.user) {
-  // 如果有token但没有用户信息，自动获取用户信息
+  console.log('main.ts: 有token但没有user信息，尝试从API获取...')
   authService.getCurrentUser()
     .then(user => {
+      console.log('main.ts: 从API获取用户信息成功:', user)
       authStore.setUser(user)
     })
     .catch(error => {
-      console.error('获取用户信息失败:', error)
-      // 如果获取失败，清除token
-      authStore.logout()
+      console.error('main.ts: 获取用户信息失败:', error)
+      // 如果获取失败，不要清除已有的token和user信息
+      // 保留localStorage中的用户信息（如果有）
     })
 }
 

@@ -65,12 +65,6 @@ class Settings(BaseSettings):
     redis_password: str = "123456"  # 从.env读取
     redis_db: int = 0
 
-    # 阿里云OSS配置
-    access_key_id: str = "LTAI5tChzi1g1csczkKBbec9"  # 阿里云accessKey
-    access_key_secret: str ="b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX"  # 阿里云secretKey
-    endpoint: str = "oss-cn-beijing.aliyuncs.com"  # 阿里云endpoint
-    bucket_name: str = "java-webai-1"  # 阿里云bucketName
-
     # ============ 新增：JWT配置 ============
     jwt_secret_key: str = "UoFj5OGotDPJFlQLFTHQDZtB7QDtR3lG01Xk+iDVnY4="  # 必须在.env中设置，用于JWT签名
     jwt_algorithm: str = "HS256"
@@ -89,7 +83,8 @@ class Settings(BaseSettings):
     oss_enabled: bool = True  # 是否启用OSS（False则使用本地存储）
     oss_access_key_id: str = "LTAI5tChzi1g1csczkKBbec9"  # 从.env读取
     oss_access_key_secret: str = "b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX"  # 从.env读取
-    oss_endpoint: str = "oss-cn-hangzhou.aliyuncs.com"  # OSS地域节点
+    region: str = "cn-beijing"  # 从.env读取
+    oss_endpoint: str = "https://oss-cn-beijing.aliyuncs.com"  # OSS地域节点
     oss_bucket_name: str = "java-webai-1"  # Bucket名称
     oss_url_prefix: str = ""  # 可选：自定义域名前缀，如 https://cdn.example.com
     oss_avatar_dir: str = "avatars"  # 头像存储目录

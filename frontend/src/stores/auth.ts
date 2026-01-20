@@ -12,9 +12,25 @@ interface User {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  // 从localStorage加载token和user信息
+  // 直接从localStorage加载token
   const token = ref<string | null>(localStorage.getItem('token'))
-  const user = ref<User | null>(JSON.parse(localStorage.getItem('user') || 'null'))
+  
+  // 直接从localStorage加载user
+  const user = ref<User | null>(null)
+  try {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      user.value = JSON.parse(userStr)
+      // console.log('authStore: 从localStorage加载用户信息成功:', user.value)
+    } else {
+      console.log('authStore: localStorage中没有用户信息')
+    }
+  } catch (e) {
+    console.error('authStore: 解析用户信息失败:', e)
+    // 解析失败时，清空localStorage中的用户信息
+    localStorage.removeItem('user')
+  }
+  
   const isLoading = ref(false)
 
   const isAuthenticated = computed(() => !!token.value)
