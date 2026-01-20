@@ -194,17 +194,19 @@ async function createPost() {
       }
     }
 
-    const post = await socialService.createPost({
+    await socialService.createPost({
       content: postForm.value.content,
       tags: postForm.value.tags,
       media_urls: uploadedUrls
     })
 
-    socialStore.addToFeed(post)
     message.success('发布成功')
     showCreateModal.value = false
     postForm.value = { content: '', tags: [], media_urls: [] }
     fileList.value = []
+
+    // Reload feed to show the new post
+    await loadFeed()
   } catch (error) {
     message.error('发布失败')
   } finally {

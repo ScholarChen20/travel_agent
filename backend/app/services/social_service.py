@@ -179,7 +179,8 @@ class SocialService:
                 }).sort("created_at", -1).limit(following_limit)
 
                 async for post in following_cursor:
-                    posts.append(self._format_post(post))
+                    formatted_post = await self._format_post(post, user_id)
+                    posts.append(formatted_post)
 
             # 2. 热门内容 (30%)
             # 时间衰减：只看最近7天的内容
@@ -191,7 +192,8 @@ class SocialService:
 
             async for post in popular_cursor:
                 if post not in posts:
-                    posts.append(self._format_post(post))
+                    formatted_post = await self._format_post(post, user_id)
+                    posts.append(formatted_post)
 
             # 3. 推荐内容 (20%)
             # 基于用户偏好（简化版：随机推荐）
@@ -201,7 +203,8 @@ class SocialService:
 
             async for post in recommended_cursor:
                 if post not in posts:
-                    posts.append(self._format_post(post))
+                    formatted_post = await self._format_post(post, user_id)
+                    posts.append(formatted_post)
 
             # 按时间排序
             posts.sort(key=lambda x: x["created_at"], reverse=True)
@@ -404,7 +407,8 @@ class SocialService:
 
             posts = []
             async for post in cursor:
-                posts.append(self._format_post(post))
+                formatted_post = await self._format_post(post, None)
+                posts.append(formatted_post)
 
             return posts
 
@@ -473,7 +477,7 @@ class SocialService:
                 {"$inc": {"view_count": 1}}
             )
 
-            return self._format_post(post)
+            return await self._format_post(post, None)
 
         except Exception as e:
             logger.error(f"获取帖子详情失败: {str(e)}")
@@ -544,7 +548,8 @@ class SocialService:
 
             posts = []
             async for post in cursor:
-                posts.append(self._format_post(post))
+                formatted_post = await self._format_post(post, None)
+                posts.append(formatted_post)
 
             return posts
 
@@ -568,13 +573,56 @@ class SocialService:
             logger.error(f"获取关注列表失败: {str(e)}")
             return []
 
-    def _format_post(self, post: Dict[str, Any]) -> Dict[str, Any]:
+    async def _format_post(self, post: Dict[str, Any], current_user_id: Optional[int] = None) -> Dict[str, Any]:
         """格式化帖子数据"""
         post.pop("_id", None)
         if isinstance(post.get("created_at"), datetime):
             post["created_at"] = post["created_at"].isoformat()
         if isinstance(post.get("updated_at"), datetime):
             post["updated_at"] = post["updated_at"].isoformat()
+
+        # Rename fields to match frontend expectations
+        if "like_count" in post:
+            post["likes_count"] = post.pop("like_count")
+        if "comment_count" in post:
+            post["comments_count"] = post.pop("comment_count")
+
+        # Add id field (copy of post_id for frontend compatibility)
+        if "post_id" in post:
+            post["id"] = post["post_id"]
+
+        # Get user information from MySQL
+        try:
+            user_id = post.get("user_id")
+            if user_id:
+                result = await self.mysql_db.fetch_one(
+                    "SELECT username, avatar_url FROM users WHERE id = ?",
+                    (user_id,)
+                )
+                if result:
+                    post["username"] = result["username"]
+                    post["user_avatar"] = result.get("avatar_url")
+                else:
+                    post["username"] = "未知用户"
+                    post["user_avatar"] = None
+        except Exception as e:
+            logger.error(f"获取用户信息失败: {str(e)}")
+            post["username"] = "未知用户"
+            post["user_avatar"] = None
+
+        # Check if current user liked this post
+        post["is_liked"] = False
+        if current_user_id and post.get("post_id"):
+            try:
+                likes_collection = self.mongodb.get_collection(self.likes_collection)
+                like = await likes_collection.find_one({
+                    "user_id": current_user_id,
+                    "post_id": post["post_id"]
+                })
+                post["is_liked"] = like is not None
+            except Exception as e:
+                logger.error(f"检查点赞状态失败: {str(e)}")
+
         return post
 
 

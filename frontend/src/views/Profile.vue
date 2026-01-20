@@ -115,6 +115,7 @@ import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { UploadOutlined } from '@ant-design/icons-vue'
 import { userService } from '@/services/user'
+import { API_BASE_URL } from '@/utils/axios'
 
 const profile = ref<any>(null)
 const stats = ref<any>(null)
@@ -141,11 +142,41 @@ onMounted(async () => {
 
 async function loadProfile() {
   try {
-    profile.value = await userService.getProfile()
+    const response = await userService.getProfile()
+    
+    // 解析travel_preferences数组，提取nickname、bio、location
+    const preferences = {}
+    if (response.profile?.travel_preferences) {
+      response.profile.travel_preferences.forEach(pref => {
+        const [key, value] = pref.split(':')
+        if (key && value) {
+          preferences[key] = value
+        }
+      })
+    }
+    
+    // 处理后的profile数据，添加解析后的属性和完整的头像URL
+    let avatarUrl = response.avatar_url
+    // 如果头像URL是相对路径，添加API_BASE_URL前缀
+    if (avatarUrl && avatarUrl.startsWith('/')) {
+      avatarUrl = API_BASE_URL + avatarUrl
+    }
+    
+    profile.value = {
+      ...response,
+      avatar_url: avatarUrl,
+      profile: {
+        ...response.profile,
+        nickname: preferences.nickname,
+        bio: preferences.bio,
+        location: preferences.location
+      }
+    }
+    
     profileForm.value = {
-      nickname: profile.value.profile?.nickname || '',
-      bio: profile.value.profile?.bio || '',
-      location: profile.value.profile?.location || ''
+      nickname: preferences.nickname || '',
+      bio: preferences.bio || '',
+      location: preferences.location || ''
     }
   } catch (error) {
     message.error('加载个人资料失败')
@@ -172,7 +203,9 @@ async function loadVisitedCities() {
 async function updateProfile() {
   updating.value = true
   try {
+    // 后端只返回成功消息，不返回完整用户资料
     await userService.updateProfile(profileForm.value)
+    // 重新加载完整用户资料
     await loadProfile()
     message.success('更新成功')
   } catch (error) {
@@ -185,7 +218,8 @@ async function updateProfile() {
 async function uploadAvatar(file: File) {
   try {
     const result = await userService.uploadAvatar(file)
-    profile.value.avatar_url = result.avatar_url
+    // 重新加载完整用户资料以获取最新的头像URL
+    await loadProfile()
     message.success('头像上传成功')
   } catch (error) {
     message.error('头像上传失败')

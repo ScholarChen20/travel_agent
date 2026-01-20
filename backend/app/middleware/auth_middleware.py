@@ -74,15 +74,30 @@ async def verify_token(token: str) -> Optional[CurrentUser]:
             if is_blacklisted:
                 logger.warning(f"Token已被加入黑名单: {jti[:8]}...")
                 return None
+    except RuntimeError as e:
+        if "Redis客户端未初始化" in str(e):
+            logger.warning("Redis客户端未初始化，跳过黑名单检查")
+            # Redis未初始化时跳过黑名单检查，继续处理
+            pass
+        else:
+            logger.error(f"检查Token黑名单失败: {str(e)}")
+            # 其他Redis错误不应阻止认证，继续处理
+            pass
     except Exception as e:
         logger.error(f"检查Token黑名单失败: {str(e)}")
-        # Redis失败不应阻止认证，继续处理
+        # 其他Redis错误不应阻止认证，继续处理
         pass
 
     # 3. 从数据库验证用户是否存在且激活
-    user_id = payload.get("sub")
-    if not user_id:
+    user_id_str = payload.get("sub")
+    if not user_id_str:
         logger.warning("Token中缺少用户ID")
+        return None
+    
+    try:
+        user_id = int(user_id_str)  # 将字符串类型的user_id转换为整数
+    except ValueError:
+        logger.warning(f"Token中用户ID格式错误: {user_id_str}")
         return None
 
     try:

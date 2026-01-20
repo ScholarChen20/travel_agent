@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     redis_password: str = "123456"  # 从.env读取
     redis_db: int = 0
 
+    # 阿里云OSS配置
+    access_key_id: str = "LTAI5tChzi1g1csczkKBbec9"  # 阿里云accessKey
+    access_key_secret: str ="b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX"  # 阿里云secretKey
+    endpoint: str = "oss-cn-beijing.aliyuncs.com"  # 阿里云endpoint
+    bucket_name: str = "java-webai-1"  # 阿里云bucketName
+
     # ============ 新增：JWT配置 ============
     jwt_secret_key: str = "UoFj5OGotDPJFlQLFTHQDZtB7QDtR3lG01Xk+iDVnY4="  # 必须在.env中设置，用于JWT签名
     jwt_algorithm: str = "HS256"

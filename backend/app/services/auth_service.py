@@ -150,7 +150,7 @@ class AuthService:
 
         # Token负载
         payload = {
-            "sub": user_id,  # Subject: 用户ID
+            "sub": str(user_id),  # Subject: 用户ID（必须是字符串类型）
             "username": username,
             "role": role,
             "device_id": device_id,
