@@ -36,7 +36,8 @@ export const socialService = {
       const response = await axios.get('/api/social/posts', {
         params: { limit, offset }
       })
-      return response.data.posts
+      // 适配新的响应格式
+      return response.data.data?.posts || response.data.posts || []
     } catch (error) {
       console.error('API请求失败:', error)
       throw error
@@ -45,12 +46,12 @@ export const socialService = {
 
   async createPost(data: CreatePostRequest): Promise<Post> {
     const response = await axios.post('/api/social/posts', data)
-    return response.data
+    return response.data.data || response.data
   },
 
   async getPost(postId: string): Promise<Post> {
     const response = await axios.get(`/api/social/posts/${postId}`)
-    return response.data
+    return response.data.data || response.data
   },
 
   async deletePost(postId: string): Promise<void> {
@@ -70,14 +71,15 @@ export const socialService = {
     const response = await axios.get(`/api/social/posts/${postId}/comments`, {
       params: { limit, offset }
     })
-    return response.data.comments
+    // 适配新的响应格式
+    return response.data.data?.comments || response.data.comments || []
   },
 
   async addComment(postId: string, content: string): Promise<Comment> {
     const response = await axios.post(`/api/social/posts/${postId}/comments`, {
       content
     })
-    return response.data
+    return response.data.data || response.data
   },
 
   async uploadMedia(file: File): Promise<{ url: string }> {
@@ -86,7 +88,7 @@ export const socialService = {
     const response = await axios.post('/api/social/posts/media', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    return response.data
+    return response.data.data || response.data
   },
 
   async followUser(userId: number): Promise<void> {
@@ -102,13 +104,13 @@ export const socialService = {
     const response = await axios.get(`/api/social/users/${userId}/posts`, {
       params: { limit, offset }
     })
-    return response.data.posts
+    return response.data.data?.posts || response.data.posts || []
   },
 
   async getPopularTags(limit = 20): Promise<Array<{ tag: string; count: number }>> {
     const response = await axios.get('/api/social/tags', {
       params: { limit }
     })
-    return response.data.tags
+    return response.data.data?.tags || response.data.tags || []
   }
 }

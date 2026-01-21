@@ -160,10 +160,6 @@ async function loadProfile() {
     
     // 处理后的profile数据，添加解析后的属性和完整的头像URL
     let avatarUrl = response.avatar_url
-    // 如果头像URL是相对路径，添加API_BASE_URL前缀
-    if (avatarUrl && avatarUrl.startsWith('/')) {
-      avatarUrl = API_BASE_URL + avatarUrl
-    }
     
     profile.value = {
       ...response,

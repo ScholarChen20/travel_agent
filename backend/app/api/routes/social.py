@@ -16,6 +16,7 @@
 """
 
 from typing import Optional, List
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Query
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -23,6 +24,7 @@ from loguru import logger
 from ...services.social_service import get_social_service
 from ...services.storage_service import get_storage_service
 from ...middleware.auth_middleware import get_current_user, CurrentUser
+from ...utils.response import ApiResponse, ResponseCode
 
 
 router = APIRouter(prefix="/social", tags=["社交功能"])
@@ -84,7 +86,7 @@ class MediaUploadResponse(BaseModel):
 
 # ========== API端点 ==========
 
-@router.post("/posts", response_model=PostResponse)
+@router.post("/posts")
 async def create_post(
     request: CreatePostRequest,
     current_user: CurrentUser = Depends(get_current_user)
@@ -117,22 +119,16 @@ async def create_post(
 
         logger.info(f"帖子已创建: {post_id} (用户: {current_user.username})")
 
-        return PostResponse(
-            post_id=post_id,
-            message="帖子创建成功"
+        return ApiResponse.created(
+            data={"post_id": post_id},
+            msg="帖子创建成功"
         )
 
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        return ApiResponse.bad_request(msg=str(e))
     except Exception as e:
         logger.error(f"创建帖子失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="创建帖子失败"
-        )
+        return ApiResponse.internal_error(msg="创建帖子失败")
 
 
 @router.post("/posts/media", response_model=MediaUploadResponse)
@@ -202,7 +198,7 @@ async def upload_media(
         )
 
 
-@router.get("/posts", response_model=FeedResponse)
+@router.get("/posts")
 async def get_feed(
     limit: int = Query(20, ge=1, le=100, description="返回数量"),
     offset: int = Query(0, ge=0, description="偏移量"),
@@ -225,17 +221,17 @@ async def get_feed(
             offset=offset
         )
 
-        return FeedResponse(
-            total=len(posts),
-            posts=posts
+        return ApiResponse.success(
+            data={
+                "total": len(posts),
+                "posts": posts
+            },
+            msg="获取成功"
         )
 
     except Exception as e:
         logger.error(f"获取Feed流失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="获取Feed流失败"
-        )
+        return ApiResponse.internal_error(msg="获取Feed流失败")
 
 
 @router.get("/posts/{post_id}")
@@ -271,7 +267,7 @@ async def get_post_detail(
         )
 
 
-@router.post("/posts/{post_id}/like", response_model=LikeResponse)
+@router.post("/posts/{post_id}/like")
 async def like_post(
     post_id: str,
     current_user: CurrentUser = Depends(get_current_user)
@@ -292,20 +288,17 @@ async def like_post(
         message = "已点赞" if liked else "已取消点赞"
         logger.info(f"{message}: {post_id} (用户: {current_user.username})")
 
-        return LikeResponse(
-            liked=liked,
-            message=message
+        return ApiResponse.success(
+            data={"liked": liked},
+            msg=message
         )
 
     except Exception as e:
         logger.error(f"点赞操作失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="点赞操作失败"
-        )
+        return ApiResponse.internal_error(msg="点赞操作失败")
 
 
-@router.post("/posts/{post_id}/comments", response_model=CommentResponse)
+@router.post("/posts/{post_id}/comments")
 async def create_comment(
     post_id: str,
     request: CommentRequest,
@@ -328,22 +321,27 @@ async def create_comment(
 
         logger.info(f"评论已发表: {comment_id} (帖子: {post_id}, 用户: {current_user.username})")
 
-        return CommentResponse(
-            comment_id=comment_id,
-            message="评论发表成功"
+        # 返回完整的评论数据
+        return ApiResponse.created(
+            data={
+                "comment_id": comment_id,
+                "id": comment_id,
+                "content": request.content,
+                "user_id": current_user.id,
+                "username": current_user.username,
+                "user_avatar": current_user.avatar_url,
+                "post_id": post_id,
+                "parent_id": request.parent_id,
+                "created_at": datetime.utcnow().isoformat()
+            },
+            msg="评论发表成功"
         )
 
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        return ApiResponse.bad_request(msg=str(e))
     except Exception as e:
         logger.error(f"发表评论失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="发表评论失败"
-        )
+        return ApiResponse.internal_error(msg="发表评论失败")
 
 
 @router.get("/posts/{post_id}/comments")
@@ -367,18 +365,18 @@ async def get_comments(
             offset=offset
         )
 
-        return {
-            "post_id": post_id,
-            "total": len(comments),
-            "comments": comments
-        }
+        return ApiResponse.success(
+            data={
+                "post_id": post_id,
+                "total": len(comments),
+                "comments": comments
+            },
+            msg="获取成功"
+        )
 
     except Exception as e:
         logger.error(f"获取评论列表失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="获取评论列表失败"
-        )
+        return ApiResponse.internal_error(msg="获取评论列表失败")
 
 
 @router.post("/users/{user_id}/follow", response_model=FollowResponse)
