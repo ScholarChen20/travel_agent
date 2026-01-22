@@ -14,6 +14,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from loguru import logger
+from sqlalchemy import text
 
 from ..database.mongodb import get_mongodb_client
 from ..database.mysql import get_mysql_db
@@ -117,11 +118,12 @@ class SocialService:
                         "reason": f"包含违禁词: {keyword}"
                     }
 
-            # 长度检查
-            if len(content) < 10:
+            # 长度检查（评论至少1个字符，帖子至少10个字符）
+            min_length = 1  # 评论可以很短
+            if len(content) < min_length:
                 return {
                     "status": "rejected",
-                    "reason": "内容过短"
+                    "reason": "内容不能为空"
                 }
 
             return {
@@ -516,10 +518,8 @@ class SocialService:
 
             comments = []
             async for comment in cursor:
-                comment.pop("_id", None)
-                if isinstance(comment.get("created_at"), datetime):
-                    comment["created_at"] = comment["created_at"].isoformat()
-                comments.append(comment)
+                formatted_comment = await self._format_comment(comment)
+                comments.append(formatted_comment)
 
             return comments
 
@@ -601,16 +601,18 @@ class SocialService:
         try:
             user_id = post.get("user_id")
             if user_id:
-                result = await self.mysql_db.fetch_one(
-                    "SELECT username, avatar_url FROM users WHERE id = ?",
-                    (user_id,)
-                )
-                if result:
-                    post["username"] = result["username"]
-                    post["user_avatar"] = result.get("avatar_url")
-                else:
-                    post["username"] = "未知用户"
-                    post["user_avatar"] = None
+                with self.mysql_db.get_session() as session:
+                    result = session.execute(
+                        text("SELECT username, avatar_url FROM users WHERE id = :user_id"),
+                        {"user_id": user_id}
+                    ).fetchone()
+
+                    if result:
+                        post["username"] = result[0]  # username
+                        post["user_avatar"] = result[1]  # avatar_url
+                    else:
+                        post["username"] = "未知用户"
+                        post["user_avatar"] = None
         except Exception as e:
             logger.error(f"获取用户信息失败: {str(e)}")
             post["username"] = "未知用户"
@@ -630,6 +632,50 @@ class SocialService:
                 logger.error(f"检查点赞状态失败: {str(e)}")
 
         return post
+
+    async def _format_comment(self, comment: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        格式化评论数据
+
+        Args:
+            comment: 原始评论数据
+
+        Returns:
+            Dict: 格式化后的评论数据
+        """
+        # 移除 MongoDB 的 _id
+        comment.pop("_id", None)
+
+        # 格式化时间
+        if isinstance(comment.get("created_at"), datetime):
+            comment["created_at"] = comment["created_at"].isoformat()
+
+        # 添加 id 字段（复制 comment_id）
+        if "comment_id" in comment:
+            comment["id"] = comment["comment_id"]
+
+        # 从 MySQL 获取用户信息
+        try:
+            user_id = comment.get("user_id")
+            if user_id:
+                with self.mysql_db.get_session() as session:
+                    result = session.execute(
+                        text("SELECT username, avatar_url FROM users WHERE id = :user_id"),
+                        {"user_id": user_id}
+                    ).fetchone()
+
+                    if result:
+                        comment["username"] = result[0]  # username
+                        comment["user_avatar"] = result[1]  # avatar_url
+                    else:
+                        comment["username"] = "未知用户"
+                        comment["user_avatar"] = None
+        except Exception as e:
+            logger.error(f"获取评论用户信息失败: {str(e)}")
+            comment["username"] = "未知用户"
+            comment["user_avatar"] = None
+
+        return comment
 
 
 # ========== 全局实例（单例模式） ==========

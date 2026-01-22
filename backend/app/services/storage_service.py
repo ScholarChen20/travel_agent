@@ -51,16 +51,14 @@ class StorageService:
             else:
                 try:
                     # 使用静态凭证认证（注意：是 Credentials 不是 StaticCredentials）
-                    credentials = oss.credentials.Credentials(
+                    credentials_provider = oss.credentials.StaticCredentialsProvider(
                         access_key_id=self.settings.oss_access_key_id,
                         access_key_secret=self.settings.oss_access_key_secret
                     )
                     config = oss.config.load_default()
-                    config.credentials_provider = oss.credentials.StaticCredentialsProvider(credentials)
-                    # 配置OSS客户端
-                    config.region = self.settings.oss_endpoint.split('.')[0].split('-')[-1]  # 从endpoint提取region
+                    config.credentials_provider = credentials_provider
                     config.endpoint = self.settings.oss_endpoint
-                    # 创建OSS客户端
+                    config.region = self.settings.region
                     self.oss_client = oss.Client(config)
                     logger.info(f"OSS云存储已初始化: {self.settings.oss_bucket_name}")
                 except Exception as e:

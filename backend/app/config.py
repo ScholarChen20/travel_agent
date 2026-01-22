@@ -84,11 +84,11 @@ class Settings(BaseSettings):
     oss_access_key_id: str = "LTAI5tChzi1g1csczkKBbec9"  # 从.env读取
     oss_access_key_secret: str = "b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX"  # 从.env读取
     region: str = "cn-beijing"  # 从.env读取
-    oss_endpoint: str = "https://oss-cn-beijing.aliyuncs.com"  # OSS地域节点
+    oss_endpoint: str = "oss-cn-beijing.aliyuncs.com"  # OSS地域节点
     oss_bucket_name: str = "java-webai-1"  # Bucket名称
     oss_url_prefix: str = ""  # 可选：自定义域名前缀，如 https://cdn.example.com
-    oss_avatar_dir: str = "avatars"  # 头像存储目录
-    oss_media_dir: str = "media"  # 媒体文件存储目录
+    oss_avatar_dir: str = "travel_avatars"  # 头像存储目录
+    oss_media_dir: str = "travel_media"  # 媒体文件存储目录
 
     # 日志配置
     log_level: str = "INFO"

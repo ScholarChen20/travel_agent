@@ -34,7 +34,8 @@ class CurrentUser:
         email: str,
         role: str,
         is_active: bool,
-        device_id: str
+        device_id: str,
+        avatar_url: Optional[str] = None
     ):
         self.id = id
         self.username = username
@@ -42,6 +43,7 @@ class CurrentUser:
         self.role = role
         self.is_active = is_active
         self.device_id = device_id
+        self.avatar_url = avatar_url
 
     def __repr__(self):
         return f"<CurrentUser(id={self.id}, username='{self.username}', role='{self.role}')>"
@@ -120,7 +122,8 @@ async def verify_token(token: str) -> Optional[CurrentUser]:
                 email=user.email,
                 role=user.role,
                 is_active=user.is_active,
-                device_id=payload.get("device_id", "default")
+                device_id=payload.get("device_id", "default"),
+                avatar_url=user.avatar_url
             )
 
     except Exception as e:
