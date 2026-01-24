@@ -9,7 +9,16 @@ MySQL种子数据脚本
 """
 
 import sys
+import os
 from pathlib import Path
+
+import bcrypt
+
+# 设置UTF-8编码（Windows兼容）
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent
@@ -161,12 +170,25 @@ def seed_data():
     print("👤 创建管理员账户（可选）...")
     print("="*60)
 
-    create_admin = input("  是否创建默认管理员账户？(y/n): ").strip().lower()
+    # 检查是否在交互式环境中
+    try:
+        create_admin = input("  是否创建默认管理员账户？(y/n): ").strip().lower()
+    except EOFError:
+        # 非交互式环境，跳过
+        print("  ⏭️  非交互式环境，跳过管理员账户创建")
+        create_admin = 'n'
 
     if create_admin == 'y':
-        admin_username = input("  请输入管理员用户名 [默认: admin]: ").strip() or "admin"
-        admin_email = input("  请输入管理员邮箱 [默认: admin@example.com]: ").strip() or "admin@example.com"
-        admin_password = input("  请输入管理员密码 [默认: Admin@123456]: ").strip() or "Admin@123456"
+        try:
+            admin_username = input("  请输入管理员用户名 [默认: admin]: ").strip() or "admin"
+            admin_email = input("  请输入管理员邮箱 [默认: admin@example.com]: ").strip() or "admin@example.com"
+            admin_password = input("  请输入管理员密码 [默认: Admin@123456]: ").strip() or "Admin@123456"
+        except EOFError:
+            # 使用默认值
+            admin_username = "admin"
+            admin_email = "admin@example.com"
+            admin_password = "Admin@123456"
+            print("  ℹ️  使用默认值创建管理员账户")
 
         with mysql_db.get_session() as session:
             # 检查是否已存在
@@ -177,8 +199,11 @@ def seed_data():
                 print(f"  ⚠️  管理员 '{admin_username}' 已存在，跳过创建")
             else:
                 # 哈希密码
-                pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-                password_hash = pwd_context.hash(admin_password)
+                password_bytes = admin_password.encode('utf-8')[:72]
+                salt = bcrypt.gensalt(rounds=12)
+                hashed_bytes = bcrypt.hashpw(password_bytes, salt)
+                password_hash =  hashed_bytes.decode('utf-8')
+
 
                 # 创建用户
                 admin_user = User(

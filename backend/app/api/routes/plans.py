@@ -37,12 +37,14 @@ class PlanDetailResponse(BaseModel):
     user_id: int = Field(..., description="用户ID")
     city: str = Field(..., description="城市")
     start_date: str = Field(..., description="开始日期")
+    end_date: Optional[str] = Field(None, description="结束日期")
     days: List[dict] = Field(..., description="每日行程")
-    weather_info: dict = Field(default={}, description="天气信息")
-    budget: Optional[float] = Field(None, description="预算")
-    preferences: dict = Field(default={}, description="用户偏好")
-    is_favorite: bool = Field(..., description="是否收藏")
-    is_completed: bool = Field(..., description="是否完成")
+    weather_info: Optional[List[dict]] = Field(default=[], description="天气信息")
+    budget: Optional[dict] = Field(None, description="预算详情")
+    overall_suggestions: Optional[str] = Field(None, description="总体建议")
+    preferences: Optional[dict] = Field(default={}, description="用户偏好")
+    is_favorite: bool = Field(default=False, description="是否收藏")
+    is_completed: bool = Field(default=False, description="是否完成")
     created_at: str = Field(..., description="创建时间")
     updated_at: str = Field(..., description="更新时间")
 
@@ -89,6 +91,8 @@ async def get_user_plans(
     try:
         plan_service = get_travel_plan_service()
 
+        logger.info(f"查询计划列表 - 用户ID: {current_user.id}, 用户名: {current_user.username}")
+
         # 查询计划列表
         plans = await plan_service.get_user_plans(
             user_id=current_user.id,
@@ -98,6 +102,8 @@ async def get_user_plans(
             limit=limit,
             skip=skip
         )
+
+        logger.info(f"查询到 {len(plans)} 个计划")
 
         return PlanListResponse(
             total=len(plans),
@@ -134,12 +140,24 @@ async def get_plan_detail(
                 detail="计划不存在或无权访问"
             )
 
+        # 确保必填字段存在
+        if 'is_completed' not in plan or plan['is_completed'] is None:
+            plan['is_completed'] = False
+        if 'is_favorite' not in plan or plan['is_favorite'] is None:
+            plan['is_favorite'] = False
+        if 'preferences' not in plan or plan['preferences'] is None:
+            plan['preferences'] = {}
+        if 'weather_info' not in plan or plan['weather_info'] is None:
+            plan['weather_info'] = []
+
         return PlanDetailResponse(**plan)
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"获取计划详情失败: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="获取计划详情失败"
@@ -205,22 +223,30 @@ async def update_plan(
 @router.post("/{plan_id}/favorite", response_model=MessageResponse)
 async def toggle_favorite(
     plan_id: str,
-    request: ToggleFavoriteRequest,
     current_user: CurrentUser = Depends(get_current_user)
 ):
     """
     切换计划收藏状态
 
-    标记为收藏或取消收藏
+    自动切换：如果已收藏则取消，如果未收藏则收藏
     """
     try:
         plan_service = get_travel_plan_service()
 
-        # 标记收藏
+        # 先获取当前状态
+        plan = await plan_service.get_plan_by_id(plan_id, user_id=current_user.id)
+        if not plan:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="计划不存在"
+            )
+
+        # 切换收藏状态
+        new_favorite_status = not plan.get('is_favorite', False)
         success = await plan_service.mark_favorite(
             plan_id=plan_id,
             user_id=current_user.id,
-            is_favorite=request.is_favorite
+            is_favorite=new_favorite_status
         )
 
         if not success:
@@ -229,7 +255,7 @@ async def toggle_favorite(
                 detail="计划不存在"
             )
 
-        action = "已收藏" if request.is_favorite else "已取消收藏"
+        action = "已收藏" if new_favorite_status else "已取消收藏"
         logger.info(f"计划{action}: {plan_id} (用户: {current_user.username})")
 
         return MessageResponse(message=f"计划{action}")

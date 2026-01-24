@@ -1,6 +1,7 @@
 """旅行规划API路由"""
 
 import secrets
+import asyncio
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from loguru import logger
@@ -13,6 +14,7 @@ from ...models.schemas import (
 from ...agents.trip_planner_agent import get_trip_planner_agent
 from ...middleware.auth_middleware import get_current_user_optional, CurrentUser
 from ...services.travel_plan_service import get_travel_plan_service
+from ...services.image_service import get_image_service
 
 router = APIRouter(prefix="/trip", tags=["旅行规划"])
 
@@ -64,6 +66,11 @@ async def plan_trip(
         trip_plan = agent.plan_trip(request)
 
         logger.info("✅ 旅行计划生成成功")
+
+        # 获取并上传景点图片到 OSS
+        logger.info("📸 开始获取景点图片...")
+        await process_attraction_images(trip_plan, request.city)
+        logger.info("✅ 景点图片处理完成")
 
         # 如果用户已登录，保存计划到MongoDB
         plan_id = None
@@ -125,7 +132,7 @@ async def health_check():
     try:
         # 检查Agent是否可用
         agent = get_trip_planner_agent()
-        
+
         return {
             "status": "healthy",
             "service": "trip-planner",
@@ -137,4 +144,71 @@ async def health_check():
             status_code=503,
             detail=f"服务不可用: {str(e)}"
         )
+
+
+async def process_attraction_images(trip_plan, city: str):
+    """
+    处理旅行计划中的景点图片
+
+    为每个景点获取图片并上传到 OSS
+
+    Args:
+        trip_plan: 旅行计划对象
+        city: 城市名称
+    """
+    try:
+        image_service = get_image_service()
+
+        # 获取所有天的行程
+        days = trip_plan.days if hasattr(trip_plan, 'days') else []
+
+        # 收集所有需要获取图片的景点
+        tasks = []
+        attraction_refs = []  # 保存景点引用，用于后续更新
+
+        for day in days:
+            if hasattr(day, 'attractions') and day.attractions:
+                for attraction in day.attractions:
+                    # 只处理还没有图片的景点
+                    if not getattr(attraction, 'image_url', None):
+                        attraction_name = getattr(attraction, 'name', '')
+                        if attraction_name:
+                            # 创建异步任务
+                            task = image_service.get_and_upload_attraction_image(
+                                attraction_name,
+                                city
+                            )
+                            tasks.append(task)
+                            attraction_refs.append(attraction)
+
+        if not tasks:
+            logger.info("没有需要获取图片的景点")
+            return
+
+        logger.info(f"开始获取 {len(tasks)} 个景点的图片...")
+
+        # 并发获取所有图片（限制并发数为 5）
+        results = []
+        for i in range(0, len(tasks), 5):
+            batch = tasks[i:i+5]
+            batch_results = await asyncio.gather(*batch, return_exceptions=True)
+            results.extend(batch_results)
+
+        # 更新景点的图片 URL
+        success_count = 0
+        for attraction, result in zip(attraction_refs, results):
+            if isinstance(result, str) and result:
+                # 成功获取图片
+                attraction.image_url = result
+                success_count += 1
+            elif isinstance(result, Exception):
+                logger.error(f"获取景点图片失败: {attraction.name}, 错误: {str(result)}")
+            else:
+                logger.warning(f"未获取到景点图片: {attraction.name}")
+
+        logger.info(f"成功获取 {success_count}/{len(tasks)} 个景点的图片")
+
+    except Exception as e:
+        logger.error(f"处理景点图片失败: {str(e)}")
+        # 不抛出异常，图片获取失败不应该影响整个旅行计划的生成
 
