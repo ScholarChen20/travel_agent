@@ -302,7 +302,7 @@ class RedisClient:
     async def close(self):
         """关闭Redis客户端"""
         if self.client:
-            await self.client.close()
+            await self.client.aclose()
             logger.info("Redis客户端已关闭")
 
     # ========== 通用辅助方法 ==========

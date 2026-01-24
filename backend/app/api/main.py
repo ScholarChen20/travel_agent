@@ -169,7 +169,7 @@ async def shutdown_event():
 
         # 2. 关闭MongoDB
         mongodb_client = get_mongodb_client()
-        mongodb_client.close()
+        await mongodb_client.close()
         print("   ✅ MongoDB连接已关闭")
 
         # 3. 关闭Redis
