@@ -2,7 +2,7 @@
   <div class="plans-container">
     <a-page-header title="我的旅行计划" class="page-header">
       <template #extra>
-        <a-button type="primary" size="large" @click="$router.push('/')">
+        <a-button type="primary" size="large" @click="$router.push('/create-plan')">
           <PlusOutlined /> 创建新计划
         </a-button>
       </template>
@@ -127,7 +127,7 @@
           description="还没有旅行计划，开始创建你的第一个旅行计划吧！"
           class="empty-state"
         >
-          <a-button type="primary" size="large" @click="$router.push('/')">
+          <a-button type="primary" size="large" @click="$router.push('/create-plan')">
             <PlusOutlined /> 创建第一个计划
           </a-button>
         </a-empty>

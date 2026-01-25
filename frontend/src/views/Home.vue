@@ -66,224 +66,331 @@
       <p class="page-subtitle">基于AI的个性化旅行规划,让每一次出行都完美无忧</p>
     </div>
 
-    <a-card class="form-card" :bordered="false">
-      <a-form
-        :model="formData"
-        layout="vertical"
-        @finish="handleSubmit"
-      >
-        <!-- 第一步:目的地和日期 -->
-        <div class="form-section">
-          <div class="section-header">
-            <span class="section-icon">📍</span>
-            <span class="section-title">目的地与日期</span>
-          </div>
+    <!-- 主要内容区域 -->
+    <div class="content-wrapper">
+      <!-- 创建计划按钮 -->
+      <div class="action-section">
+        <a-button
+          type="primary"
+          size="large"
+          @click="$router.push('/create-plan')"
+          class="create-plan-button"
+        >
+          <span class="button-icon">🚀</span>
+          <span>开始规划我的旅行</span>
+        </a-button>
+      </div>
 
-          <a-row :gutter="24">
-            <a-col :span="8">
-              <a-form-item name="city" :rules="[{ required: true, message: '请输入目的地城市' }]">
-                <template #label>
-                  <span class="form-label">目的地城市</span>
-                </template>
-                <a-input
-                  v-model:value="formData.city"
-                  placeholder="例如: 北京"
-                  size="large"
-                  class="custom-input"
-                >
-                  <template #prefix>
-                    <span style="color: #1890ff;">🏙️</span>
-                  </template>
-                </a-input>
-              </a-form-item>
-            </a-col>
-            <a-col :span="6">
-              <a-form-item name="start_date" :rules="[{ required: true, message: '请选择开始日期' }]">
-                <template #label>
-                  <span class="form-label">开始日期</span>
-                </template>
-                <a-date-picker
-                  v-model:value="formData.start_date"
-                  style="width: 100%"
-                  size="large"
-                  class="custom-input"
-                  placeholder="选择日期"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="6">
-              <a-form-item name="end_date" :rules="[{ required: true, message: '请选择结束日期' }]">
-                <template #label>
-                  <span class="form-label">结束日期</span>
-                </template>
-                <a-date-picker
-                  v-model:value="formData.end_date"
-                  style="width: 100%"
-                  size="large"
-                  class="custom-input"
-                  placeholder="选择日期"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="4">
-              <a-form-item>
-                <template #label>
-                  <span class="form-label">旅行天数</span>
-                </template>
-                <div class="days-display-compact">
-                  <span class="days-value">{{ formData.travel_days }}</span>
-                  <span class="days-unit">天</span>
-                </div>
-              </a-form-item>
-            </a-col>
-          </a-row>
+      <!-- 旅行足迹卡片 -->
+      <a-card class="map-card" :bordered="false" v-if="authStore.isAuthenticated">
+        <template #title>
+          <div class="card-title">
+            <span class="title-icon">🗺️</span>
+            <span>我的旅行足迹</span>
+          </div>
+        </template>
+
+        <!-- 统计信息 -->
+        <div class="stats-section">
+          <div class="stat-item">
+            <div class="stat-value">{{ visitedCities.length }}</div>
+            <div class="stat-label">去过的城市</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ getProvinceCount() }}</div>
+            <div class="stat-label">去过的省份</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ getCoveragePercentage() }}%</div>
+            <div class="stat-label">覆盖率</div>
+          </div>
         </div>
 
-        <!-- 第二步:偏好设置 -->
-        <div class="form-section">
-          <div class="section-header">
-            <span class="section-icon">⚙️</span>
-            <span class="section-title">偏好设置</span>
-          </div>
-
-          <a-row :gutter="24">
-            <a-col :span="8">
-              <a-form-item name="transportation">
-                <template #label>
-                  <span class="form-label">交通方式</span>
-                </template>
-                <a-select v-model:value="formData.transportation" size="large" class="custom-select">
-                  <a-select-option value="公共交通">🚇 公共交通</a-select-option>
-                  <a-select-option value="自驾">🚗 自驾</a-select-option>
-                  <a-select-option value="步行">🚶 步行</a-select-option>
-                  <a-select-option value="混合">🔀 混合</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item name="accommodation">
-                <template #label>
-                  <span class="form-label">住宿偏好</span>
-                </template>
-                <a-select v-model:value="formData.accommodation" size="large" class="custom-select">
-                  <a-select-option value="经济型酒店">💰 经济型酒店</a-select-option>
-                  <a-select-option value="舒适型酒店">🏨 舒适型酒店</a-select-option>
-                  <a-select-option value="豪华酒店">⭐ 豪华酒店</a-select-option>
-                  <a-select-option value="民宿">🏡 民宿</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item name="preferences">
-                <template #label>
-                  <span class="form-label">旅行偏好</span>
-                </template>
-                <div class="preference-tags">
-                  <a-checkbox-group v-model:value="formData.preferences" class="custom-checkbox-group">
-                    <a-checkbox value="历史文化" class="preference-tag">🏛️ 历史文化</a-checkbox>
-                    <a-checkbox value="自然风光" class="preference-tag">🏞️ 自然风光</a-checkbox>
-                    <a-checkbox value="美食" class="preference-tag">🍜 美食</a-checkbox>
-                    <a-checkbox value="购物" class="preference-tag">🛍️ 购物</a-checkbox>
-                    <a-checkbox value="艺术" class="preference-tag">🎨 艺术</a-checkbox>
-                    <a-checkbox value="休闲" class="preference-tag">☕ 休闲</a-checkbox>
-                  </a-checkbox-group>
-                </div>
-              </a-form-item>
-            </a-col>
-          </a-row>
+        <!-- 地图容器 -->
+        <div class="map-container">
+          <a-spin :spinning="mapLoading" tip="加载地图中...">
+            <div ref="mapRef" class="china-map"></div>
+          </a-spin>
         </div>
 
-        <!-- 第三步:额外要求 -->
-        <div class="form-section">
-          <div class="section-header">
-            <span class="section-icon">💬</span>
-            <span class="section-title">额外要求</span>
+        <!-- 城市列表 -->
+        <div class="cities-list" v-if="visitedCities.length > 0">
+          <div class="cities-title">已访问城市：</div>
+          <div class="cities-tags">
+            <a-tag
+              v-for="city in visitedCities"
+              :key="city"
+              color="blue"
+              class="city-tag"
+            >
+              📍 {{ city }}
+            </a-tag>
           </div>
-
-          <a-form-item name="free_text_input">
-            <a-textarea
-              v-model:value="formData.free_text_input"
-              placeholder="请输入您的额外要求,例如:想去看升旗、需要无障碍设施、对海鲜过敏等..."
-              :rows="3"
-              size="large"
-              class="custom-textarea"
-            />
-          </a-form-item>
         </div>
 
-        <!-- 提交按钮 -->
-        <a-form-item>
-          <a-button
-            type="primary"
-            html-type="submit"
-            :loading="loading"
-            size="large"
-            block
-            class="submit-button"
-          >
-            <template v-if="!loading">
-              <span class="button-icon">🚀</span>
-              <span>开始规划我的旅行</span>
-            </template>
-            <template v-else>
-              <span>正在生成中...</span>
-            </template>
+        <!-- 空状态 -->
+        <a-empty
+          v-else
+          description="还没有旅行足迹，快去创建你的第一个旅行计划吧！"
+          class="empty-state"
+        >
+          <a-button type="primary" @click="$router.push('/create-plan')">
+            创建旅行计划
           </a-button>
-        </a-form-item>
+        </a-empty>
+      </a-card>
 
-        <!-- 加载进度条 -->
-        <a-form-item v-if="loading">
-          <div class="loading-container">
-            <a-progress
-              :percent="loadingProgress"
-              status="active"
-              :stroke-color="{
-                '0%': '#667eea',
-                '100%': '#764ba2',
-              }"
-              :stroke-width="10"
-            />
-            <p class="loading-status">
-              {{ loadingStatus }}
-            </p>
-          </div>
-        </a-form-item>
-      </a-form>
-    </a-card>
+      <!-- 未登录提示 -->
+      <a-card class="map-card" :bordered="false" v-else>
+        <a-empty description="登录后查看你的旅行足迹">
+          <a-button type="primary" @click="$router.push('/login')">
+            立即登录
+          </a-button>
+        </a-empty>
+      </a-card>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { UserOutlined, SettingOutlined, LogoutOutlined } from '@ant-design/icons-vue'
-import { generateTripPlan } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
-import type { TripFormData } from '@/types'
-import type { Dayjs } from 'dayjs'
-import {userService} from "@/services/user.ts";
+import { userService } from '@/services/user'
+import * as echarts from 'echarts'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-// 使用ref存储头像URL
 const userAvatar = ref<string | undefined>()
+const visitedCities = ref<string[]>([])
+const mapRef = ref<HTMLElement>()
+const mapLoading = ref(false)
+let chartInstance: echarts.ECharts | null = null
 
-// 在组件挂载后异步获取用户信息
-onMounted(async () => {
+// 中国省份总数（用于计算覆盖率）
+const TOTAL_PROVINCES = 34
+
+// 城市到省份的映射
+const cityProvinceMap: Record<string, string> = {
+  // 直辖市
+  '北京': '北京',
+  '上海': '上海',
+  '天津': '天津',
+  '重庆': '重庆',
+
+  // 广东省
+  '广州': '广东',
+  '深圳': '广东',
+  '珠海': '广东',
+  '汕头': '广东',
+  '佛山': '广东',
+  '韶关': '广东',
+  '湛江': '广东',
+  '肇庆': '广东',
+  '江门': '广东',
+  '茂名': '广东',
+  '惠州': '广东',
+  '梅州': '广东',
+  '汕尾': '广东',
+  '河源': '广东',
+  '阳江': '广东',
+  '清远': '广东',
+  '东莞': '广东',
+  '中山': '广东',
+  '潮州': '广东',
+  '揭阳': '广东',
+  '云浮': '广东',
+
+  // 浙江省
+  '杭州': '浙江',
+  '宁波': '浙江',
+  '温州': '浙江',
+  '嘉兴': '浙江',
+  '湖州': '浙江',
+  '绍兴': '浙江',
+  '金华': '浙江',
+  '衢州': '浙江',
+  '舟山': '浙江',
+  '台州': '浙江',
+  '丽水': '浙江',
+
+  // 江苏省
+  '南京': '江苏',
+  '无锡': '江苏',
+  '徐州': '江苏',
+  '常州': '江苏',
+  '苏州': '江苏',
+  '南通': '江苏',
+  '连云港': '江苏',
+  '淮安': '江苏',
+  '盐城': '江苏',
+  '扬州': '江苏',
+  '镇江': '江苏',
+  '泰州': '江苏',
+  '宿迁': '江苏',
+
+  // 福建省
+  '福州': '福建',
+  '厦门': '福建',
+  '莆田': '福建',
+  '三明': '福建',
+  '泉州': '福建',
+  '漳州': '福建',
+  '南平': '福建',
+  '龙岩': '福建',
+  '宁德': '福建',
+
+  // 湖南省
+  '长沙': '湖南',
+  '株洲': '湖南',
+  '湘潭': '湖南',
+  '衡阳': '湖南',
+  '邵阳': '湖南',
+  '岳阳': '湖南',
+  '常德': '湖南',
+  '张家界': '湖南',
+  '益阳': '湖南',
+  '郴州': '湖南',
+  '永州': '湖南',
+  '怀化': '湖南',
+  '娄底': '湖南',
+  '湘西': '湖南',
+
+  // 湖北省
+  '武汉': '湖北',
+  '黄石': '湖北',
+  '十堰': '湖北',
+  '宜昌': '湖北',
+  '襄阳': '湖北',
+  '鄂州': '湖北',
+  '荆门': '湖北',
+  '孝感': '湖北',
+  '荆州': '湖北',
+  '黄冈': '湖北',
+  '咸宁': '湖北',
+  '随州': '湖北',
+  '恩施': '湖北',
+
+  // 江西省
+  '南昌': '江西',
+  '景德镇': '江西',
+  '萍乡': '江西',
+  '九江': '江西',
+  '新余': '江西',
+  '鹰潭': '江西',
+  '赣州': '江西',
+  '吉安': '江西',
+  '宜春': '江西',
+  '抚州': '江西',
+  '上饶': '江西',
+
+  // 安徽省
+  '合肥': '安徽',
+  '芜湖': '安徽',
+  '蚌埠': '安徽',
+  '淮南': '安徽',
+  '马鞍山': '安徽',
+  '淮北': '安徽',
+  '铜陵': '安徽',
+  '安庆': '安徽',
+  '黄山': '安徽',
+  '滁州': '安徽',
+  '阜阳': '安徽',
+  '宿州': '安徽',
+  '六安': '安徽',
+  '亳州': '安徽',
+  '池州': '安徽',
+  '宣城': '安徽',
+
+  // 广西壮族自治区
+  '南宁': '广西',
+  '柳州': '广西',
+  '桂林': '广西',
+  '梧州': '广西',
+  '北海': '广西',
+  '防城港': '广西',
+  '钦州': '广西',
+  '贵港': '广西',
+  '玉林': '广西',
+  '百色': '广西',
+  '贺州': '广西',
+  '河池': '广西',
+  '来宾': '广西',
+  '崇左': '广西',
+
+  // 河北省
+  '石家庄': '河北',
+  '唐山': '河北',
+  '秦皇岛': '河北',
+  '邯郸': '河北',
+  '邢台': '河北',
+  '保定': '河北',
+  '张家口': '河北',
+  '承德': '河北',
+  '沧州': '河北',
+  '廊坊': '河北',
+  '衡水': '河北',
+
+  // 四川省
+  '成都': '四川',
+  '自贡': '四川',
+  '攀枝花': '四川',
+  '泸州': '四川',
+  '德阳': '四川',
+  '绵阳': '四川',
+  '广元': '四川',
+  '遂宁': '四川',
+  '内江': '四川',
+  '乐山': '四川',
+  '南充': '四川',
+  '眉山': '四川',
+  '宜宾': '四川',
+  '广安': '四川',
+  '达州': '四川',
+  '雅安': '四川',
+  '巴中': '四川',
+  '资阳': '四川',
+  '阿坝': '四川',
+  '甘孜': '四川',
+  '凉山': '四川',
+
+  // 其他省份主要城市
+  '西安': '陕西',
+  '郑州': '河南',
+  '济南': '山东',
+  '青岛': '山东',
+  '烟台': '山东',
+  '昆明': '云南',
+  '大理': '云南',
+  '丽江': '云南',
+  '拉萨': '西藏',
+  '乌鲁木齐': '新疆',
+  '哈尔滨': '黑龙江',
+  '长春': '吉林',
+  '沈阳': '辽宁',
+  '大连': '辽宁',
+  '呼和浩特': '内蒙古',
+  '银川': '宁夏',
+  '兰州': '甘肃',
+  '西宁': '青海',
+  '贵阳': '贵州',
+  '海口': '海南',
+  '三亚': '海南',
+  '太原': '山西',
+}
+
+// 获取用户头像
+async function fetchUserAvatar() {
   try {
-    // 尝试从authStore获取用户信息
     if (authStore.user.value?.avatar_url) {
       userAvatar.value = authStore.user.value.avatar_url
-      console.log('从authStore获取头像URL:', userAvatar.value)
     } else {
-      // 如果authStore中没有，则直接从API获取
       const response = await userService.getProfile()
       userAvatar.value = response.avatar_url
-      console.log('从API获取头像URL:', userAvatar.value)
-      
-      // 更新authStore中的用户信息
+
       if (authStore.user.value) {
         authStore.setUser({
           ...authStore.user.value,
@@ -294,128 +401,253 @@ onMounted(async () => {
   } catch (error) {
     console.error('获取头像URL失败:', error)
   }
-})
-
-
-
-const loading = ref(false)
-const loadingProgress = ref(0)
-const loadingStatus = ref('')
-
-interface FormData {
-  city: string
-  start_date: Dayjs | null
-  end_date: Dayjs | null
-  travel_days: number
-  transportation: string
-  accommodation: string
-  preferences: string[]
-  free_text_input: string
 }
 
-const formData = reactive<FormData>({
-  city: '',
-  start_date: null,
-  end_date: null,
-  travel_days: 1,
-  transportation: '公共交通',
-  accommodation: '经济型酒店',
-  preferences: [],
-  free_text_input: ''
-})
+// 获取已访问城市
+async function fetchVisitedCities() {
+  try {
+    const cities = await userService.getVisitedCities()
+    visitedCities.value = Array.isArray(cities) ? cities : []
 
-// 监听日期变化,自动计算旅行天数
-watch([() => formData.start_date, () => formData.end_date], ([start, end]) => {
-  if (start && end) {
-    const days = end.diff(start, 'day') + 1
-    if (days > 0 && days <= 30) {
-      formData.travel_days = days
-    } else if (days > 30) {
-      message.warning('旅行天数不能超过30天')
-      formData.end_date = null
-    } else {
-      message.warning('结束日期不能早于开始日期')
-      formData.end_date = null
-    }
+    // 等待DOM更新后初始化地图
+    await nextTick()
+    initMap()
+  } catch (error) {
+    console.error('获取已访问城市失败:', error)
+    visitedCities.value = []
   }
-})
+}
 
-const handleSubmit = async () => {
-  if (!formData.start_date || !formData.end_date) {
-    message.error('请选择日期')
-    return
-  }
-
-  loading.value = true
-  loadingProgress.value = 0
-  loadingStatus.value = '正在初始化...'
-
-  // 模拟进度更新
-  const progressInterval = setInterval(() => {
-    if (loadingProgress.value < 90) {
-      loadingProgress.value += 10
-
-      // 更新状态文本
-      if (loadingProgress.value <= 30) {
-        loadingStatus.value = '🔍 正在搜索景点...'
-      } else if (loadingProgress.value <= 50) {
-        loadingStatus.value = '🌤️ 正在查询天气...'
-      } else if (loadingProgress.value <= 70) {
-        loadingStatus.value = '🏨 正在推荐酒店...'
-      } else {
-        loadingStatus.value = '📋 正在生成行程计划...'
-      }
+// 获取去过的省份数量
+function getProvinceCount(): number {
+  const provinces = new Set<string>()
+  visitedCities.value.forEach(city => {
+    const province = getCityProvince(city)
+    if (province) {
+      provinces.add(province)
     }
-  }, 500)
+  })
+  return provinces.size
+}
+
+// 获取覆盖率
+function getCoveragePercentage(): number {
+  const provinceCount = getProvinceCount()
+  return Math.round((provinceCount / TOTAL_PROVINCES) * 100)
+}
+
+// 根据城市名称获取省份
+function getCityProvince(city: string): string {
+  return cityProvinceMap[city] || ''
+}
+
+// 初始化地图
+async function initMap() {
+  if (!mapRef.value) return
+
+  mapLoading.value = true
 
   try {
-    const requestData: TripFormData = {
-      city: formData.city,
-      start_date: formData.start_date.format('YYYY-MM-DD'),
-      end_date: formData.end_date.format('YYYY-MM-DD'),
-      travel_days: formData.travel_days,
-      transportation: formData.transportation,
-      accommodation: formData.accommodation,
-      preferences: formData.preferences,
-      free_text_input: formData.free_text_input
+    // 从在线CDN加载中国地图数据
+    const response = await fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
+    const chinaJson = await response.json()
+
+    // 注册中国地图
+    echarts.registerMap('china', chinaJson)
+
+    // 销毁旧实例
+    if (chartInstance) {
+      chartInstance.dispose()
     }
 
-    const response = await generateTripPlan(requestData)
+    // 创建新实例
+    chartInstance = echarts.init(mapRef.value)
 
-    clearInterval(progressInterval)
-    loadingProgress.value = 100
-    loadingStatus.value = '✅ 完成!'
+    // 获取省份访问数据
+    const provinceData = getProvinceData()
 
-    if (response.success && response.data) {
-      // 保存到sessionStorage
-      sessionStorage.setItem('tripPlan', JSON.stringify(response.data))
+    console.log('省份数据:', provinceData)
+    console.log('访问的城市:', visitedCities.value)
+    console.log('地图中的省份名称:', chinaJson.features.map((f: any) => f.properties.name))
 
-      message.success('旅行计划生成成功!')
-
-      // 短暂延迟后跳转
-      setTimeout(() => {
-        router.push('/result')
-      }, 10) // 延迟10毫秒
-    } else {
-      message.error(response.message || '生成失败')
+    const option: echarts.EChartsOption = {
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => {
+          if (params.data && params.data.value > 0) {
+            return `${params.name}<br/>访问城市: ${params.data.cities.join('、')}<br/>城市数量: ${params.data.value}`
+          }
+          return `${params.name}<br/>未访问`
+        },
+        backgroundColor: 'rgba(50, 50, 50, 0.9)',
+        borderColor: '#667eea',
+        borderWidth: 1,
+        textStyle: {
+          color: '#fff'
+        }
+      },
+      visualMap: {
+        show: provinceData.length > 0,
+        min: 0,
+        max: Math.max(...provinceData.map(d => d.value), 1),
+        text: ['访问多', '访问少'],
+        realtime: false,
+        calculable: true,
+        inRange: {
+          color: ['#a8d5ff', '#4da6ff', '#1a8cff', '#0066cc', '#004d99']
+        },
+        textStyle: {
+          color: '#333'
+        },
+        left: 'left',
+        bottom: '20px'
+      },
+      series: [
+        {
+          name: '访问城市',
+          type: 'map',
+          map: 'china',
+          roam: true,
+          zoom: 1.2,
+          emphasis: {
+            label: {
+              show: true,
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 'bold'
+            },
+            itemStyle: {
+              areaColor: '#ffd700',
+              borderColor: '#fff',
+              borderWidth: 2,
+              shadowColor: 'rgba(0, 0, 0, 0.5)',
+              shadowBlur: 10
+            }
+          },
+          select: {
+            label: {
+              show: true,
+              color: '#fff'
+            },
+            itemStyle: {
+              areaColor: '#ffa500'
+            }
+          },
+          itemStyle: {
+            areaColor: '#f0f0f0',
+            borderColor: '#ccc',
+            borderWidth: 1
+          },
+          label: {
+            show: true,
+            fontSize: 11,
+            color: '#666'
+          },
+          data: provinceData
+        }
+      ]
     }
-  } catch (error: any) {
-    clearInterval(progressInterval)
-    message.error(error.message || '生成旅行计划失败,请稍后重试')
+
+    chartInstance.setOption(option)
+
+    // 响应式调整
+    const resizeHandler = () => {
+      chartInstance?.resize()
+    }
+    window.addEventListener('resize', resizeHandler)
+
+  } catch (error) {
+    console.error('加载地图失败:', error)
+    message.error('地图加载失败，请检查网络连接')
   } finally {
-    setTimeout(() => {
-      loading.value = false
-      loadingProgress.value = 0
-      loadingStatus.value = ''
-    }, 1000)
+    mapLoading.value = false
   }
 }
 
+// 获取省份数据
+function getProvinceData() {
+  const provinceMap = new Map<string, string[]>()
+
+  visitedCities.value.forEach(city => {
+    const province = getCityProvince(city)
+    if (province) {
+      if (!provinceMap.has(province)) {
+        provinceMap.set(province, [])
+      }
+      provinceMap.get(province)!.push(city)
+    }
+  })
+
+  // 转换省份名称为地图中的完整名称
+  return Array.from(provinceMap.entries()).map(([name, cities]) => ({
+    name: getFullProvinceName(name),
+    value: cities.length,
+    cities
+  }))
+}
+
+// 将简称转换为地图中的完整省份名称
+function getFullProvinceName(shortName: string): string {
+  const provinceNameMap: Record<string, string> = {
+    '北京': '北京市',
+    '天津': '天津市',
+    '上海': '上海市',
+    '重庆': '重庆市',
+    '河北': '河北省',
+    '山西': '山西省',
+    '辽宁': '辽宁省',
+    '吉林': '吉林省',
+    '黑龙江': '黑龙江省',
+    '江苏': '江苏省',
+    '浙江': '浙江省',
+    '安徽': '安徽省',
+    '福建': '福建省',
+    '江西': '江西省',
+    '山东': '山东省',
+    '河南': '河南省',
+    '湖北': '湖北省',
+    '湖南': '湖南省',
+    '广东': '广东省',
+    '海南': '海南省',
+    '四川': '四川省',
+    '贵州': '贵州省',
+    '云南': '云南省',
+    '陕西': '陕西省',
+    '甘肃': '甘肃省',
+    '青海': '青海省',
+    '台湾': '台湾省',
+    '内蒙古': '内蒙古自治区',
+    '广西': '广西壮族自治区',
+    '西藏': '西藏自治区',
+    '宁夏': '宁夏回族自治区',
+    '新疆': '新疆维吾尔自治区',
+    '香港': '香港特别行政区',
+    '澳门': '澳门特别行政区'
+  }
+
+  return provinceNameMap[shortName] || shortName
+}
+
+// 退出登录
 function handleLogout() {
   authStore.logout()
   message.success('已退出登录')
   router.push('/')
 }
+
+onMounted(async () => {
+  if (authStore.isAuthenticated) {
+    await fetchUserAvatar()
+    await fetchVisitedCities()
+  }
+})
+
+onUnmounted(() => {
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
+})
 </script>
 
 <style scoped>
@@ -472,10 +704,6 @@ function handleLogout() {
   border: none;
 }
 
-.home-container > *:not(.top-nav) {
-  padding: 60px 20px;
-}
-
 /* 背景装饰 */
 .bg-decoration {
   position: absolute;
@@ -530,7 +758,7 @@ function handleLogout() {
 /* 页面标题 */
 .page-header {
   text-align: center;
-  margin-bottom: 50px;
+  padding: 60px 20px 40px;
   animation: fadeInDown 0.8s ease-out;
   position: relative;
   z-index: 1;
@@ -571,171 +799,24 @@ function handleLogout() {
   font-weight: 300;
 }
 
-/* 表单卡片 */
-.form-card {
+/* 内容区域 */
+.content-wrapper {
   max-width: 1400px;
   margin: 0 auto;
-  border-radius: 24px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
-  animation: fadeInUp 0.8s ease-out;
+  padding: 0 24px 60px;
   position: relative;
   z-index: 1;
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.98) !important;
 }
 
-/* 表单分区 */
-.form-section {
-  margin-bottom: 32px;
-  padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
-  border-radius: 16px;
-  border: 1px solid #e8e8e8;
-  transition: all 0.3s ease;
+/* 操作区域 */
+.action-section {
+  text-align: center;
+  margin-bottom: 40px;
 }
 
-.form-section:hover {
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
-  transform: translateY(-2px);
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #667eea;
-}
-
-.section-icon {
-  font-size: 24px;
-  margin-right: 12px;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-/* 表单标签 */
-.form-label {
-  font-size: 15px;
-  font-weight: 500;
-  color: #555;
-}
-
-/* 自定义输入框 */
-.custom-input :deep(.ant-input),
-.custom-input :deep(.ant-picker) {
-  border-radius: 12px;
-  border: 2px solid #e8e8e8;
-  transition: all 0.3s ease;
-}
-
-.custom-input :deep(.ant-input:hover),
-.custom-input :deep(.ant-picker:hover) {
-  border-color: #667eea;
-}
-
-.custom-input :deep(.ant-input:focus),
-.custom-input :deep(.ant-picker-focused) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-/* 自定义选择框 */
-.custom-select :deep(.ant-select-selector) {
-  border-radius: 12px !important;
-  border: 2px solid #e8e8e8 !important;
-  transition: all 0.3s ease;
-}
-
-.custom-select:hover :deep(.ant-select-selector) {
-  border-color: #667eea !important;
-}
-
-.custom-select :deep(.ant-select-focused .ant-select-selector) {
-  border-color: #667eea !important;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
-}
-
-/* 天数显示 - 紧凑版 */
-.days-display-compact {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 40px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  color: white;
-}
-
-.days-display-compact .days-value {
-  font-size: 24px;
-  font-weight: 700;
-  margin-right: 4px;
-}
-
-.days-display-compact .days-unit {
-  font-size: 14px;
-}
-
-/* 偏好标签 */
-.preference-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.custom-checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
-}
-
-.preference-tag :deep(.ant-checkbox-wrapper) {
-  margin: 0 !important;
-  padding: 8px 16px;
-  border: 2px solid #e8e8e8;
-  border-radius: 20px;
-  transition: all 0.3s ease;
-  background: white;
-  font-size: 14px;
-}
-
-.preference-tag :deep(.ant-checkbox-wrapper:hover) {
-  border-color: #667eea;
-  background: #f5f7ff;
-}
-
-.preference-tag :deep(.ant-checkbox-wrapper-checked) {
-  border-color: #667eea;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-/* 自定义文本域 */
-.custom-textarea :deep(.ant-input) {
-  border-radius: 12px;
-  border: 2px solid #e8e8e8;
-  transition: all 0.3s ease;
-}
-
-.custom-textarea :deep(.ant-input:hover) {
-  border-color: #667eea;
-}
-
-.custom-textarea :deep(.ant-input:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-/* 提交按钮 */
-.submit-button {
+.create-plan-button {
   height: 56px;
+  padding: 0 48px;
   border-radius: 28px;
   font-size: 18px;
   font-weight: 600;
@@ -745,12 +826,12 @@ function handleLogout() {
   transition: all 0.3s ease;
 }
 
-.submit-button:hover {
+.create-plan-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
 }
 
-.submit-button:active {
+.create-plan-button:active {
   transform: translateY(0);
 }
 
@@ -759,20 +840,95 @@ function handleLogout() {
   font-size: 20px;
 }
 
-/* 加载容器 */
-.loading-container {
-  text-align: center;
+/* 地图卡片 */
+.map-card {
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+  animation: fadeInUp 0.8s ease-out;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.98) !important;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+}
+
+.title-icon {
+  margin-right: 12px;
+  font-size: 28px;
+}
+
+/* 统计信息 */
+.stats-section {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 32px;
   padding: 24px;
   background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
   border-radius: 16px;
-  border: 2px dashed #667eea;
 }
 
-.loading-status {
-  margin-top: 16px;
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
   color: #667eea;
-  font-size: 18px;
-  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+}
+
+/* 地图容器 */
+.map-container {
+  margin-bottom: 24px;
+}
+
+.china-map {
+  width: 100%;
+  height: 800px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+/* 城市列表 */
+.cities-list {
+  padding: 24px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+  border-radius: 16px;
+}
+
+.cities-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.cities-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.city-tag {
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+/* 空状态 */
+.empty-state {
+  padding: 60px 0;
 }
 
 /* 动画 */
@@ -798,4 +954,3 @@ function handleLogout() {
   }
 }
 </style>
-
