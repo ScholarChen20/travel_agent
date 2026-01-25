@@ -229,6 +229,55 @@ class UserService:
             logger.error(f"获取访问城市列表失败: {str(e)}")
             raise
 
+    def update_visited_cities(self, user_id: int, cities: List[str]) -> List[str]:
+        """
+        更新用户访问过的城市列表
+
+        Args:
+            user_id: 用户ID
+            cities: 城市列表
+
+        Returns:
+            List[str]: 更新后的城市列表
+        """
+        try:
+            with self.mysql_db.get_session() as session:
+                profile = session.query(UserProfile).filter(
+                    UserProfile.user_id == user_id
+                ).first()
+
+                if profile:
+                    # 更新城市列表
+                    profile.visited_cities = cities
+
+                    # 更新统计信息
+                    travel_stats = profile.travel_stats or {}
+                    travel_stats["total_cities"] = len(cities)
+                    profile.travel_stats = travel_stats
+
+                    session.commit()
+
+                    logger.info(f"用户 {user_id} 的访问城市列表已更新，共 {len(cities)} 个城市")
+
+                    return cities
+                else:
+                    # 如果用户档案不存在，创建一个
+                    new_profile = UserProfile(
+                        user_id=user_id,
+                        visited_cities=cities,
+                        travel_stats={"total_cities": len(cities)}
+                    )
+                    session.add(new_profile)
+                    session.commit()
+
+                    logger.info(f"为用户 {user_id} 创建了新档案并设置访问城市")
+
+                    return cities
+
+        except Exception as e:
+            logger.error(f"更新访问城市列表失败: {str(e)}")
+            raise
+
     def change_password(
         self,
         user_id: int,
