@@ -98,8 +98,9 @@ async function loadSessions() {
     if (sessions.length > 0 && !dialogStore.currentSessionId.value) {
       await selectSession(sessions[0].id)
     }
-  } catch (error) {
-    message.error('加载会话失败')
+  } catch (error: any) {
+    console.error('加载会话失败:', error)
+    message.error(error.response?.data?.detail || '加载会话失败')
   } finally {
     loading.value = false
   }
@@ -111,8 +112,9 @@ async function createNewSession() {
     await loadSessions()
     await selectSession(result.session_id)
     message.success('创建会话成功')
-  } catch (error) {
-    message.error('创建会话失败')
+  } catch (error: any) {
+    console.error('创建会话失败:', error)
+    message.error(error.response?.data?.detail || '创建会话失败')
   }
 }
 
@@ -196,9 +198,8 @@ async function sendMessage() {
     dialogStore.addMessage({
       id: Date.now().toString(),
       role: 'assistant',
-      content: response.response,
-      timestamp: response.timestamp,
-      tool_calls: response.tool_calls
+      content: response.message,
+      timestamp: new Date().toISOString(),
     })
     scrollToBottom()
   } catch (error) {

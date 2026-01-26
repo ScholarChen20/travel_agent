@@ -112,5 +112,12 @@ export const socialService = {
       params: { limit }
     })
     return response.data.data?.tags || response.data.tags || []
+  },
+
+  async getHotTopics(limit = 10): Promise<Array<{ rank: number; title: string; hot_value: number }>> {
+    const response = await axios.get('/api/social/hot-topics', {
+      params: { limit }
+    })
+    return response.data.topics || []
   }
 }
