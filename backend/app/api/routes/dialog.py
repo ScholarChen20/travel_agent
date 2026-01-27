@@ -62,6 +62,17 @@ class MessageResponse(BaseModel):
     message: str = Field(..., description="消息内容")
 
 
+class CreateSessionRequest(BaseModel):
+    """创建会话请求"""
+    initial_context: dict = Field(default={}, description="初始上下文")
+
+
+class CreateSessionResponse(BaseModel):
+    """创建会话响应"""
+    session_id: str = Field(..., description="会话ID")
+    message: str = Field(..., description="消息")
+
+
 # ========== API端点 ==========
 
 @router.post("/chat", response_model=ChatResponse)
@@ -109,6 +120,39 @@ async def chat(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"对话处理失败: {str(e)}"
+        )
+
+
+@router.post("/sessions", response_model=CreateSessionResponse)
+async def create_session(
+    request: CreateSessionRequest = CreateSessionRequest(),
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """
+    创建新的对话会话
+
+    用于手动创建会话，通常在开始新对话时调用
+    """
+    try:
+        dialog_service = get_dialog_service()
+
+        session_id = await dialog_service.create_session(
+            user_id=current_user.id,
+            initial_context=request.initial_context
+        )
+
+        logger.info(f"创建新会话: {session_id} (用户: {current_user.username})")
+
+        return CreateSessionResponse(
+            session_id=session_id,
+            message="会话创建成功"
+        )
+
+    except Exception as e:
+        logger.error(f"创建会话失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建会话失败: {str(e)}"
         )
 
 
