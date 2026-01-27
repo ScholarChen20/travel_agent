@@ -10,6 +10,11 @@ const routes: RouteRecordRaw[] = [
     component: Home
   },
   {
+    path: '/create-plan',
+    name: 'CreatePlan',
+    component: () => import('@/views/CreatePlan.vue')
+  },
+  {
     path: '/result',
     name: 'Result',
     component: Result

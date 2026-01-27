@@ -83,10 +83,64 @@
           </a-card>
 
           <a-card title="访问过的城市" style="margin-top: 16px">
-            <a-tag v-for="city in visitedCities" :key="city" color="blue" style="margin: 4px">
-              {{ city }}
-            </a-tag>
-            <a-empty v-if="visitedCities.length === 0" description="还没有访问记录" />
+            <template #extra>
+              <a-button
+                type="link"
+                @click="editingCities ? cancelEditCities() : startEditCities()"
+              >
+                {{ editingCities ? '取消' : '编辑' }}
+              </a-button>
+            </template>
+
+            <div v-if="!editingCities">
+              <div v-if="visitedCities.length === 0" class="empty-cities">
+                <a-empty description="还没有访问记录">
+                  <template #image>
+                    <div class="empty-icon">🗺️</div>
+                  </template>
+                  <template #description>
+                    <span style="color: #999;">还没有访问记录，快去创建旅行计划吧！</span>
+                  </template>
+                </a-empty>
+              </div>
+              <div v-else class="cities-grid">
+                <div
+                  v-for="(city, index) in visitedCities"
+                  :key="city"
+                  class="city-card"
+                  :style="{ animationDelay: `${index * 0.1}s` }"
+                >
+                  <div class="city-icon">📍</div>
+                  <div class="city-name">{{ city }}</div>
+                  <div class="city-badge">已访问</div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="edit-cities-section">
+              <a-cascader
+                v-model:value="selectedCities"
+                :options="chinaCities"
+                placeholder="请选择省份和城市"
+                multiple
+                :max-tag-count="5"
+                style="width: 100%; margin-bottom: 16px"
+                :show-search="{ filter }"
+              />
+              <div class="edit-actions">
+                <a-button
+                  type="primary"
+                  @click="saveCities"
+                  :loading="savingCities"
+                  size="large"
+                >
+                  💾 保存
+                </a-button>
+                <a-button @click="cancelEditCities" size="large">
+                  取消
+                </a-button>
+              </div>
+            </div>
           </a-card>
 
           <a-card title="修改密码" style="margin-top: 16px">
@@ -117,12 +171,16 @@ import { API_BASE_URL } from '@/utils/axios'
 import { userService } from '@/services/user'
 import { useAuthStore } from '@/stores/auth'
 import { UploadOutlined } from '@ant-design/icons-vue'
+import { chinaCities, findProvinceByCity } from '@/data/cities'
 
 const profile = ref<any>(null)
 const stats = ref<any>(null)
 const visitedCities = ref<string[]>([])
 const updating = ref(false)
 const changingPassword = ref(false)
+const editingCities = ref(false)
+const savingCities = ref(false)
+const selectedCities = ref<string[][]>([])
 
 const profileForm = ref({
   nickname: '',
@@ -179,10 +237,10 @@ async function loadProfile() {
     }
     
     // 更新authStore中的用户信息，确保首页头像同步更新
-    console.log('Profile.vue: 更新authStore中的用户信息')
-    console.log('Profile.vue: 新的用户信息 - id:', response.id)
-    console.log('Profile.vue: 新的用户信息 - username:', response.username)
-    console.log('Profile.vue: 新的用户信息 - avatar_url:', avatarUrl)
+    // console.log('Profile.vue: 更新authStore中的用户信息')
+    // console.log('Profile.vue: 新的用户信息 - id:', response.id)
+    // console.log('Profile.vue: 新的用户信息 - username:', response.username)
+    // console.log('Profile.vue: 新的用户信息 - avatar_url:', avatarUrl)
     
     // 无论authStore.user.value是否存在，都更新用户信息
     authStore.setUser({
@@ -266,11 +324,212 @@ async function changePassword() {
     changingPassword.value = false
   }
 }
+
+// 城市编辑相关函数
+function cancelEditCities() {
+  editingCities.value = false
+  // 重置选择
+  selectedCities.value = visitedCities.value.map(city => {
+    const province = findProvinceByCity(city)
+    return province ? [province, city] : []
+  }).filter(item => item.length > 0)
+}
+
+async function saveCities() {
+  savingCities.value = true
+  try {
+    // console.log('保存前的级联选择器数据:', selectedCities.value)
+
+    // 从级联选择器的值中提取城市名称
+    // 对于直辖市，数组只有一个元素 ['北京']
+    // 对于其他城市，数组有两个元素 ['广东', '广州']
+    const cities = selectedCities.value
+      .map(item => {
+        if (!item || !Array.isArray(item) || item.length === 0) {
+          return null
+        }
+        // 如果只有一个元素，说明是直辖市，取第一个元素
+        // 如果有两个元素，取第二个元素（城市名）
+        const city = item.length === 1 ? item[0] : item[1]
+        // console.log('处理项:', item, '提取城市:', city)
+        return city
+      })
+      .filter(city => {
+        const isValid = city && typeof city === 'string' && city.trim() !== ''
+        // console.log('城市:', city, '是否有效:', isValid)
+        return isValid
+      })
+
+    // console.log('最终要保存的城市列表:', cities)
+
+    await userService.updateVisitedCities(cities)
+    visitedCities.value = cities
+    editingCities.value = false
+    message.success('城市列表更新成功')
+
+    // 重新加载统计数据
+    await loadStats()
+  } catch (error) {
+    console.error('保存城市失败:', error)
+    message.error('更新城市列表失败')
+  } finally {
+    savingCities.value = false
+  }
+}
+
+// 级联选择器搜索过滤函数
+function filter(inputValue: string, path: any[]) {
+  return path.some(option =>
+    option.label.toLowerCase().indexOf(inputValue.toLowerCase()) > -1
+  )
+}
+
+// 监听编辑模式变化，初始化选择的城市
+function startEditCities() {
+  editingCities.value = true
+  // 将现有城市转换为级联选择器格式 [省份, 城市]
+  selectedCities.value = visitedCities.value
+    .map(city => {
+      const province = findProvinceByCity(city)
+      if (!province) {
+        console.warn(`无法找到城市 "${city}" 对应的省份`)
+        return null
+      }
+      return [province, city]
+    })
+    .filter(item => item !== null) as string[][]
+
+  // console.log('当前访问的城市:', visitedCities.value)
+  // console.log('转换后的级联选择器数据:', selectedCities.value)
+}
 </script>
 
 <style scoped>
 .profile-container {
   min-height: 100vh;
   background: #f0f2f5;
+}
+
+/* 城市网格布局 */
+.cities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  padding: 8px 0;
+}
+
+/* 城市卡片 */
+.city-card {
+  position: relative;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 20px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: fadeInUp 0.5s ease-out;
+  overflow: hidden;
+}
+
+.city-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.city-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+}
+
+.city-card:hover::before {
+  opacity: 1;
+}
+
+/* 城市图标 */
+.city-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* 城市名称 */
+.city-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 城市徽章 */
+.city-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 空状态 */
+.empty-cities {
+  padding: 40px 0;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+/* 编辑区域 */
+.edit-cities-section {
+  padding: 8px 0;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* 淡入动画 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .cities-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+
+  .city-card {
+    padding: 16px 12px;
+  }
+
+  .city-icon {
+    font-size: 28px;
+  }
+
+  .city-name {
+    font-size: 14px;
+  }
 }
 </style>

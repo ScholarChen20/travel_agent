@@ -8,7 +8,14 @@ MongoDB数据库初始化脚本
 """
 
 import sys
+import os
 from pathlib import Path
+
+# 设置UTF-8编码（Windows兼容）
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # 添加项目根目录到Python路径
 project_root = Path(__file__).parent.parent
@@ -16,7 +23,7 @@ sys.path.insert(0, str(project_root))
 
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.errors import CollectionInvalid
-from backend.app.config import get_settings
+from ..app.config import get_settings
 
 
 def init_mongodb():
