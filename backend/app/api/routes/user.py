@@ -93,7 +93,7 @@ async def get_profile(current_user: CurrentUser = Depends(get_current_user)):
         user_service = get_user_service()
 
         # 获取用户资料
-        profile = user_service.get_user_profile(current_user.id)
+        profile = await user_service.get_user_profile(current_user.id)
 
         if not profile:
             raise HTTPException(
@@ -134,7 +134,7 @@ async def update_profile(
             )
 
         # 更新用户资料
-        success = user_service.update_user_profile(
+        success = await user_service.update_user_profile(
             user_id=current_user.id,
             username=request.username,
             email=request.email,
@@ -217,7 +217,7 @@ async def upload_avatar(
         # 更新用户头像URL
         logger.info("开始更新用户头像URL")
         user_service = get_user_service()
-        user_service.update_avatar(current_user.id, avatar_url)
+        await user_service.update_avatar(current_user.id, avatar_url)
         logger.info(f"用户头像URL已更新: {current_user.username} -> {avatar_url}")
 
         return AvatarUploadResponse(avatar_url=avatar_url)

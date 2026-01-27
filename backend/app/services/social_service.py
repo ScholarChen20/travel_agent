@@ -271,7 +271,7 @@ class SocialService:
 
             # 缓存到Redis，过期时间10分钟
             import json
-            await self.redis.set(cache_key, json.dumps(feed_result, ex=600)
+            await self.redis.set(cache_key, json.dumps(feed_result, ensure_ascii=False), ex=600
             )
             logger.debug(f"个性化Feed流已缓存到Redis: {user_id}")
 
@@ -531,7 +531,7 @@ class SocialService:
 
             # 缓存到Redis，过期时间1小时
             import json
-            await self.redis.set(cache_key, json.dumps(posts, ex=3600)
+            await self.redis.set(cache_key, json.dumps(posts, ensure_ascii=False), ex=3600
             )
             logger.debug(f"用户帖子已缓存到Redis: {user_id}")
 
@@ -590,7 +590,7 @@ class SocialService:
 
             # 缓存到Redis，过期时间30分钟
             import json
-            await self.redis.set(cache_key, json.dumps(tags, ex=1800)
+            await self.redis.set(cache_key, json.dumps(tags, ensure_ascii=False), ex=1800
             )
             logger.debug(f"热门标签已缓存到Redis")
 
@@ -660,7 +660,7 @@ class SocialService:
 
             # 缓存到Redis，过期时间1小时
             import json
-            await self.redis.set(cache_key, json.dumps(formatted_post, ex=3600)
+            await self.redis.set(cache_key, json.dumps(formatted_post, ensure_ascii=False), ex=3600
             )
             logger.debug(f"帖子详情已缓存到Redis: {post_id}")
 
@@ -753,7 +753,7 @@ class SocialService:
 
             # 缓存到Redis，过期时间1小时
             import json
-            await self.redis.set(cache_key, json.dumps(posts, ex=3600)
+            await self.redis.set(cache_key, json.dumps(posts, ensure_ascii=False), ex=3600
             )
             logger.debug(f"标签帖子已缓存到Redis: {tag}")
 

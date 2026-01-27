@@ -572,6 +572,32 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
             print(f"⚠️  意图识别失败: {str(e)}")
             return "general_chat"
 
+    def _extract_city_from_message(self, message: str) -> Optional[str]:
+        """
+        从用户消息中提取城市名
+
+        Args:
+            message: 用户消息
+
+        Returns:
+            Optional[str]: 城市名，如果未找到则返回None
+        """
+        # 常见城市列表
+        cities = [
+            "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "成都",
+            "重庆", "武汉", "西安", "天津", "青岛", "大连", "厦门", "宁波",
+            "长沙", "郑州", "济南", "哈尔滨", "沈阳", "福州", "石家庄", "合肥",
+            "南昌", "昆明", "贵阳", "兰州", "太原", "乌鲁木齐", "拉萨", "呼和浩特",
+            "银川", "西宁", "海口", "三亚", "桂林", "丽江", "大理", "香格里拉"
+        ]
+
+        # 在消息中查找城市名
+        for city in cities:
+            if city in message:
+                return city
+
+        return None
+
     async def _handle_trip_planning(
         self,
         session_id: str,
@@ -629,8 +655,16 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         try:
             # 判断查询类型
             if "天气" in user_message:
-                # 提取城市名（简化版）
-                city = "北京"  # 实际应该从消息中提取
+                # 提取城市名
+                city = self._extract_city_from_message(user_message)
+                if not city:
+                    return {
+                        "session_id": session_id,
+                        "message": "请告诉我您想查询哪个城市的天气？",
+                        "intent": "info_query",
+                        "suggestions": ["北京天气", "上海天气", "南京天气"]
+                    }
+
                 start_time = time.time()
                 weather_query = f"请查询{city}的天气信息"
                 weather_response = self.weather_agent.run(weather_query)

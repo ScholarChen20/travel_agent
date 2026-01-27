@@ -219,6 +219,19 @@ class DouyinService:
                 limit - 1,
                 withscores=True
             )
+            if len(result) == 0:
+                data = await self.process_hotboard_data()
+                if not data.get('success'):
+                    logger.info("处理抖音热点数据失败，请稍后再试")
+                    return []
+
+                # 再从redis中取数据
+                result = await self.redis_client.client.zrange(
+                    self.redis_key,
+                    0,
+                    limit - 1,
+                    withscores=True
+                )
             
             # 转换结果格式
             rank_list = []

@@ -29,7 +29,7 @@ class UserService:
         self.redis = get_redis_client()
         logger.info("用户服务已初始化")
 
-    def get_user_profile(self, user_id: int) -> Optional[Dict[str, Any]]:
+    async def get_user_profile(self, user_id: int) -> Optional[Dict[str, Any]]:
         """
         获取用户资料
 
@@ -44,7 +44,7 @@ class UserService:
             cache_key = f"user:{user_id}:profile"
 
             # 先尝试从Redis获取
-            cached_profile = self.redis.get(cache_key)
+            cached_profile = await self.redis.get(cache_key)
             if cached_profile:
                 import json
                 try:
@@ -91,8 +91,7 @@ class UserService:
 
                 # 缓存到Redis，过期时间2小时
                 import json
-                await self.redis.set(cache_key, json.dumps(user_data, ex=7200)
-                )
+                await self.redis.set(cache_key, json.dumps(user_data, ensure_ascii=False), ex=7200)
                 logger.debug(f"用户资料已缓存到Redis: {user_id}")
 
                 return user_data
@@ -101,7 +100,7 @@ class UserService:
             logger.error(f"获取用户资料失败: {str(e)}")
             raise
 
-    def update_user_profile(
+    async def update_user_profile(
         self,
         user_id: int,
         username: Optional[str] = None,
@@ -185,7 +184,7 @@ class UserService:
 
             # 清除相关缓存
             # 1. 清除用户资料缓存
-            self.redis.delete(f"user:{user_id}:profile")
+            await self.redis.delete(f"user:{user_id}:profile")
             logger.debug(f"已清除用户资料缓存: {user_id}")
 
             return True
@@ -244,34 +243,13 @@ class UserService:
             List[str]: 城市列表
         """
         try:
-            # 构建缓存键
-            cache_key = f"user:{user_id}:visited_cities"
-
-            # 先尝试从Redis获取
-            cached_cities = self.redis.get(cache_key)
-            if cached_cities:
-                import json
-                try:
-                    cities = json.loads(cached_cities)
-                    logger.debug(f"从Redis缓存获取用户访问城市: {user_id}")
-                    return cities
-                except Exception as e:
-                    logger.warning(f"解析Redis缓存失败: {str(e)}")
-
-            # 从MySQL获取
+            # 从MySQL获取（不使用Redis缓存，避免async/sync混用）
             with self.mysql_db.get_session() as session:
                 profile = session.query(UserProfile).filter(
                     UserProfile.user_id == user_id
                 ).first()
 
                 cities = profile.visited_cities if profile else []
-
-                # 缓存到Redis，过期时间2小时
-                import json
-                await self.redis.set(cache_key, json.dumps(cities, ex=7200)
-                )
-                logger.debug(f"用户访问城市已缓存到Redis: {user_id}")
-
                 return cities
 
         except Exception as e:
@@ -319,15 +297,6 @@ class UserService:
                     session.commit()
 
                     logger.info(f"为用户 {user_id} 创建了新档案并设置访问城市")
-
-            # 清除相关缓存
-            # 1. 清除用户资料缓存
-            self.redis.delete(f"user:{user_id}:profile")
-            logger.debug(f"已清除用户资料缓存: {user_id}")
-
-            # 2. 清除访问城市列表缓存
-            self.redis.delete(f"user:{user_id}:visited_cities")
-            logger.debug(f"已清除用户访问城市缓存: {user_id}")
 
             return cities
 
@@ -388,7 +357,7 @@ class UserService:
             logger.error(f"修改密码失败: {str(e)}")
             raise
 
-    def update_avatar(self, user_id: int, avatar_url: str) -> bool:
+    async def update_avatar(self, user_id: int, avatar_url: str) -> bool:
         """
         更新用户头像
 
@@ -413,7 +382,7 @@ class UserService:
 
             # 清除相关缓存
             # 1. 清除用户资料缓存
-            self.redis.delete(f"user:{user_id}:profile")
+            await self.redis.delete(f"user:{user_id}:profile")
             logger.debug(f"已清除用户资料缓存: {user_id}")
 
             return True

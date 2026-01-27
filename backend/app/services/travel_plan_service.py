@@ -177,7 +177,7 @@ class TravelPlanService:
 
             # 缓存到Redis，过期时间1小时
             import json
-            await self.redis.set(cache_key, json.dumps(plans, ex=3600)
+            await self.redis.set(cache_key, json.dumps(plans, ensure_ascii=False), ex=3600
             )
             logger.debug(f"用户旅行计划已缓存到Redis: {user_id}")
 
@@ -241,7 +241,7 @@ class TravelPlanService:
 
             # 缓存到Redis，过期时间2小时
             import json
-            await self.redis.set(cache_key, json.dumps(doc, ex=7200)
+            await self.redis.set(cache_key, json.dumps(doc, ensure_ascii=False), ex=7200
             )
             logger.debug(f"旅行计划详情已缓存到Redis: {plan_id}")
 
@@ -525,7 +525,7 @@ class TravelPlanService:
 
             # 缓存到Redis，过期时间1小时
             import json
-            await self.redis.set(cache_key, json.dumps(stats_dict, ex=3600)
+            await self.redis.set(cache_key, json.dumps(stats_dict, ensure_ascii=False), ex=3600
             )
             logger.debug(f"用户旅行统计数据已缓存到Redis: {user_id}")
 
