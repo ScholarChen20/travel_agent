@@ -7,10 +7,10 @@
             <PlusOutlined /> 新建对话
           </a-button>
         </div>
-        <a-list :data-source="dialogStore.sessions.value" :loading="loading">
+        <a-list :data-source="dialogStore.sessions" :loading="loading">
           <template #renderItem="{ item }">
             <a-list-item
-              :class="{ active: item.id === dialogStore.currentSessionId.value }"
+              :class="{ active: item.id === dialogStore.currentSessionId }"
               @click="selectSession(item.id)"
               style="cursor: pointer"
             >
@@ -30,7 +30,7 @@
 
       <a-layout-content style="display: flex; flex-direction: column">
         <div class="messages-container" ref="messagesRef">
-            <div v-for="msg in dialogStore.messages.value" :key="msg.id" :class="['message', msg.role]">
+            <div v-for="msg in dialogStore.messages" :key="msg.id" :class="['message', msg.role]">
               <div class="message-content">
                 <a-avatar v-if="msg.role === 'user'" style="background-color: #1890ff">
                   <UserOutlined />
@@ -95,7 +95,7 @@ async function loadSessions() {
   try {
     const sessions = await dialogService.getSessions()
     dialogStore.setSessions(sessions)
-    if (sessions.length > 0 && !dialogStore.currentSessionId.value) {
+    if (sessions.length > 0 && !dialogStore.currentSessionId) {
       await selectSession(sessions[0].id)
     }
   } catch (error: any) {
@@ -135,7 +135,7 @@ async function deleteSession(sessionId: string) {
   try {
     await dialogService.deleteSession(sessionId)
     dialogStore.removeSession(sessionId)
-    if (dialogStore.currentSessionId.value === sessionId) {
+    if (dialogStore.currentSessionId === sessionId) {
       dialogStore.setCurrentSession(null)
       if (ws) {
         ws.close()
@@ -152,10 +152,10 @@ function connectWebSocket(sessionId: string) {
     ws.close()
   }
 
-  ws = dialogService.createWebSocket(sessionId, authStore.token.value!)
+  ws = dialogService.createWebSocket(sessionId, authStore.token!)
 
   ws.onopen = () => {
-    dialogStore.isConnected.value = true
+    dialogStore.isConnected = true
   }
 
   ws.onmessage = (event) => {
@@ -167,7 +167,7 @@ function connectWebSocket(sessionId: string) {
   }
 
   ws.onclose = () => {
-    dialogStore.isConnected.value = false
+    dialogStore.isConnected = false
   }
 
   ws.onerror = () => {
@@ -176,7 +176,7 @@ function connectWebSocket(sessionId: string) {
 }
 
 async function sendMessage() {
-  if (!inputMessage.value.trim() || !dialogStore.currentSessionId.value) return
+  if (!inputMessage.value.trim() || !dialogStore.currentSessionId) return
 
   const userMessage = inputMessage.value
   inputMessage.value = ''
@@ -191,7 +191,7 @@ async function sendMessage() {
     })
     scrollToBottom()
 
-    const response = await dialogService.chat(dialogStore.currentSessionId.value, {
+    const response = await dialogService.chat(dialogStore.currentSessionId, {
       message: userMessage
     })
 

@@ -11,7 +11,15 @@ from ..config import get_settings, validate_config, print_config
 from ..database.mysql import get_mysql_db, init_mysql_db
 from ..database.mongodb import get_mongodb_client, init_mongodb_client
 from ..database.redis_client import get_redis_client, init_redis_client
-from ..scheduler.scheduler import start_scheduler, shutdown_scheduler
+
+# 尝试导入调度器（可选功能）
+try:
+    from ..scheduler.scheduler import start_scheduler, shutdown_scheduler
+    SCHEDULER_AVAILABLE = True
+except ImportError:
+    SCHEDULER_AVAILABLE = False
+    logger.warning("APScheduler未安装，定时任务功能将被禁用")
+
 from .routes import trip, poi, map as map_routes
 from .routes import auth, plans, user, dialog, social, admin
 
@@ -147,15 +155,18 @@ async def startup_event():
         raise
 
     # 启动定时任务调度器
-    print("\n" + "="*60)
-    print("[SCHEDULER] 启动定时任务调度器...")
-    print("="*60)
-    try:
-        start_scheduler()
-        print("\n[OK] 定时任务调度器启动成功")
-    except Exception as e:
-        logger.error(f"定时任务调度器启动失败: {str(e)}")
-        print(f"\n[WARN] 定时任务调度器启动失败: {str(e)}")
+    if SCHEDULER_AVAILABLE:
+        print("\n" + "="*60)
+        print("[SCHEDULER] 启动定时任务调度器...")
+        print("="*60)
+        try:
+            start_scheduler()
+            print("\n[OK] 定时任务调度器启动成功")
+        except Exception as e:
+            logger.error(f"定时任务调度器启动失败: {str(e)}")
+            print(f"\n[WARN] 定时任务调度器启动失败: {str(e)}")
+    else:
+        print("\n[SKIP] 定时任务调度器未启用（APScheduler未安装）")
 
     print("\n" + "="*60)
     print("[API] API文档: http://localhost:8000/docs")
@@ -172,9 +183,10 @@ async def shutdown_event():
 
     try:
         # 关闭定时任务调度器
-        print("\n[SCHEDULER] 关闭定时任务调度器...")
-        shutdown_scheduler()
-        print("   [OK] 定时任务调度器已关闭")
+        if SCHEDULER_AVAILABLE:
+            print("\n[SCHEDULER] 关闭定时任务调度器...")
+            shutdown_scheduler()
+            print("   [OK] 定时任务调度器已关闭")
 
         # 关闭数据库连接
         print("\n[DB] 关闭数据库连接...")
