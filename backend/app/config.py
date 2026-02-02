@@ -32,15 +32,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
 
     # 高德地图API配置
-    amap_api_key: str = "8aa3f70ef5cb613094d14ea0fe797dd7"
+    amap_api_key: str = "8aa3f70ef5cb613094d14ea0fe797dd7dk29"
     # amap_api_key: str = "5d6e7a8e7ef5fb9ddeed9f7324bb012d"
 
     # Unsplash API配置
-    unsplash_access_key: str = "QuvNEksG7496IMigS5BhLkbiZg5MrFkszr35xutStEE"
-    unsplash_secret_key: str = "AHo9Knd1T89YlVwHebQXpP1JOXc_rRFMT8_NlKEOrk8"
+    unsplash_access_key: str = "QuvNEksG7496IMigS5BhLkbiZg5MrFkszr35xutStEEX23dgh"
+    unsplash_secret_key: str = "AHo9Knd1T89YlVwHebQXpP1JOXc_rRFMT8_NlKEOrk823123123"
 
     # LLM配置 (从环境变量读取,由HelloAgents管理)
-    openai_api_key: str = "ms-7df9fd49-9a59-495d-bf50-f2922001f367"
+    openai_api_key: str = "ms-7df9fd49-9a59-495d-bf50-f2922001f367f12d"
     openai_base_url: str = "https://api-inference.modelscope.cn/v1/"
     openai_model: str = "Qwen/Qwen2.5-72B-Instruct"
 
@@ -77,6 +77,18 @@ class Settings(BaseSettings):
 
     # ============ 新增：限流配置 ============
     rate_limit_per_minute: int = 60
+
+    # ============ 新增：OSS云存储配置 ============
+    # 阿里云OSS配置
+    oss_enabled: bool = True  # 是否启用OSS（False则使用本地存储）
+    oss_access_key_id: str = "LTAI5tChzi1g1csczkKBbec91"  # 从.env读取
+    oss_access_key_secret: str = "b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX134"  # 从.env读取
+    region: str = "cn-beijing"  # 从.env读取
+    oss_endpoint: str = "oss-cn-beijing.aliyuncs.com"  # OSS地域节点
+    oss_bucket_name: str = "java-webai-1"  # Bucket名称
+    oss_url_prefix: str = ""  # 可选：自定义域名前缀，如 https://cdn.example.com
+    oss_avatar_dir: str = "travel_avatars"  # 头像存储目录
+    oss_media_dir: str = "travel_media"  # 媒体文件存储目录
 
     # 日志配置
     log_level: str = "INFO"
@@ -174,6 +186,19 @@ def validate_config():
     if not settings.redis_password:
         warnings.append("REDIS_PASSWORD未配置，将尝试无密码连接Redis")
 
+    # ============ 新增：验证OSS配置 ============
+    if settings.oss_enabled:
+        if not settings.oss_access_key_id:
+            errors.append("OSS_ACCESS_KEY_ID未配置，但OSS已启用")
+        if not settings.oss_access_key_secret:
+            errors.append("OSS_ACCESS_KEY_SECRET未配置，但OSS已启用")
+        if not settings.oss_bucket_name:
+            errors.append("OSS_BUCKET_NAME未配置")
+        if not settings.oss_endpoint:
+            errors.append("OSS_ENDPOINT未配置")
+    else:
+        warnings.append("OSS云存储未启用，将使用本地存储")
+
     if errors:
         error_msg = "配置错误:\n" + "\n".join(f"  - {e}" for e in errors)
         raise ValueError(error_msg)
@@ -218,6 +243,15 @@ def print_config():
     print(f"  JWT算法: {settings.jwt_algorithm}")
     print(f"  Token有效期: {settings.jwt_access_token_expire_days}天")
     print(f"  验证码有效期: {settings.captcha_expiry_seconds}秒")
+
+    # ============ 新增：打印OSS配置 ============
+    print("\n存储配置:")
+    print(f"  OSS云存储: {'✅ 已启用' if settings.oss_enabled else '❌ 未启用（使用本地存储）'}")
+    if settings.oss_enabled:
+        print(f"  OSS AccessKey: {'已配置' if settings.oss_access_key_id else '❌ 未配置'}")
+        print(f"  OSS Endpoint: {settings.oss_endpoint}")
+        print(f"  OSS Bucket: {settings.oss_bucket_name}")
+        print(f"  OSS URL前缀: {settings.oss_url_prefix or '使用默认OSS域名'}")
 
     print(f"\n日志级别: {settings.log_level}")
 
