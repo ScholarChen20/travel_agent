@@ -1,9 +1,27 @@
 """FastAPI主应用"""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from pathlib import Path
+from loguru import logger
+
 from ..config import get_settings, validate_config, print_config
+from ..database.mysql import get_mysql_db, init_mysql_db
+from ..database.mongodb import get_mongodb_client, init_mongodb_client
+from ..database.redis_client import get_redis_client, init_redis_client
+
+# 尝试导入调度器（可选功能）
+try:
+    from ..scheduler.scheduler import start_scheduler, shutdown_scheduler
+    SCHEDULER_AVAILABLE = True
+except ImportError:
+    SCHEDULER_AVAILABLE = False
+    logger.warning("APScheduler未安装，定时任务功能将被禁用")
+
 from .routes import trip, poi, map as map_routes
+from .routes import auth, plans, user, dialog, social, admin
 
 # 获取配置
 settings = get_settings()
@@ -20,40 +38,139 @@ app = FastAPI(
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.get_cors_origins_list(),
+    allow_origins=settings.get_cors_origins_list() + ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
+# 全局异常处理器 - 确保所有错误响应都包含CORS头
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"全局异常捕获: {type(exc).__name__}: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"服务器内部错误: {str(exc)}"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
 # 注册路由
-app.include_router(trip.router, prefix="/api")
-app.include_router(poi.router, prefix="/api")
-app.include_router(map_routes.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")  # 认证路由
+app.include_router(user.router, prefix="/api")  # 用户管理路由
+app.include_router(plans.router, prefix="/api")  # 计划管理路由
+app.include_router(dialog.router, prefix="/api")  # 对话管理路由
+app.include_router(social.router, prefix="/api")  # 社交功能路由
+app.include_router(admin.router, prefix="/api")  # 管理后台路由
+app.include_router(trip.router, prefix="/api")  # 旅行规划路由
+app.include_router(poi.router, prefix="/api")  # 景点查询路由
+app.include_router(map_routes.router, prefix="/api")  # 地图服务路由
+
+# 配置静态文件服务（用于访问上传的文件）
+storage_path = Path("storage")
+storage_path.mkdir(exist_ok=True)
+app.mount("/storage", StaticFiles(directory=str(storage_path)), name="storage")
 
 
 @app.on_event("startup")
 async def startup_event():
     """应用启动事件"""
+    # 配置loguru日志
+    logger.remove()  # 移除默认处理器
+    logger.add(
+        sink=lambda msg: print(msg, end=""),
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level=settings.log_level.upper(),
+        colorize=True
+    )
+
     print("\n" + "="*60)
-    print(f"🚀 {settings.app_name} v{settings.app_version}")
+    print(f"[START] {settings.app_name} v{settings.app_version}")
     print("="*60)
-    
+
     # 打印配置信息
     print_config()
-    
+
     # 验证配置
     try:
         validate_config()
-        print("\n✅ 配置验证通过")
+        print("\n[OK] 配置验证通过")
     except ValueError as e:
-        print(f"\n❌ 配置验证失败:\n{e}")
+        print(f"\n[ERROR] 配置验证失败:\n{e}")
         print("\n请检查.env文件并确保所有必要的配置项都已设置")
         raise
-    
+
+    # 初始化数据库连接
     print("\n" + "="*60)
-    print("📚 API文档: http://localhost:8000/docs")
-    print("📖 ReDoc文档: http://localhost:8000/redoc")
+    print("[DB] 初始化数据库连接...")
+    print("="*60)
+
+    try:
+        # 1. 初始化MySQL
+        print("\n[1] 连接MySQL...")
+        init_mysql_db(settings.mysql_url)
+        mysql_db = get_mysql_db()
+        if mysql_db.health_check():
+            print(f"   [OK] MySQL连接成功: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
+        else:
+            print(f"   [ERROR] MySQL连接失败")
+            raise Exception("MySQL健康检查失败")
+
+        # 2. 初始化MongoDB
+        print("\n[2] 连接MongoDB...")
+        init_mongodb_client(settings.mongodb_uri, settings.mongodb_database)
+        mongodb_client = get_mongodb_client()
+        if await mongodb_client.health_check():
+            print(f"   [OK] MongoDB连接成功: {settings.mongodb_database}")
+            # 创建索引
+            await mongodb_client.create_indexes()
+            print(f"   [OK] MongoDB索引创建完成")
+        else:
+            print(f"   [ERROR] MongoDB连接失败")
+            raise Exception("MongoDB健康检查失败")
+
+        # 3. 初始化Redis
+        print("\n[3] 连接Redis...")
+        init_redis_client(settings.redis_url)
+        redis_client = get_redis_client()
+        if await redis_client.ping():
+            print(f"   [OK] Redis连接成功")
+        else:
+            print(f"   [ERROR] Redis连接失败")
+            raise Exception("Redis健康检查失败")
+
+        print("\n" + "="*60)
+        print("[OK] 所有数据库连接初始化完成")
+        print("="*60)
+
+    except Exception as e:
+        logger.error(f"数据库初始化失败: {str(e)}")
+        print(f"\n[ERROR] 数据库初始化失败: {str(e)}")
+        print("\n请检查数据库配置和连接状态")
+        raise
+
+    # 启动定时任务调度器
+    if SCHEDULER_AVAILABLE:
+        print("\n" + "="*60)
+        print("[SCHEDULER] 启动定时任务调度器...")
+        print("="*60)
+        try:
+            start_scheduler()
+            print("\n[OK] 定时任务调度器启动成功")
+        except Exception as e:
+            logger.error(f"定时任务调度器启动失败: {str(e)}")
+            print(f"\n[WARN] 定时任务调度器启动失败: {str(e)}")
+    else:
+        print("\n[SKIP] 定时任务调度器未启用（APScheduler未安装）")
+
+    print("\n" + "="*60)
+    print("[API] API文档: http://localhost:8000/docs")
+    print("[DOC] ReDoc文档: http://localhost:8000/redoc")
     print("="*60 + "\n")
 
 
@@ -61,7 +178,39 @@ async def startup_event():
 async def shutdown_event():
     """应用关闭事件"""
     print("\n" + "="*60)
-    print("👋 应用正在关闭...")
+    print("[SHUTDOWN] 应用正在关闭...")
+    print("="*60)
+
+    try:
+        # 关闭定时任务调度器
+        if SCHEDULER_AVAILABLE:
+            print("\n[SCHEDULER] 关闭定时任务调度器...")
+            shutdown_scheduler()
+            print("   [OK] 定时任务调度器已关闭")
+
+        # 关闭数据库连接
+        print("\n[DB] 关闭数据库连接...")
+
+        # 1. 关闭MySQL
+        mysql_db = get_mysql_db()
+        mysql_db.close()
+        print("   [OK] MySQL连接已关闭")
+
+        # 2. 关闭MongoDB
+        mongodb_client = get_mongodb_client()
+        await mongodb_client.close()
+        print("   [OK] MongoDB连接已关闭")
+
+        # 3. 关闭Redis
+        redis_client = get_redis_client()
+        await redis_client.close()
+        print("   [OK] Redis连接已关闭")
+
+        print("\n[OK] 所有数据库连接已关闭")
+    except Exception as e:
+        logger.error(f"关闭数据库连接失败: {str(e)}")
+        print(f"\n[WARN] 关闭数据库连接时出现错误: {str(e)}")
+
     print("="*60 + "\n")
 
 
@@ -79,12 +228,35 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """健康检查"""
-    return {
-        "status": "healthy",
-        "service": settings.app_name,
-        "version": settings.app_version
-    }
+    """健康检查 - 包含数据库连接状态、磁盘空间、Agent状态"""
+    from ..services.monitoring_service import get_monitoring_service
+
+    try:
+        monitoring_service = get_monitoring_service()
+        health_report = await monitoring_service.get_comprehensive_health()
+        return health_report
+    except Exception as e:
+        logger.error(f"健康检查失败: {str(e)}")
+        return {
+            "overall_status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/metrics")
+async def metrics():
+    """性能指标 - CPU、内存、磁盘、网络"""
+    from ..services.monitoring_service import get_monitoring_service
+
+    try:
+        monitoring_service = get_monitoring_service()
+        metrics_data = monitoring_service.get_performance_metrics()
+        return metrics_data
+    except Exception as e:
+        logger.error(f"获取性能指标失败: {str(e)}")
+        return {
+            "error": str(e)
+        }
 
 
 if __name__ == "__main__":

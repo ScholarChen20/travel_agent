@@ -2,9 +2,8 @@
 
 from contextlib import contextmanager
 from typing import Generator
-from sqlalchemy import create_engine, event
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import Pool
 from loguru import logger
 
@@ -132,7 +131,7 @@ class MySQLDatabase:
         """
         try:
             with self.get_session() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
             logger.debug("MySQL健康检查：连接正常")
             return True
         except Exception as e:

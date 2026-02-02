@@ -1,7 +1,8 @@
 """多智能体旅行规划系统"""
 
 import json
-from typing import Dict, Any, List
+import time
+from typing import Dict, Any, List, Optional
 from hello_agents import SimpleAgent
 from hello_agents.tools import MCPTool
 from ..services.llm_service import get_llm
@@ -426,4 +427,368 @@ def get_trip_planner_agent() -> MultiAgentTripPlanner:
         _multi_agent_planner = MultiAgentTripPlanner()
 
     return _multi_agent_planner
+
+
+# ============ 对话式多智能体系统 ============
+
+INTENT_DETECTION_PROMPT = """你是意图识别专家。分析用户消息并识别意图类型。
+
+**意图类型:**
+1. trip_planning - 用户想要规划新的旅行
+2. info_query - 用户查询景点/天气/酒店信息
+3. plan_modification - 用户想要修改已有计划
+4. general_chat - 一般对话
+
+**示例:**
+用户: "我想去北京玩3天" -> trip_planning
+用户: "故宫的门票多少钱" -> info_query
+用户: "把第二天的行程改一下" -> plan_modification
+用户: "你好" -> general_chat
+
+只返回意图类型,不要其他内容。"""
+
+
+class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
+    """对话式多智能体旅行规划系统"""
+
+    def __init__(self, dialog_service):
+        """
+        初始化对话式系统
+
+        Args:
+            dialog_service: 对话服务实例
+        """
+        super().__init__()
+        self.dialog_service = dialog_service
+
+        # 创建意图识别Agent
+        self.intent_agent = SimpleAgent(
+            name="意图识别专家",
+            llm=self.llm,
+            system_prompt=INTENT_DETECTION_PROMPT
+        )
+
+        print("✅ 对话式多智能体系统初始化成功")
+
+    async def chat(
+        self,
+        session_id: str,
+        user_id: int,
+        user_message: str
+    ) -> Dict[str, Any]:
+        """
+        处理多轮对话
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID
+            user_message: 用户消息
+
+        Returns:
+            Dict: 响应结果
+        """
+        try:
+            # 1. 保存用户消息
+            await self.dialog_service.add_message(
+                session_id=session_id,
+                role="user",
+                content=user_message
+            )
+
+            # 2. 获取会话上下文
+            context = await self.dialog_service.get_session_context(session_id)
+
+            # 3. 意图识别
+            intent = await self._detect_intent(user_message, context)
+
+            # 4. 根据意图路由到对应处理器
+            if intent == "trip_planning":
+                response = await self._handle_trip_planning(session_id, user_id, user_message, context)
+            elif intent == "info_query":
+                response = await self._handle_info_query(session_id, user_id, user_message, context)
+            elif intent == "plan_modification":
+                response = await self._handle_plan_modification(session_id, user_id, user_message, context)
+            else:
+                response = await self._handle_general_chat(session_id, user_id, user_message, context)
+
+            # 5. 保存助手响应
+            await self.dialog_service.add_message(
+                session_id=session_id,
+                role="assistant",
+                content=response["message"],
+                metadata={"intent": intent}
+            )
+
+            return response
+
+        except Exception as e:
+            print(f"❌ 对话处理失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    async def _detect_intent(self, user_message: str, context: Dict[str, Any]) -> str:
+        """
+        检测用户意图
+
+        Args:
+            user_message: 用户消息
+            context: 会话上下文
+
+        Returns:
+            str: 意图类型
+        """
+        try:
+            # 构建意图识别查询
+            query = f"用户消息: {user_message}"
+
+            # 调用意图识别Agent
+            start_time = time.time()
+            intent_response = self.intent_agent.run(query)
+            execution_time = (time.time() - start_time) * 1000
+
+            # 记录工具调用
+            await self.dialog_service.log_tool_call(
+                session_id=context["session_id"],
+                tool_name="intent_detection",
+                input_params={"message": user_message},
+                output_result=intent_response,
+                execution_time_ms=execution_time,
+                status="success"
+            )
+
+            # 提取意图
+            intent = intent_response.strip().lower()
+            if "trip_planning" in intent:
+                return "trip_planning"
+            elif "info_query" in intent:
+                return "info_query"
+            elif "plan_modification" in intent:
+                return "plan_modification"
+            else:
+                return "general_chat"
+
+        except Exception as e:
+            print(f"⚠️  意图识别失败: {str(e)}")
+            return "general_chat"
+
+    def _extract_city_from_message(self, message: str) -> Optional[str]:
+        """
+        从用户消息中提取城市名
+
+        Args:
+            message: 用户消息
+
+        Returns:
+            Optional[str]: 城市名，如果未找到则返回None
+        """
+        # 常见城市列表
+        cities = [
+            "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "成都",
+            "重庆", "武汉", "西安", "天津", "青岛", "大连", "厦门", "宁波",
+            "长沙", "郑州", "济南", "哈尔滨", "沈阳", "福州", "石家庄", "合肥",
+            "南昌", "昆明", "贵阳", "兰州", "太原", "乌鲁木齐", "拉萨", "呼和浩特",
+            "银川", "西宁", "海口", "三亚", "桂林", "丽江", "大理", "香格里拉"
+        ]
+
+        # 在消息中查找城市名
+        for city in cities:
+            if city in message:
+                return city
+
+        return None
+
+    async def _handle_trip_planning(
+        self,
+        session_id: str,
+        user_id: int,
+        user_message: str,
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        处理旅行规划请求
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID
+            user_message: 用户消息
+            context: 会话上下文
+
+        Returns:
+            Dict: 响应结果
+        """
+        try:
+            # 从消息中提取旅行参数（简化版，实际应该用更复杂的NLP）
+            # 这里返回引导用户提供完整信息
+            response_message = "好的，我来帮您规划旅行！请告诉我：\n1. 目的地城市\n2. 出发日期\n3. 旅行天数\n4. 您的偏好（如历史文化、自然风光等）"
+
+            return {
+                "session_id": session_id,
+                "message": response_message,
+                "intent": "trip_planning",
+                "suggestions": ["北京3日游", "上海2日游", "成都4日游"]
+            }
+
+        except Exception as e:
+            print(f"❌ 处理旅行规划失败: {str(e)}")
+            raise
+
+    async def _handle_info_query(
+        self,
+        session_id: str,
+        user_id: int,
+        user_message: str,
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        处理信息查询请求
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID
+            user_message: 用户消息
+            context: 会话上下文
+
+        Returns:
+            Dict: 响应结果
+        """
+        try:
+            # 判断查询类型
+            if "天气" in user_message:
+                # 提取城市名
+                city = self._extract_city_from_message(user_message)
+                if not city:
+                    return {
+                        "session_id": session_id,
+                        "message": "请告诉我您想查询哪个城市的天气？",
+                        "intent": "info_query",
+                        "suggestions": ["北京天气", "上海天气", "南京天气"]
+                    }
+
+                start_time = time.time()
+                weather_query = f"请查询{city}的天气信息"
+                weather_response = self.weather_agent.run(weather_query)
+                execution_time = (time.time() - start_time) * 1000
+
+                # 记录工具调用
+                await self.dialog_service.log_tool_call(
+                    session_id=session_id,
+                    tool_name="weather_query",
+                    input_params={"city": city},
+                    output_result=weather_response,
+                    execution_time_ms=execution_time,
+                    status="success"
+                )
+
+                response_message = f"为您查询到{city}的天气信息：\n{weather_response}"
+
+            elif "景点" in user_message or "门票" in user_message:
+                # 景点查询
+                response_message = "请告诉我您想了解哪个城市的景点信息？"
+
+            else:
+                response_message = "我可以帮您查询天气、景点、酒店等信息，请问您想了解什么？"
+
+            return {
+                "session_id": session_id,
+                "message": response_message,
+                "intent": "info_query",
+                "suggestions": ["查询天气", "景点推荐", "酒店信息"]
+            }
+
+        except Exception as e:
+            print(f"❌ 处理信息查询失败: {str(e)}")
+            raise
+
+    async def _handle_plan_modification(
+        self,
+        session_id: str,
+        user_id: int,
+        user_message: str,
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        处理计划修改请求
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID
+            user_message: 用户消息
+            context: 会话上下文
+
+        Returns:
+            Dict: 响应结果
+        """
+        try:
+            response_message = "好的，我来帮您修改计划。请告诉我您想修改哪一天的行程？"
+
+            return {
+                "session_id": session_id,
+                "message": response_message,
+                "intent": "plan_modification",
+                "suggestions": ["修改第一天", "修改第二天", "修改第三天"]
+            }
+
+        except Exception as e:
+            print(f"❌ 处理计划修改失败: {str(e)}")
+            raise
+
+    async def _handle_general_chat(
+        self,
+        session_id: str,
+        user_id: int,
+        user_message: str,
+        context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        处理一般对话
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID
+            user_message: 用户消息
+            context: 会话上下文
+
+        Returns:
+            Dict: 响应结果
+        """
+        try:
+            # 简单的问候回复
+            if "你好" in user_message or "hello" in user_message.lower():
+                response_message = "您好！我是智能旅行规划助手，可以帮您规划旅行、查询景点信息、推荐酒店等。有什么可以帮您的吗？"
+            else:
+                response_message = "我是旅行规划助手，可以帮您规划旅行行程。请问有什么可以帮您的吗？"
+
+            return {
+                "session_id": session_id,
+                "message": response_message,
+                "intent": "general_chat",
+                "suggestions": ["规划旅行", "查询景点", "推荐酒店"]
+            }
+
+        except Exception as e:
+            print(f"❌ 处理一般对话失败: {str(e)}")
+            raise
+
+
+# 全局对话式系统实例
+_conversational_planner = None
+
+
+def get_conversational_planner(dialog_service) -> ConversationalMultiAgentTripPlanner:
+    """
+    获取对话式多智能体系统实例
+
+    Args:
+        dialog_service: 对话服务实例
+
+    Returns:
+        ConversationalMultiAgentTripPlanner: 对话式系统实例
+    """
+    global _conversational_planner
+
+    if _conversational_planner is None:
+        _conversational_planner = ConversationalMultiAgentTripPlanner(dialog_service)
+
+    return _conversational_planner
 

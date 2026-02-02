@@ -22,7 +22,7 @@ class User(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(100), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(500), nullable=False)
     phone = Column(String(20), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
@@ -162,7 +162,6 @@ class Post(Base):
     # 关系
     author = relationship("User", back_populates="posts")
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
-    likes = relationship("Like", back_populates="post", cascade="all, delete-orphan", primaryjoin="and_(Post.id==Like.target_id, Like.target_type=='post')")
     post_tags = relationship("PostTag", back_populates="post", cascade="all, delete-orphan")
 
     # 索引
@@ -217,7 +216,6 @@ class Like(Base):
 
     # 关系
     user = relationship("User", back_populates="likes")
-    post = relationship("Post", back_populates="likes", foreign_keys=[target_id], primaryjoin="and_(Like.target_id==Post.id, Like.target_type=='post')", viewonly=True)
 
     # 索引和约束
     __table_args__ = (
