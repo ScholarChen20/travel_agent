@@ -1,6 +1,6 @@
 <template>
   <div class="plans-container">
-    <a-page-header title="我的旅行计划" class="page-header">
+    <a-page-header title="我的旅行计划" class="page-header" @back="router.push('/')">
       <template #extra>
         <a-button type="primary" size="large" @click="$router.push('/create-plan')">
           <PlusOutlined /> 创建新计划

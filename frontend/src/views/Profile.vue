@@ -1,6 +1,6 @@
 <template>
   <div class="profile-container">
-    <a-page-header title="个人中心" style="background: white; margin-bottom: 16px" />
+    <a-page-header title="个人中心" style="background: white; margin-bottom: 16px" @back="router.push('/')" />
 
     <div style="padding: 0 24px; max-width: 1200px; margin: 0 auto">
       <a-row :gutter="16">
@@ -166,6 +166,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { API_BASE_URL } from '@/utils/axios'
 import { userService } from '@/services/user'
@@ -193,6 +194,7 @@ const passwordForm = ref({
   new_password: ''
 })
 
+const router = useRouter()
 const authStore = useAuthStore()
 
 onMounted(async () => {

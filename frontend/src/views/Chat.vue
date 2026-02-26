@@ -3,6 +3,9 @@
     <a-layout style="height: 100vh">
       <a-layout-sider width="300" style="background: #fff; border-right: 1px solid #f0f0f0">
         <div style="padding: 16px; border-bottom: 1px solid #f0f0f0">
+          <a-button type="text" size="small" class="back-home-btn" @click="router.push('/')">
+            <LeftOutlined /> 返回首页
+          </a-button>
           <a-button type="primary" block @click="createNewSession">
             <PlusOutlined /> 新建对话
           </a-button>
@@ -65,12 +68,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, DeleteOutlined, UserOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, UserOutlined, RobotOutlined, SendOutlined, LeftOutlined } from '@ant-design/icons-vue'
 import { useDialogStore } from '@/stores/dialog'
 import { useAuthStore } from '@/stores/auth'
 import { dialogService } from '@/services/dialog'
 
+const router = useRouter()
 const dialogStore = useDialogStore()
 const authStore = useAuthStore()
 
@@ -221,6 +226,18 @@ function scrollToBottom() {
 <style scoped>
 .chat-container {
   height: 100vh;
+}
+
+.back-home-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  text-align: left;
+  color: #666;
+}
+
+.back-home-btn:hover {
+  color: #1890ff;
 }
 
 .active {
