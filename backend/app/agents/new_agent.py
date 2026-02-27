@@ -28,7 +28,7 @@ async def creating_react_agent():
         name = "Jarvis",
         sys_prompt= """你是一个名为贾维斯的人工智能机器人，你是为钢铁侠量身定做的机器人，你可以识别主人的一切指令要求并快速分析所有结果""",
         model = DashScopeChatModel(
-            api_key='sk-1c854040b85549a3be779d4e95665176',
+            api_key='sk-1c854040b85549a3be779d4e95665176111',
             model_name="qwen-max",
             stream=True,
             enable_thinking=True,
