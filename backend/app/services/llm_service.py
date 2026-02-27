@@ -23,7 +23,7 @@ def get_llm() -> HelloAgentsLLM:
         # 使用阿里云百炼 Qwen 模型（已验证可用）
         _llm_instance = HelloAgentsLLM(
             model='qwen-plus',
-            api_key='sk-1c854040b85549a3be779d4e95665176',
+            api_key='sk-1c854040b85549a3be779d4e95665176222',
             base_url='https://dashscope.aliyuncs.com/compatible-mode/v1',
             provider='qwen'
         )
