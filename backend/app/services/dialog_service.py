@@ -46,6 +46,7 @@ class DialogService:
             session_doc = {
                 "session_id": session_id,
                 "user_id": user_id,
+                "title": "",
                 "context": initial_context or {},
                 "message_count": 0,
                 "created_at": datetime.utcnow(),
@@ -63,6 +64,12 @@ class DialogService:
                 session_doc,
                 ex=86400
             )
+
+            # 清除用户会话列表缓存，确保下次拉取时获得最新数据
+            cache_pattern = f"user:{user_id}:sessions*"
+            cached_keys = await self.redis.keys(cache_pattern)
+            if cached_keys:
+                await self.redis.delete(*cached_keys)
 
             logger.info(f"对话会话已创建: {session_id} (用户: {user_id})")
             return session_id
@@ -330,6 +337,43 @@ class DialogService:
             logger.error(f"列出用户会话失败: {str(e)}")
             raise
 
+    async def update_session_title(self, session_id: str, user_id: int, title: str) -> bool:
+        """
+        更新会话标题
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID（权限验证）
+            title: 新标题
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            sessions_collection = self.mongodb.get_collection(self.sessions_collection)
+            result = await sessions_collection.update_one(
+                {"session_id": session_id, "user_id": user_id},
+                {"$set": {"title": title, "updated_at": datetime.utcnow()}}
+            )
+
+            if result.matched_count > 0:
+                # 清除会话上下文缓存
+                await self.redis.delete(f"session:{session_id}:context")
+                # 清除用户会话列表缓存
+                cache_pattern = f"user:{user_id}:sessions*"
+                cached_keys = await self.redis.keys(cache_pattern)
+                if cached_keys:
+                    await self.redis.delete(*cached_keys)
+                logger.info(f"会话标题已更新: {session_id} -> {title}")
+                return True
+
+            logger.warning(f"更新标题失败（会话不存在）: {session_id}")
+            return False
+
+        except Exception as e:
+            logger.error(f"更新会话标题失败: {str(e)}")
+            raise
+
     async def delete_session(self, session_id: str, user_id: int) -> bool:
         """
         删除会话
@@ -409,6 +453,24 @@ class DialogService:
         except Exception as e:
             logger.error(f"获取工具调用日志失败: {str(e)}")
             raise
+
+    def delete_session_cache(
+            self,
+            user_id: int,
+            is_active: Optional[bool] = None,
+            limit: int = 20,
+            skip: int = 0
+    ):
+        """
+        删除原有的会话缓存
+        """
+        # 构建缓存键
+        cache_key = f"user:{user_id}:sessions"
+        if is_active is not None:
+            cache_key += f":active:{is_active}"
+        cache_key += f":limit:{limit}:skip:{skip}"
+
+        self.redis.delete(cache_key)
 
 
 # ========== 全局实例（单例模式） ==========
