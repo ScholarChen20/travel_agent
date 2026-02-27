@@ -148,6 +148,8 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { userService } from '@/services/user'
 import * as echarts from 'echarts'
+import chinaJson from '@/assets/china.json'
+import { findProvinceByCity } from '@/data/cities'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -160,26 +162,31 @@ let chartInstance: echarts.ECharts | null = null
 
 const TOTAL_PROVINCES = 34
 
-// 城市到省份的映射 (Keep original map data)
-const cityProvinceMap: Record<string, string> = {
-  '北京': '北京', '上海': '上海', '天津': '天津', '重庆': '重庆',
-  '广州': '广东', '深圳': '广东', '珠海': '广东', '汕头': '广东', '佛山': '广东', 
-  '杭州': '浙江', '宁波': '浙江', '温州': '浙江', '南京': '江苏', '苏州': '江苏',
-  '成都': '四川', '武汉': '湖北', '西安': '陕西', '长沙': '湖南', '郑州': '河南',
-  // ... (Can add more or rely on backend/complete list later)
+// 省份简称 → GeoJSON 全称（与 china.json 的 feature name 完全一致）
+const provinceGeoNameMap: Record<string, string> = {
+  '北京': '北京市', '上海': '上海市', '天津': '天津市', '重庆': '重庆市',
+  '广东': '广东省', '浙江': '浙江省', '江苏': '江苏省', '四川': '四川省',
+  '湖北': '湖北省', '湖南': '湖南省', '河南': '河南省', '陕西': '陕西省',
+  '山东': '山东省', '河北': '河北省', '福建': '福建省', '安徽': '安徽省',
+  '江西': '江西省', '辽宁': '辽宁省', '黑龙江': '黑龙江省', '吉林': '吉林省',
+  '山西': '山西省', '云南': '云南省', '贵州': '贵州省', '海南': '海南省',
+  '甘肃': '甘肃省', '青海': '青海省', '台湾': '台湾省',
+  '内蒙古': '内蒙古自治区', '广西': '广西壮族自治区', '西藏': '西藏自治区',
+  '宁夏': '宁夏回族自治区', '新疆': '新疆维吾尔自治区',
+  '香港': '香港特别行政区', '澳门': '澳门特别行政区',
 }
 
 // 获取用户头像
 async function fetchUserAvatar() {
   try {
-    if (authStore.user.value?.avatar_url) {
-      userAvatar.value = authStore.user.value.avatar_url
+    if (authStore.user?.avatar_url) {
+      userAvatar.value = authStore.user.avatar_url
     } else {
       const response = await userService.getProfile()
       userAvatar.value = response.avatar_url
-      if (authStore.user.value) {
+      if (authStore.user) {
         authStore.setUser({
-          ...authStore.user.value,
+          ...authStore.user,
           avatar_url: response.avatar_url
         })
       }
@@ -194,23 +201,22 @@ async function fetchVisitedCities() {
   try {
     const cities = await userService.getVisitedCities()
     visitedCities.value = Array.isArray(cities) ? cities : []
-    await nextTick()
-    initMap()
   } catch (error) {
     console.error('获取已访问城市失败:', error)
     visitedCities.value = []
+  } finally {
+    await nextTick()
+    initMap()
   }
 }
 
 function getProvinceCount(): number {
   const provinces = new Set<string>()
   visitedCities.value.forEach(city => {
-    // Simple check, robust mapping would be better
-    for(const [c, p] of Object.entries(cityProvinceMap)) {
-        if(city.includes(c)) provinces.add(p)
-    }
+    const province = findProvinceByCity(city)
+    if (province) provinces.add(province)
   })
-  return provinces.size > 0 ? provinces.size : Math.ceil(visitedCities.value.length / 2) // Fallback estimation
+  return provinces.size
 }
 
 function getCoveragePercentage(): number {
@@ -221,23 +227,40 @@ async function initMap() {
   if (!mapRef.value) return
   mapLoading.value = true
   try {
-    const response = await fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
-    const chinaJson = await response.json()
-    echarts.registerMap('china', chinaJson)
+    echarts.registerMap('china', chinaJson as any)
     if (chartInstance) chartInstance.dispose()
     chartInstance = echarts.init(mapRef.value)
-    
+
+    // 把访问过的城市 → 省份简称 → GeoJSON 全称
+    const visitedProvinceGeoNames = new Set<string>()
+    visitedCities.value.forEach(city => {
+      const province = findProvinceByCity(city)
+      if (province && provinceGeoNameMap[province]) {
+        visitedProvinceGeoNames.add(provinceGeoNameMap[province])
+      }
+    })
+
+    // series.data：已访问省份 value=1（高亮色），其余由 itemStyle 默认色填充
+    const mapData = Array.from(visitedProvinceGeoNames).map(name => ({
+      name,
+      value: 1,
+    }))
+
     const option = {
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(50, 50, 50, 0.9)',
         borderColor: '#667eea',
-        textStyle: { color: '#fff' }
+        textStyle: { color: '#fff' },
+        formatter: (params: any) => {
+          const visited = visitedProvinceGeoNames.has(params.name)
+          return `${params.name}<br/>${visited ? '✅ 已到访' : '未到访'}`
+        }
       },
       visualMap: {
         show: false,
-        min: 0, max: 10,
-        inRange: { color: ['#e0e0e0', '#667eea'] }
+        min: 0, max: 1,
+        inRange: { color: ['#e8eaf6', '#667eea'] }
       },
       series: [{
         type: 'map',
@@ -245,7 +268,7 @@ async function initMap() {
         roam: true,
         zoom: 1.2,
         itemStyle: {
-          areaColor: '#f5f5f5',
+          areaColor: '#f0f0f0',
           borderColor: '#ccc'
         },
         emphasis: {
@@ -255,7 +278,7 @@ async function initMap() {
             shadowColor: 'rgba(0,0,0,0.2)'
           }
         },
-        data: [] // Can populate if needed
+        data: mapData
       }]
     }
     chartInstance.setOption(option)
@@ -517,6 +540,11 @@ onUnmounted(() => {
 
 .echarts-map {
   width: 100%;
+  height: 600px;
+}
+
+:deep(.ant-spin-nested-loading),
+:deep(.ant-spin-container) {
   height: 100%;
 }
 

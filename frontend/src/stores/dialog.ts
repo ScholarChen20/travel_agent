@@ -7,6 +7,8 @@ interface Message {
   content: string
   timestamp: string
   tool_calls?: any[]
+  suggestions?: string[]
+  thinking?: boolean
 }
 
 interface Session {
@@ -43,6 +45,10 @@ export const useDialogStore = defineStore('dialog', () => {
     sessions.value = newSessions
   }
 
+  function addSession(session: Session) {
+    sessions.value.unshift(session)
+  }
+
   function updateSession(sessionId: string, updates: Partial<Session>) {
     const index = sessions.value.findIndex(s => s.id === sessionId)
     if (index !== -1) {
@@ -52,6 +58,17 @@ export const useDialogStore = defineStore('dialog', () => {
 
   function removeSession(sessionId: string) {
     sessions.value = sessions.value.filter(s => s.id !== sessionId)
+  }
+
+  function replaceMessage(id: string, newMessage: Message) {
+    const index = messages.value.findIndex(m => m.id === id)
+    if (index !== -1) {
+      messages.value[index] = newMessage
+    }
+  }
+
+  function removeMessageById(id: string) {
+    messages.value = messages.value.filter(m => m.id !== id)
   }
 
   return {
@@ -64,7 +81,10 @@ export const useDialogStore = defineStore('dialog', () => {
     addMessage,
     setMessages,
     setSessions,
+    addSession,
     updateSession,
-    removeSession
+    removeSession,
+    replaceMessage,
+    removeMessageById
   }
 })

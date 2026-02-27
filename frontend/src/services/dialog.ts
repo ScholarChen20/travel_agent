@@ -2,7 +2,7 @@ import axios from '@/utils/axios'
 
 interface CreateSessionResponse {
   session_id: string
-  created_at: string
+  message: string
 }
 
 interface ChatRequest {
@@ -34,84 +34,51 @@ interface Message {
 
 export const dialogService = {
   async createSession(): Promise<CreateSessionResponse> {
-    console.log('[Dialog] 创建会话...')
-    try {
-      const response = await axios.post('/api/dialog/sessions', {
-        initial_context: {}
-      })
-      console.log('[Dialog] 会话创建成功:', response.data)
-      return response.data
-    } catch (error: any) {
-      console.error('[Dialog] 创建会话失败:', error)
-      throw error
-    }
+    const response = await axios.post('/api/dialog/sessions', { initial_context: {} })
+    return response.data
   },
 
   async chat(sessionId: string, data: ChatRequest): Promise<ChatResponse> {
-    console.log('[Dialog] 发送消息:', { sessionId, message: data.message })
-    try {
-      const response = await axios.post('/api/dialog/chat', {
-        session_id: sessionId,
-        message: data.message
-      })
-      console.log('[Dialog] 收到回复:', response.data)
-      return response.data
-    } catch (error: any) {
-      console.error('[Dialog] 发送消息失败:', error)
-      throw error
-    }
+    const response = await axios.post('/api/dialog/chat', {
+      session_id: sessionId,
+      message: data.message
+    })
+    return response.data
   },
 
   async getSessions(): Promise<Session[]> {
-    console.log('[Dialog] 获取会话列表...')
-    try {
-      const response = await axios.get('/api/dialog/sessions')
-      console.log('[Dialog] 会话列表:', response.data)
-      return response.data.sessions || []
-    } catch (error: any) {
-      console.error('[Dialog] 获取会话列表失败:', error)
-      throw error
-    }
+    const response = await axios.get('/api/dialog/sessions')
+    const raw: any[] = response.data.sessions || []
+    return raw.map(s => ({
+      ...s,
+      id: s.id ?? s.session_id,
+    }))
   },
 
-  async getSession(sessionId: string): Promise<Session> {
-    console.log('[Dialog] 获取会话详情:', sessionId)
-    try {
-      const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
-      console.log('[Dialog] 会话详情:', response.data)
-      return response.data
-    } catch (error: any) {
-      console.error('[Dialog] 获取会话详情失败:', error)
-      throw error
-    }
+  async getSession(sessionId: string): Promise<{ messages: Message[] }> {
+    const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
+    return response.data
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    console.log('[Dialog] 删除会话:', sessionId)
-    try {
-      await axios.delete(`/api/dialog/sessions/${sessionId}`)
-      console.log('[Dialog] 会话删除成功')
-    } catch (error: any) {
-      console.error('[Dialog] 删除会话失败:', error)
-      throw error
-    }
+    await axios.delete(`/api/dialog/sessions/${sessionId}`)
+  },
+
+  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+    await axios.patch(`/api/dialog/sessions/${sessionId}`, { title })
   },
 
   async getMessages(sessionId: string): Promise<Message[]> {
-    console.log('[Dialog] 获取消息列表:', sessionId)
-    try {
-      const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
-      console.log('[Dialog] 消息列表:', response.data.messages)
-      return response.data.messages || []
-    } catch (error: any) {
-      console.error('[Dialog] 获取消息列表失败:', error)
-      throw error
-    }
+    const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
+    return response.data.messages || []
   },
 
-  createWebSocket(sessionId: string, token: string): WebSocket {
-    const wsUrl = `ws://localhost:8000/api/dialog/ws/${sessionId}?token=${token}`
-    console.log('[Dialog] 创建WebSocket连接:', wsUrl)
-    return new WebSocket(wsUrl)
+  /**
+   * 建立 SSE 连接。token 通过 query param 传递（EventSource 不支持自定义请求头）。
+   */
+  createSSE(sessionId: string, token: string): EventSource {
+    const baseUrl = (axios.defaults.baseURL || '').replace(/\/$/, '')
+    const url = `${baseUrl}/api/dialog/sse/${sessionId}?token=${encodeURIComponent(token)}`
+    return new EventSource(url)
   }
 }

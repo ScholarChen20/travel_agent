@@ -3,7 +3,12 @@
     <!-- 顶部导航栏 -->
     <div class="top-header">
       <div class="header-content">
-        <h2 class="page-title">旅行动态</h2>
+        <div class="header-left">
+          <a-button type="text" class="back-home-btn" @click="router.push('/')">
+            <LeftOutlined /> 首页
+          </a-button>
+          <h2 class="page-title">旅行动态</h2>
+        </div>
         <a-button type="primary" size="large" @click="showCreateModal = true" class="post-btn">
           <template #icon><EditOutlined /></template>
           发布动态
@@ -236,6 +241,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
 import {
   EditOutlined,
@@ -243,12 +249,14 @@ import {
   HeartFilled,
   CommentOutlined,
   ShareAltOutlined,
-  PlusOutlined
+  PlusOutlined,
+  LeftOutlined
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialStore } from '@/stores/social'
 import { socialService } from '@/services/social'
 
+const router = useRouter()
 const socialStore = useSocialStore()
 const authStore = useAuthStore()
 
@@ -508,6 +516,21 @@ function formatTime(time: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-home-btn {
+  color: #666;
+  font-size: 14px;
+}
+
+.back-home-btn:hover {
+  color: #1890ff;
 }
 
 .page-title {
