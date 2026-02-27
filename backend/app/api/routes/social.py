@@ -23,6 +23,7 @@ from loguru import logger
 
 from ...services.social_service import get_social_service
 from ...services.storage_service import get_storage_service
+from ...services.douyin_service import get_douyin_service
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...utils.response import ApiResponse, ResponseCode
 
@@ -511,4 +512,33 @@ async def get_posts_by_tag(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="按标签查询失败"
+        )
+
+
+@router.get("/hot-topics")
+async def get_hot_topics(
+    limit: int = Query(20, ge=1, le=20, description="返回数量")
+):
+    """
+    获取抖音热点话题
+
+    返回当前抖音热榜Top N数据
+    """
+    try:
+        douyin_service = get_douyin_service()
+
+        # 获取热点排名
+        hot_topics = await douyin_service.get_hotboard_rank(limit=limit)
+
+        return {
+            "success": True,
+            "total": len(hot_topics),
+            "topics": hot_topics
+        }
+
+    except Exception as e:
+        logger.error(f"获取热点话题失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取热点话题失败"
         )

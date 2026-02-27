@@ -1,37 +1,42 @@
 <template>
   <div class="home-container">
-    <!-- 顶部导航栏 -->
-    <div class="top-nav">
+    <!-- Navbar -->
+    <nav class="navbar animate-fade-in-down">
       <div class="nav-content">
-        <div class="nav-left">
-          <span class="logo">✈️ 智能旅行助手</span>
+        <div class="logo">
+          <span class="logo-icon">✈️</span>
+          <span class="logo-text">TravelAI</span>
         </div>
-        <div class="nav-right">
+        <div class="nav-links">
           <template v-if="authStore.isAuthenticated">
-            <a-button type="link" @click="$router.push('/chat')" class="nav-link">
-              💬 对话
-            </a-button>
-            <a-button type="link" @click="$router.push('/plans')" class="nav-link">
-              📋 我的计划
-            </a-button>
-            <a-button type="link" @click="$router.push('/social')" class="nav-link">
-              🌐 动态
-            </a-button>
+            <router-link to="/chat" class="nav-link">
+              <span class="icon">💬</span> 对话
+            </router-link>
+            <router-link to="/plans" class="nav-link">
+              <span class="icon">📋</span> 计划
+            </router-link>
+            <router-link to="/social" class="nav-link">
+              <span class="icon">🌐</span> 社区
+            </router-link>
+            
             <a-dropdown>
-                <img v-if="userAvatar" :src="userAvatar" style="width: 40px; height: 40px; border-radius: 50%; cursor: pointer;" alt="头像" />
-                <a-avatar v-else style="width: 40px; height: 40px; cursor: pointer;">
-                  {{ authStore.user.value?.username?.[0] }}
+              <div class="user-menu-trigger">
+                <a-avatar :src="userAvatar" :size="40" class="user-avatar">
+                  {{ authStore.user?.username?.[0]?.toUpperCase() }}
                 </a-avatar>
+                <span class="username">{{ authStore.user?.nickname || authStore.user?.username }}</span>
+                <DownOutlined />
+              </div>
               <template #overlay>
                 <a-menu>
-                  <a-menu-item @click="$router.push('/profile')">
+                  <a-menu-item key="profile" @click="$router.push('/profile')">
                     <UserOutlined /> 个人中心
                   </a-menu-item>
-                  <a-menu-item v-if="authStore.isAdmin" @click="$router.push('/admin')">
+                  <a-menu-item key="admin" v-if="authStore.isAdmin" @click="$router.push('/admin')">
                     <SettingOutlined /> 管理后台
                   </a-menu-item>
                   <a-menu-divider />
-                  <a-menu-item @click="handleLogout">
+                  <a-menu-item key="logout" @click="handleLogout">
                     <LogoutOutlined /> 退出登录
                   </a-menu-item>
                 </a-menu>
@@ -39,254 +44,149 @@
             </a-dropdown>
           </template>
           <template v-else>
-            <a-button type="link" @click="$router.push('/login')" class="nav-link">
-              登录
-            </a-button>
-            <a-button type="primary" @click="$router.push('/register')" class="nav-button">
-              注册
-            </a-button>
+            <router-link to="/login" class="nav-link">登录</router-link>
+            <router-link to="/register" class="nav-btn-primary">注册</router-link>
           </template>
         </div>
       </div>
-    </div>
+    </nav>
 
-    <!-- 背景装饰 -->
-    <div class="bg-decoration">
-      <div class="circle circle-1"></div>
-      <div class="circle circle-2"></div>
-      <div class="circle circle-3"></div>
-    </div>
-
-    <!-- 页面标题 -->
-    <div class="page-header">
-      <div class="icon-wrapper">
-        <span class="icon">✈️</span>
-      </div>
-      <h1 class="page-title">智能旅行助手</h1>
-      <p class="page-subtitle">基于AI的个性化旅行规划,让每一次出行都完美无忧</p>
-    </div>
-
-    <a-card class="form-card" :bordered="false">
-      <a-form
-        :model="formData"
-        layout="vertical"
-        @finish="handleSubmit"
-      >
-        <!-- 第一步:目的地和日期 -->
-        <div class="form-section">
-          <div class="section-header">
-            <span class="section-icon">📍</span>
-            <span class="section-title">目的地与日期</span>
-          </div>
-
-          <a-row :gutter="24">
-            <a-col :span="8">
-              <a-form-item name="city" :rules="[{ required: true, message: '请输入目的地城市' }]">
-                <template #label>
-                  <span class="form-label">目的地城市</span>
-                </template>
-                <a-input
-                  v-model:value="formData.city"
-                  placeholder="例如: 北京"
-                  size="large"
-                  class="custom-input"
-                >
-                  <template #prefix>
-                    <span style="color: #1890ff;">🏙️</span>
-                  </template>
-                </a-input>
-              </a-form-item>
-            </a-col>
-            <a-col :span="6">
-              <a-form-item name="start_date" :rules="[{ required: true, message: '请选择开始日期' }]">
-                <template #label>
-                  <span class="form-label">开始日期</span>
-                </template>
-                <a-date-picker
-                  v-model:value="formData.start_date"
-                  style="width: 100%"
-                  size="large"
-                  class="custom-input"
-                  placeholder="选择日期"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="6">
-              <a-form-item name="end_date" :rules="[{ required: true, message: '请选择结束日期' }]">
-                <template #label>
-                  <span class="form-label">结束日期</span>
-                </template>
-                <a-date-picker
-                  v-model:value="formData.end_date"
-                  style="width: 100%"
-                  size="large"
-                  class="custom-input"
-                  placeholder="选择日期"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="4">
-              <a-form-item>
-                <template #label>
-                  <span class="form-label">旅行天数</span>
-                </template>
-                <div class="days-display-compact">
-                  <span class="days-value">{{ formData.travel_days }}</span>
-                  <span class="days-unit">天</span>
-                </div>
-              </a-form-item>
-            </a-col>
-          </a-row>
-        </div>
-
-        <!-- 第二步:偏好设置 -->
-        <div class="form-section">
-          <div class="section-header">
-            <span class="section-icon">⚙️</span>
-            <span class="section-title">偏好设置</span>
-          </div>
-
-          <a-row :gutter="24">
-            <a-col :span="8">
-              <a-form-item name="transportation">
-                <template #label>
-                  <span class="form-label">交通方式</span>
-                </template>
-                <a-select v-model:value="formData.transportation" size="large" class="custom-select">
-                  <a-select-option value="公共交通">🚇 公共交通</a-select-option>
-                  <a-select-option value="自驾">🚗 自驾</a-select-option>
-                  <a-select-option value="步行">🚶 步行</a-select-option>
-                  <a-select-option value="混合">🔀 混合</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item name="accommodation">
-                <template #label>
-                  <span class="form-label">住宿偏好</span>
-                </template>
-                <a-select v-model:value="formData.accommodation" size="large" class="custom-select">
-                  <a-select-option value="经济型酒店">💰 经济型酒店</a-select-option>
-                  <a-select-option value="舒适型酒店">🏨 舒适型酒店</a-select-option>
-                  <a-select-option value="豪华酒店">⭐ 豪华酒店</a-select-option>
-                  <a-select-option value="民宿">🏡 民宿</a-select-option>
-                </a-select>
-              </a-form-item>
-            </a-col>
-            <a-col :span="8">
-              <a-form-item name="preferences">
-                <template #label>
-                  <span class="form-label">旅行偏好</span>
-                </template>
-                <div class="preference-tags">
-                  <a-checkbox-group v-model:value="formData.preferences" class="custom-checkbox-group">
-                    <a-checkbox value="历史文化" class="preference-tag">🏛️ 历史文化</a-checkbox>
-                    <a-checkbox value="自然风光" class="preference-tag">🏞️ 自然风光</a-checkbox>
-                    <a-checkbox value="美食" class="preference-tag">🍜 美食</a-checkbox>
-                    <a-checkbox value="购物" class="preference-tag">🛍️ 购物</a-checkbox>
-                    <a-checkbox value="艺术" class="preference-tag">🎨 艺术</a-checkbox>
-                    <a-checkbox value="休闲" class="preference-tag">☕ 休闲</a-checkbox>
-                  </a-checkbox-group>
-                </div>
-              </a-form-item>
-            </a-col>
-          </a-row>
-        </div>
-
-        <!-- 第三步:额外要求 -->
-        <div class="form-section">
-          <div class="section-header">
-            <span class="section-icon">💬</span>
-            <span class="section-title">额外要求</span>
-          </div>
-
-          <a-form-item name="free_text_input">
-            <a-textarea
-              v-model:value="formData.free_text_input"
-              placeholder="请输入您的额外要求,例如:想去看升旗、需要无障碍设施、对海鲜过敏等..."
-              :rows="3"
-              size="large"
-              class="custom-textarea"
-            />
-          </a-form-item>
-        </div>
-
-        <!-- 提交按钮 -->
-        <a-form-item>
-          <a-button
-            type="primary"
-            html-type="submit"
-            :loading="loading"
-            size="large"
-            block
-            class="submit-button"
-          >
-            <template v-if="!loading">
-              <span class="button-icon">🚀</span>
-              <span>开始规划我的旅行</span>
-            </template>
-            <template v-else>
-              <span>正在生成中...</span>
-            </template>
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="hero-content animate-fade-in-up">
+        <h1 class="hero-title">探索世界，<br><span class="gradient-text">智绘</span>你的旅程</h1>
+        <p class="hero-subtitle">
+          基于AI的智能旅行助手，为你定制专属行程，记录每一次难忘足迹。
+        </p>
+        <div class="hero-actions">
+          <a-button type="primary" size="large" class="cta-btn" @click="$router.push('/create-plan')">
+            <template #icon><RocketOutlined /></template>
+            开始规划
           </a-button>
-        </a-form-item>
+          <a-button size="large" class="secondary-btn" @click="scrollToMap">
+            查看足迹
+          </a-button>
+        </div>
+      </div>
+      
+      <!-- Animated Background Elements -->
+      <div class="hero-bg-elements">
+        <div class="floating-shape shape-1"></div>
+        <div class="floating-shape shape-2"></div>
+        <div class="floating-shape shape-3"></div>
+      </div>
+    </section>
 
-        <!-- 加载进度条 -->
-        <a-form-item v-if="loading">
-          <div class="loading-container">
-            <a-progress
-              :percent="loadingProgress"
-              status="active"
-              :stroke-color="{
-                '0%': '#667eea',
-                '100%': '#764ba2',
-              }"
-              :stroke-width="10"
-            />
-            <p class="loading-status">
-              {{ loadingStatus }}
-            </p>
+    <!-- Stats & Map Section -->
+    <section id="map-section" class="map-section">
+      <div class="section-container">
+        <a-card class="map-card" :bordered="false">
+          <template #title>
+            <div class="card-header">
+              <span class="header-icon">🗺️</span>
+              <span class="header-title">我的旅行足迹</span>
+            </div>
+          </template>
+          
+          <div v-if="authStore.isAuthenticated">
+            <!-- Stats -->
+            <div class="stats-grid">
+              <div class="stat-item">
+                <div class="stat-value gradient-text">{{ visitedCities.length }}</div>
+                <div class="stat-label">去过的城市</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value gradient-text">{{ getProvinceCount() }}</div>
+                <div class="stat-label">点亮的省份</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value gradient-text">{{ getCoveragePercentage() }}%</div>
+                <div class="stat-label">中国探索度</div>
+              </div>
+            </div>
+
+            <!-- Map -->
+            <div class="map-wrapper">
+              <a-spin :spinning="mapLoading" tip="加载地图中...">
+                <div ref="mapRef" class="echarts-map"></div>
+              </a-spin>
+            </div>
+            
+            <!-- City Tags -->
+            <div class="cities-list" v-if="visitedCities.length > 0">
+              <div class="cities-title">已访问城市</div>
+              <div class="tags-wrapper">
+                <a-tag v-for="city in visitedCities" :key="city" color="blue" class="city-tag">
+                  📍 {{ city }}
+                </a-tag>
+              </div>
+            </div>
           </div>
-        </a-form-item>
-      </a-form>
-    </a-card>
+          
+          <div v-else class="login-placeholder">
+            <a-empty description="登录后开启你的足迹地图" :image="Empty.PRESENTED_IMAGE_SIMPLE">
+              <a-button type="primary" @click="$router.push('/login')">立即登录</a-button>
+            </a-empty>
+          </div>
+        </a-card>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { UserOutlined, SettingOutlined, LogoutOutlined } from '@ant-design/icons-vue'
-import { generateTripPlan } from '@/services/api'
+import { message, Empty } from 'ant-design-vue'
+import { 
+  UserOutlined, 
+  SettingOutlined, 
+  LogoutOutlined, 
+  DownOutlined,
+  RocketOutlined
+} from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import type { TripFormData } from '@/types'
-import type { Dayjs } from 'dayjs'
-import {userService} from "@/services/user.ts";
+import { userService } from '@/services/user'
+import * as echarts from 'echarts'
+import chinaJson from '@/assets/china.json'
+import { findProvinceByCity } from '@/data/cities'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-// 使用ref存储头像URL
 const userAvatar = ref<string | undefined>()
+const visitedCities = ref<string[]>([])
+const mapRef = ref<HTMLElement>()
+const mapLoading = ref(false)
+let chartInstance: echarts.ECharts | null = null
 
-// 在组件挂载后异步获取用户信息
-onMounted(async () => {
+const TOTAL_PROVINCES = 34
+
+// 省份简称 → GeoJSON 全称（与 china.json 的 feature name 完全一致）
+const provinceGeoNameMap: Record<string, string> = {
+  '北京': '北京市', '上海': '上海市', '天津': '天津市', '重庆': '重庆市',
+  '广东': '广东省', '浙江': '浙江省', '江苏': '江苏省', '四川': '四川省',
+  '湖北': '湖北省', '湖南': '湖南省', '河南': '河南省', '陕西': '陕西省',
+  '山东': '山东省', '河北': '河北省', '福建': '福建省', '安徽': '安徽省',
+  '江西': '江西省', '辽宁': '辽宁省', '黑龙江': '黑龙江省', '吉林': '吉林省',
+  '山西': '山西省', '云南': '云南省', '贵州': '贵州省', '海南': '海南省',
+  '甘肃': '甘肃省', '青海': '青海省', '台湾': '台湾省',
+  '内蒙古': '内蒙古自治区', '广西': '广西壮族自治区', '西藏': '西藏自治区',
+  '宁夏': '宁夏回族自治区', '新疆': '新疆维吾尔自治区',
+  '香港': '香港特别行政区', '澳门': '澳门特别行政区',
+}
+
+// 获取用户头像
+async function fetchUserAvatar() {
   try {
-    // 尝试从authStore获取用户信息
-    if (authStore.user.value?.avatar_url) {
-      userAvatar.value = authStore.user.value.avatar_url
-      console.log('从authStore获取头像URL:', userAvatar.value)
+    if (authStore.user?.avatar_url) {
+      userAvatar.value = authStore.user.avatar_url
     } else {
-      // 如果authStore中没有，则直接从API获取
       const response = await userService.getProfile()
       userAvatar.value = response.avatar_url
-      console.log('从API获取头像URL:', userAvatar.value)
-      
-      // 更新authStore中的用户信息
-      if (authStore.user.value) {
+      if (authStore.user) {
         authStore.setUser({
-          ...authStore.user.value,
+          ...authStore.user,
           avatar_url: response.avatar_url
         })
       }
@@ -294,120 +194,99 @@ onMounted(async () => {
   } catch (error) {
     console.error('获取头像URL失败:', error)
   }
-})
-
-
-
-const loading = ref(false)
-const loadingProgress = ref(0)
-const loadingStatus = ref('')
-
-interface FormData {
-  city: string
-  start_date: Dayjs | null
-  end_date: Dayjs | null
-  travel_days: number
-  transportation: string
-  accommodation: string
-  preferences: string[]
-  free_text_input: string
 }
 
-const formData = reactive<FormData>({
-  city: '',
-  start_date: null,
-  end_date: null,
-  travel_days: 1,
-  transportation: '公共交通',
-  accommodation: '经济型酒店',
-  preferences: [],
-  free_text_input: ''
-})
-
-// 监听日期变化,自动计算旅行天数
-watch([() => formData.start_date, () => formData.end_date], ([start, end]) => {
-  if (start && end) {
-    const days = end.diff(start, 'day') + 1
-    if (days > 0 && days <= 30) {
-      formData.travel_days = days
-    } else if (days > 30) {
-      message.warning('旅行天数不能超过30天')
-      formData.end_date = null
-    } else {
-      message.warning('结束日期不能早于开始日期')
-      formData.end_date = null
-    }
-  }
-})
-
-const handleSubmit = async () => {
-  if (!formData.start_date || !formData.end_date) {
-    message.error('请选择日期')
-    return
-  }
-
-  loading.value = true
-  loadingProgress.value = 0
-  loadingStatus.value = '正在初始化...'
-
-  // 模拟进度更新
-  const progressInterval = setInterval(() => {
-    if (loadingProgress.value < 90) {
-      loadingProgress.value += 10
-
-      // 更新状态文本
-      if (loadingProgress.value <= 30) {
-        loadingStatus.value = '🔍 正在搜索景点...'
-      } else if (loadingProgress.value <= 50) {
-        loadingStatus.value = '🌤️ 正在查询天气...'
-      } else if (loadingProgress.value <= 70) {
-        loadingStatus.value = '🏨 正在推荐酒店...'
-      } else {
-        loadingStatus.value = '📋 正在生成行程计划...'
-      }
-    }
-  }, 500)
-
+// 获取已访问城市
+async function fetchVisitedCities() {
   try {
-    const requestData: TripFormData = {
-      city: formData.city,
-      start_date: formData.start_date.format('YYYY-MM-DD'),
-      end_date: formData.end_date.format('YYYY-MM-DD'),
-      travel_days: formData.travel_days,
-      transportation: formData.transportation,
-      accommodation: formData.accommodation,
-      preferences: formData.preferences,
-      free_text_input: formData.free_text_input
-    }
-
-    const response = await generateTripPlan(requestData)
-
-    clearInterval(progressInterval)
-    loadingProgress.value = 100
-    loadingStatus.value = '✅ 完成!'
-
-    if (response.success && response.data) {
-      // 保存到sessionStorage
-      sessionStorage.setItem('tripPlan', JSON.stringify(response.data))
-
-      message.success('旅行计划生成成功!')
-
-      // 短暂延迟后跳转
-      setTimeout(() => {
-        router.push('/result')
-      }, 10) // 延迟10毫秒
-    } else {
-      message.error(response.message || '生成失败')
-    }
-  } catch (error: any) {
-    clearInterval(progressInterval)
-    message.error(error.message || '生成旅行计划失败,请稍后重试')
+    const cities = await userService.getVisitedCities()
+    visitedCities.value = Array.isArray(cities) ? cities : []
+  } catch (error) {
+    console.error('获取已访问城市失败:', error)
+    visitedCities.value = []
   } finally {
-    setTimeout(() => {
-      loading.value = false
-      loadingProgress.value = 0
-      loadingStatus.value = ''
-    }, 1000)
+    await nextTick()
+    initMap()
+  }
+}
+
+function getProvinceCount(): number {
+  const provinces = new Set<string>()
+  visitedCities.value.forEach(city => {
+    const province = findProvinceByCity(city)
+    if (province) provinces.add(province)
+  })
+  return provinces.size
+}
+
+function getCoveragePercentage(): number {
+  return Math.round((getProvinceCount() / TOTAL_PROVINCES) * 100)
+}
+
+async function initMap() {
+  if (!mapRef.value) return
+  mapLoading.value = true
+  try {
+    echarts.registerMap('china', chinaJson as any)
+    if (chartInstance) chartInstance.dispose()
+    chartInstance = echarts.init(mapRef.value)
+
+    // 把访问过的城市 → 省份简称 → GeoJSON 全称
+    const visitedProvinceGeoNames = new Set<string>()
+    visitedCities.value.forEach(city => {
+      const province = findProvinceByCity(city)
+      if (province && provinceGeoNameMap[province]) {
+        visitedProvinceGeoNames.add(provinceGeoNameMap[province])
+      }
+    })
+
+    // series.data：已访问省份 value=1（高亮色），其余由 itemStyle 默认色填充
+    const mapData = Array.from(visitedProvinceGeoNames).map(name => ({
+      name,
+      value: 1,
+    }))
+
+    const option = {
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: 'rgba(50, 50, 50, 0.9)',
+        borderColor: '#667eea',
+        textStyle: { color: '#fff' },
+        formatter: (params: any) => {
+          const visited = visitedProvinceGeoNames.has(params.name)
+          return `${params.name}<br/>${visited ? '✅ 已到访' : '未到访'}`
+        }
+      },
+      visualMap: {
+        show: false,
+        min: 0, max: 1,
+        inRange: { color: ['#e8eaf6', '#667eea'] }
+      },
+      series: [{
+        type: 'map',
+        map: 'china',
+        roam: true,
+        zoom: 1.2,
+        itemStyle: {
+          areaColor: '#f0f0f0',
+          borderColor: '#ccc'
+        },
+        emphasis: {
+          itemStyle: {
+            areaColor: '#764ba2',
+            shadowBlur: 10,
+            shadowColor: 'rgba(0,0,0,0.2)'
+          }
+        },
+        data: mapData
+      }]
+    }
+    chartInstance.setOption(option)
+    window.addEventListener('resize', () => chartInstance?.resize())
+  } catch (error) {
+    message.error('地图加载失败')
+  } finally {
+    mapLoading.value = false
   }
 }
 
@@ -416,386 +295,278 @@ function handleLogout() {
   message.success('已退出登录')
   router.push('/')
 }
+
+function scrollToMap() {
+  document.getElementById('map-section')?.scrollIntoView({ behavior: 'smooth' })
+}
+
+onMounted(async () => {
+  if (authStore.isAuthenticated) {
+    await fetchUserAvatar()
+    await fetchVisitedCities()
+  }
+})
+
+onUnmounted(() => {
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
+})
 </script>
 
 <style scoped>
 .home-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 0;
-  position: relative;
-  overflow: hidden;
+  background: #fff;
 }
 
-/* 顶部导航栏 */
-.top-nav {
-  position: relative;
-  z-index: 10;
-  background: rgba(255, 255, 255, 0.95);
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
 }
 
 .nav-content {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 0 24px;
+  height: 64px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.nav-left .logo {
-  font-size: 20px;
-  font-weight: 700;
-  color: #667eea;
-}
-
-.nav-right {
+.logo {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 24px;
 }
 
 .nav-link {
-  color: #333;
+  color: var(--text-secondary);
   font-weight: 500;
+  text-decoration: none;
+  transition: color 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .nav-link:hover {
-  color: #667eea;
+  color: var(--primary-color);
 }
 
-.nav-button {
+.nav-btn-primary {
+  padding: 8px 24px;
+  background: var(--bg-gradient);
+  color: white;
   border-radius: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s;
 }
 
-.home-container > *:not(.top-nav) {
-  padding: 60px 20px;
-}
-
-/* 背景装饰 */
-.bg-decoration {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.circle {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  animation: float 20s infinite ease-in-out;
-}
-
-.circle-1 {
-  width: 300px;
-  height: 300px;
-  top: -100px;
-  left: -100px;
-  animation-delay: 0s;
-}
-
-.circle-2 {
-  width: 200px;
-  height: 200px;
-  top: 50%;
-  right: -50px;
-  animation-delay: 5s;
-}
-
-.circle-3 {
-  width: 150px;
-  height: 150px;
-  bottom: -50px;
-  left: 30%;
-  animation-delay: 10s;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-30px) rotate(180deg);
-  }
-}
-
-/* 页面标题 */
-.page-header {
-  text-align: center;
-  margin-bottom: 50px;
-  animation: fadeInDown 0.8s ease-out;
-  position: relative;
-  z-index: 1;
-}
-
-.icon-wrapper {
-  margin-bottom: 20px;
-}
-
-.icon {
-  font-size: 80px;
-  display: inline-block;
-  animation: bounce 2s infinite;
-}
-
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-20px);
-  }
-}
-
-.page-title {
-  font-size: 56px;
-  font-weight: 800;
-  color: #ffffff;
-  margin-bottom: 16px;
-  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
-  letter-spacing: 2px;
-}
-
-.page-subtitle {
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.95);
-  margin: 0;
-  font-weight: 300;
-}
-
-/* 表单卡片 */
-.form-card {
-  max-width: 1400px;
-  margin: 0 auto;
-  border-radius: 24px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
-  animation: fadeInUp 0.8s ease-out;
-  position: relative;
-  z-index: 1;
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.98) !important;
-}
-
-/* 表单分区 */
-.form-section {
-  margin-bottom: 32px;
-  padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
-  border-radius: 16px;
-  border: 1px solid #e8e8e8;
-  transition: all 0.3s ease;
-}
-
-.form-section:hover {
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+.nav-btn-primary:hover {
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-.section-header {
+.user-menu-trigger {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #667eea;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 20px;
+  transition: background 0.3s;
 }
 
-.section-icon {
-  font-size: 24px;
-  margin-right: 12px;
+.user-menu-trigger:hover {
+  background: var(--bg-secondary);
 }
 
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-/* 表单标签 */
-.form-label {
-  font-size: 15px;
-  font-weight: 500;
-  color: #555;
-}
-
-/* 自定义输入框 */
-.custom-input :deep(.ant-input),
-.custom-input :deep(.ant-picker) {
-  border-radius: 12px;
-  border: 2px solid #e8e8e8;
-  transition: all 0.3s ease;
-}
-
-.custom-input :deep(.ant-input:hover),
-.custom-input :deep(.ant-picker:hover) {
-  border-color: #667eea;
-}
-
-.custom-input :deep(.ant-input:focus),
-.custom-input :deep(.ant-picker-focused) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-/* 自定义选择框 */
-.custom-select :deep(.ant-select-selector) {
-  border-radius: 12px !important;
-  border: 2px solid #e8e8e8 !important;
-  transition: all 0.3s ease;
-}
-
-.custom-select:hover :deep(.ant-select-selector) {
-  border-color: #667eea !important;
-}
-
-.custom-select :deep(.ant-select-focused .ant-select-selector) {
-  border-color: #667eea !important;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
-}
-
-/* 天数显示 - 紧凑版 */
-.days-display-compact {
+.hero-section {
+  padding-top: 64px;
+  min-height: 80vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  color: white;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
 }
 
-.days-display-compact .days-value {
-  font-size: 24px;
-  font-weight: 700;
-  margin-right: 4px;
+.hero-content {
+  z-index: 10;
+  max-width: 800px;
+  padding: 0 20px;
 }
 
-.days-display-compact .days-unit {
-  font-size: 14px;
+.hero-title {
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1.2;
+  margin-bottom: 24px;
+  color: var(--text-primary);
 }
 
-/* 偏好标签 */
-.preference-tags {
+.hero-subtitle {
+  font-size: 20px;
+  color: var(--text-secondary);
+  margin-bottom: 40px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 16px;
+  justify-content: center;
 }
 
-.custom-checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
-}
-
-.preference-tag :deep(.ant-checkbox-wrapper) {
-  margin: 0 !important;
-  padding: 8px 16px;
-  border: 2px solid #e8e8e8;
-  border-radius: 20px;
-  transition: all 0.3s ease;
-  background: white;
-  font-size: 14px;
-}
-
-.preference-tag :deep(.ant-checkbox-wrapper:hover) {
-  border-color: #667eea;
-  background: #f5f7ff;
-}
-
-.preference-tag :deep(.ant-checkbox-wrapper-checked) {
-  border-color: #667eea;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-/* 自定义文本域 */
-.custom-textarea :deep(.ant-input) {
-  border-radius: 12px;
-  border: 2px solid #e8e8e8;
-  transition: all 0.3s ease;
-}
-
-.custom-textarea :deep(.ant-input:hover) {
-  border-color: #667eea;
-}
-
-.custom-textarea :deep(.ant-input:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-/* 提交按钮 */
-.submit-button {
+.cta-btn {
   height: 56px;
+  padding: 0 40px;
   border-radius: 28px;
   font-size: 18px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--bg-gradient);
   border: none;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-  transition: all 0.3s ease;
 }
 
-.submit-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
+.secondary-btn {
+  height: 56px;
+  padding: 0 40px;
+  border-radius: 28px;
+  font-size: 18px;
 }
 
-.submit-button:active {
-  transform: translateY(0);
+.hero-bg-elements .floating-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+  z-index: 1;
 }
 
-.button-icon {
-  margin-right: 8px;
+.shape-1 {
+  width: 400px;
+  height: 400px;
+  background: rgba(102, 126, 234, 0.2);
+  top: -100px;
+  left: -100px;
+  animation: float 10s infinite;
+}
+
+.shape-2 {
+  width: 300px;
+  height: 300px;
+  background: rgba(240, 147, 251, 0.2);
+  bottom: 0;
+  right: -50px;
+  animation: float 12s infinite reverse;
+}
+
+.map-section {
+  padding: 80px 24px;
+  background: var(--bg-secondary);
+}
+
+.section-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.map-card {
+  border-radius: var(--border-radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-size: 20px;
+  font-weight: 700;
 }
 
-/* 加载容器 */
-.loading-container {
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.stat-item {
   text-align: center;
   padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
-  border-radius: 16px;
-  border: 2px dashed #667eea;
+  background: var(--bg-light-gradient);
+  border-radius: var(--border-radius-lg);
 }
 
-.loading-status {
-  margin-top: 16px;
-  color: #667eea;
-  font-size: 18px;
-  font-weight: 500;
+.stat-value {
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 8px;
 }
 
-/* 动画 */
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.stat-label {
+  color: var(--text-secondary);
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.map-wrapper {
+  height: 600px;
+  background: #f5f5f5;
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  margin-bottom: 32px;
+}
+
+.echarts-map {
+  width: 100%;
+  height: 600px;
+}
+
+:deep(.ant-spin-nested-loading),
+:deep(.ant-spin-container) {
+  height: 100%;
+}
+
+.cities-title {
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.tags-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.login-placeholder {
+  padding: 80px 0;
+  text-align: center;
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
 }
 </style>
-

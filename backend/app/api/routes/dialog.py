@@ -10,17 +10,41 @@
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, status, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, status, Depends, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 import json
+import asyncio
+from asyncio import Queue
 
 from ...services.dialog_service import get_dialog_service
 from ...agents.trip_planner_agent import get_conversational_planner
-from ...middleware.auth_middleware import get_current_user, CurrentUser
+from ...middleware.auth_middleware import get_current_user, CurrentUser, verify_token
 
 
 router = APIRouter(prefix="/dialog", tags=["对话管理"])
+
+# ========== SSE 会话队列（内存级别，每个 session 一个队列）==========
+_session_queues: dict[str, Queue] = {}
+
+
+def get_session_queue(session_id: str) -> Queue:
+    if session_id not in _session_queues:
+        _session_queues[session_id] = Queue()
+    return _session_queues[session_id]
+
+
+async def get_current_user_sse(
+    token: Optional[str] = Query(None),
+) -> CurrentUser:
+    """SSE 专用认证：支持 query param 传 token（EventSource 不支持自定义请求头）"""
+    if not token:
+        raise HTTPException(status_code=401, detail="未提供认证凭证")
+    user = await verify_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="认证凭证无效或已过期")
+    return user
 
 
 # ========== 请求/响应模型 ==========
@@ -60,6 +84,22 @@ class SessionDetailResponse(BaseModel):
 class MessageResponse(BaseModel):
     """通用消息响应"""
     message: str = Field(..., description="消息内容")
+
+
+class UpdateSessionRequest(BaseModel):
+    """更新会话请求"""
+    title: str = Field(..., description="会话标题", max_length=50)
+
+
+class CreateSessionRequest(BaseModel):
+    """创建会话请求"""
+    initial_context: dict = Field(default={}, description="初始上下文")
+
+
+class CreateSessionResponse(BaseModel):
+    """创建会话响应"""
+    session_id: str = Field(..., description="会话ID")
+    message: str = Field(..., description="消息")
 
 
 # ========== API端点 ==========
@@ -102,6 +142,16 @@ async def chat(
 
         logger.info(f"对话处理完成: {session_id} (意图: {response['intent']})")
 
+        # 将响应推入 SSE 队列，供 SSE 连接实时推送
+        queue = get_session_queue(session_id)
+        await queue.put({
+            "type": "message",
+            "session_id": session_id,
+            "message": response["message"],
+            "intent": response["intent"],
+            "suggestions": response.get("suggestions", [])
+        })
+
         return ChatResponse(**response)
 
     except Exception as e:
@@ -109,6 +159,42 @@ async def chat(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"对话处理失败: {str(e)}"
+        )
+
+
+@router.post("/sessions", response_model=CreateSessionResponse)
+async def create_session(
+    request: CreateSessionRequest = CreateSessionRequest(),
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """
+    创建新的对话会话
+
+    用于手动创建会话，通常在开始新对话时调用
+    """
+    try:
+        dialog_service = get_dialog_service()
+
+        session_id = await dialog_service.create_session(
+            user_id=current_user.id,
+            initial_context=request.initial_context
+        )
+
+        logger.info(f"创建新会话: {session_id} (用户: {current_user.username})")
+
+        # 删除redis中的会话缓存
+        dialog_service.delete_session_cache(user_id=current_user.id)
+
+        return CreateSessionResponse(
+            session_id=session_id,
+            message="会话创建成功"
+        )
+
+    except Exception as e:
+        logger.error(f"创建会话失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"创建会话失败: {str(e)}"
         )
 
 
@@ -188,6 +274,30 @@ async def get_session_detail(
         )
 
 
+@router.patch("/sessions/{session_id}", response_model=MessageResponse)
+async def update_session(
+    session_id: str,
+    request: UpdateSessionRequest,
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """更新会话标题"""
+    try:
+        dialog_service = get_dialog_service()
+        success = await dialog_service.update_session_title(
+            session_id=session_id,
+            user_id=current_user.id,
+            title=request.title
+        )
+        if not success:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+        return MessageResponse(message="标题已更新")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新会话标题失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新失败")
+
+
 @router.delete("/sessions/{session_id}", response_model=MessageResponse)
 async def delete_session(
     session_id: str,
@@ -265,6 +375,50 @@ async def get_session_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="获取工具调用日志失败"
         )
+
+
+# ========== SSE 端点 ==========
+
+@router.get("/sse/{session_id}")
+async def sse_endpoint(
+    session_id: str,
+    current_user: CurrentUser = Depends(get_current_user_sse)
+):
+    """
+    SSE 实时对话端点
+
+    前端建立 SSE 连接后，每当 POST /chat 处理完毕，
+    响应会通过此连接实时推送到前端。
+    每 25 秒发一次心跳防止连接超时。
+    """
+    # 验证会话归属
+    dialog_service = get_dialog_service()
+    context = await dialog_service.get_session_context(session_id)
+    if not context or context["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="无权访问此会话")
+
+    queue = get_session_queue(session_id)
+
+    async def event_generator():
+        # 发送连接成功事件
+        yield f"data: {json.dumps({'type': 'connected', 'session_id': session_id}, ensure_ascii=False)}\n\n"
+        while True:
+            try:
+                data = await asyncio.wait_for(queue.get(), timeout=25)
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            except asyncio.TimeoutError:
+                # 心跳，保持连接
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 # ========== WebSocket端点 ==========

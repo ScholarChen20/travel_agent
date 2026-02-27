@@ -46,6 +46,7 @@ class DialogService:
             session_doc = {
                 "session_id": session_id,
                 "user_id": user_id,
+                "title": "",
                 "context": initial_context or {},
                 "message_count": 0,
                 "created_at": datetime.utcnow(),
@@ -58,11 +59,17 @@ class DialogService:
             await collection.insert_one(session_doc)
 
             # 缓存到Redis（24小时过期）
-            await self.redis.setex(
+            await self.redis.set(
                 f"session:{session_id}",
-                86400,
-                str(session_doc)
+                session_doc,
+                ex=86400
             )
+
+            # 清除用户会话列表缓存，确保下次拉取时获得最新数据
+            cache_pattern = f"user:{user_id}:sessions*"
+            cached_keys = await self.redis.keys(cache_pattern)
+            if cached_keys:
+                await self.redis.delete(*cached_keys)
 
             logger.info(f"对话会话已创建: {session_id} (用户: {user_id})")
             return session_id
@@ -120,6 +127,10 @@ class DialogService:
             await self.redis.lpush(f"session:{session_id}:messages", str(message_doc))
             await self.redis.expire(f"session:{session_id}:messages", 86400)
 
+            # 清除会话上下文缓存
+            await self.redis.delete(f"session:{session_id}:context")
+            logger.debug(f"已清除会话上下文缓存: {session_id}")
+
             logger.debug(f"消息已添加: {message_id} (会话: {session_id}, 角色: {role})")
             return message_id
 
@@ -143,8 +154,19 @@ class DialogService:
             Dict: 会话上下文
         """
         try:
-            # 先尝试从Redis获取
-            cached_session = await self.redis.get(f"session:{session_id}")
+            # 先尝试从Redis获取完整上下文
+            cached_context = await self.redis.get(f"session:{session_id}:context")
+            if cached_context:
+                import json
+                try:
+                    context = json.loads(cached_context)
+                    # 限制消息数量
+                    if len(context.get("messages", [])) > max_messages:
+                        context["messages"] = context["messages"][-max_messages:]
+                    logger.debug(f"从Redis缓存获取会话上下文: {session_id}")
+                    return context
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
 
             # 从MongoDB获取会话信息
             sessions_collection = self.mongodb.get_collection(self.sessions_collection)
@@ -181,6 +203,15 @@ class DialogService:
                 **session,
                 "messages": messages
             }
+
+            # 缓存到Redis，过期时间24小时
+            import json
+            await self.redis.set(
+                f"session:{session_id}:context",
+                json.dumps(context, ensure_ascii=False),
+                ex=86400
+            )
+            logger.debug(f"会话上下文已缓存到Redis: {session_id}")
 
             return context
 
@@ -256,6 +287,24 @@ class DialogService:
             List[Dict]: 会话列表
         """
         try:
+            # 构建缓存键
+            cache_key = f"user:{user_id}:sessions"
+            if is_active is not None:
+                cache_key += f":active:{is_active}"
+            cache_key += f":limit:{limit}:skip:{skip}"
+
+            # 先尝试从Redis获取
+            cached_sessions = await self.redis.get(cache_key)
+            if cached_sessions:
+                import json
+                try:
+                    sessions = json.loads(cached_sessions)
+                    logger.debug(f"从Redis缓存获取用户会话列表: {user_id}")
+                    return sessions
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             query = {"user_id": user_id}
             if is_active is not None:
                 query["is_active"] = is_active
@@ -272,11 +321,57 @@ class DialogService:
                     doc["updated_at"] = doc["updated_at"].isoformat()
                 sessions.append(doc)
 
+            # 缓存到Redis，过期时间1小时
+            import json
+            await self.redis.set(
+                cache_key,
+                json.dumps(sessions, ensure_ascii=False),
+                ex=3600
+            )
+            logger.debug(f"用户会话列表已缓存到Redis: {user_id}")
+
             logger.debug(f"查询到 {len(sessions)} 个会话 (用户: {user_id})")
             return sessions
 
         except Exception as e:
             logger.error(f"列出用户会话失败: {str(e)}")
+            raise
+
+    async def update_session_title(self, session_id: str, user_id: int, title: str) -> bool:
+        """
+        更新会话标题
+
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID（权限验证）
+            title: 新标题
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            sessions_collection = self.mongodb.get_collection(self.sessions_collection)
+            result = await sessions_collection.update_one(
+                {"session_id": session_id, "user_id": user_id},
+                {"$set": {"title": title, "updated_at": datetime.utcnow()}}
+            )
+
+            if result.matched_count > 0:
+                # 清除会话上下文缓存
+                await self.redis.delete(f"session:{session_id}:context")
+                # 清除用户会话列表缓存
+                cache_pattern = f"user:{user_id}:sessions*"
+                cached_keys = await self.redis.keys(cache_pattern)
+                if cached_keys:
+                    await self.redis.delete(*cached_keys)
+                logger.info(f"会话标题已更新: {session_id} -> {title}")
+                return True
+
+            logger.warning(f"更新标题失败（会话不存在）: {session_id}")
+            return False
+
+        except Exception as e:
+            logger.error(f"更新会话标题失败: {str(e)}")
             raise
 
     async def delete_session(self, session_id: str, user_id: int) -> bool:
@@ -306,6 +401,14 @@ class DialogService:
                 # 删除Redis缓存
                 await self.redis.delete(f"session:{session_id}")
                 await self.redis.delete(f"session:{session_id}:messages")
+                await self.redis.delete(f"session:{session_id}:context")
+
+                # 清除用户会话列表缓存（使用通配符删除所有相关缓存）
+                cache_pattern = f"user:{user_id}:sessions:*"
+                cached_keys = await self.redis.keys(cache_pattern)
+                if cached_keys:
+                    await self.redis.delete(*cached_keys)
+                    logger.debug(f"已清除用户会话列表缓存: {user_id}, 共 {len(cached_keys)} 个缓存项")
 
                 logger.info(f"会话已删除: {session_id}")
                 return True
@@ -350,6 +453,24 @@ class DialogService:
         except Exception as e:
             logger.error(f"获取工具调用日志失败: {str(e)}")
             raise
+
+    def delete_session_cache(
+            self,
+            user_id: int,
+            is_active: Optional[bool] = None,
+            limit: int = 20,
+            skip: int = 0
+    ):
+        """
+        删除原有的会话缓存
+        """
+        # 构建缓存键
+        cache_key = f"user:{user_id}:sessions"
+        if is_active is not None:
+            cache_key += f":active:{is_active}"
+        cache_key += f":limit:{limit}:skip:{skip}"
+
+        self.redis.delete(cache_key)
 
 
 # ========== 全局实例（单例模式） ==========

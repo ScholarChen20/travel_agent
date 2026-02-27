@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import Antd from 'ant-design-vue'
 // @ts-ignore
 import 'ant-design-vue/dist/reset.css'
+import '@/assets/styles/design-tokens.css'
 import App from './App.vue'
 import router from './router'
 import { useAuthStore } from '@/stores/auth'

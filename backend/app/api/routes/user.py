@@ -59,6 +59,11 @@ class VisitedCitiesResponse(BaseModel):
     cities: List[str] = Field(..., description="城市列表")
 
 
+class UpdateVisitedCitiesRequest(BaseModel):
+    """更新访问城市请求"""
+    cities: List[str] = Field(..., description="城市列表")
+
+
 class ChangePasswordRequest(BaseModel):
     """修改密码请求"""
     old_password: str = Field(..., description="旧密码")
@@ -88,7 +93,7 @@ async def get_profile(current_user: CurrentUser = Depends(get_current_user)):
         user_service = get_user_service()
 
         # 获取用户资料
-        profile = user_service.get_user_profile(current_user.id)
+        profile = await user_service.get_user_profile(current_user.id)
 
         if not profile:
             raise HTTPException(
@@ -129,7 +134,7 @@ async def update_profile(
             )
 
         # 更新用户资料
-        success = user_service.update_user_profile(
+        success = await user_service.update_user_profile(
             user_id=current_user.id,
             username=request.username,
             email=request.email,
@@ -212,7 +217,7 @@ async def upload_avatar(
         # 更新用户头像URL
         logger.info("开始更新用户头像URL")
         user_service = get_user_service()
-        user_service.update_avatar(current_user.id, avatar_url)
+        await user_service.update_avatar(current_user.id, avatar_url)
         logger.info(f"用户头像URL已更新: {current_user.username} -> {avatar_url}")
 
         return AvatarUploadResponse(avatar_url=avatar_url)
@@ -270,6 +275,34 @@ async def get_visited_cities(current_user: CurrentUser = Depends(get_current_use
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="获取访问城市列表失败"
+        )
+
+
+@router.put("/visited-cities", response_model=VisitedCitiesResponse)
+async def update_visited_cities(
+    request: UpdateVisitedCitiesRequest,
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """
+    更新当前用户访问过的城市列表
+
+    允许用户手动管理访问过的城市
+    """
+    try:
+        user_service = get_user_service()
+
+        # 更新城市列表
+        cities = user_service.update_visited_cities(current_user.id, request.cities)
+
+        logger.info(f"用户 {current_user.username} 更新了访问城市列表")
+
+        return VisitedCitiesResponse(cities=cities)
+
+    except Exception as e:
+        logger.error(f"更新访问城市列表失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="更新访问城市列表失败"
         )
 
 

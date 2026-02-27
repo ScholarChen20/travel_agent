@@ -27,6 +27,8 @@ class TravelPlanService:
     def __init__(self):
         """初始化服务"""
         self.mongodb = get_mongodb_client()
+        from ..database.redis_client import get_redis_client
+        self.redis = get_redis_client()
         self.collection_name = "travel_plans"
         logger.info("旅行计划服务已初始化")
 
@@ -82,6 +84,16 @@ class TravelPlanService:
 
             logger.info(f"旅行计划已保存: {plan_id} (用户: {user_id}, 城市: {city})")
 
+            # 清除用户的旅行计划列表缓存
+            cache_pattern = f"user:{user_id}:travel_plans:*"
+            cached_keys = await self.redis.keys(cache_pattern)
+            if cached_keys:
+                await self.redis.delete(*cached_keys)
+                logger.debug(f"已清除用户旅行计划列表缓存: {user_id}, 共 {len(cached_keys)} 个缓存项")
+
+            # 清除用户统计数据缓存
+            await self.redis.delete(f"user:{user_id}:travel_stats")
+
             # 更新用户访问过的城市列表
             await self._update_user_visited_cities(user_id, city)
 
@@ -115,6 +127,27 @@ class TravelPlanService:
             List[Dict]: 计划列表
         """
         try:
+            # 构建缓存键
+            cache_key = f"user:{user_id}:travel_plans"
+            if city is not None:
+                cache_key += f":city:{city}"
+            if is_favorite is not None:
+                cache_key += f":favorite:{is_favorite}"
+            if is_completed is not None:
+                cache_key += f":completed:{is_completed}"
+            cache_key += f":limit:{limit}:skip:{skip}"
+
+            # 先尝试从Redis获取
+            cached_plans = await self.redis.get(cache_key)
+            if cached_plans:
+                import json
+                try:
+                    plans = json.loads(cached_plans)
+                    logger.debug(f"从Redis缓存获取用户旅行计划: {user_id}")
+                    return plans
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
             # 构建查询条件
             query = {"user_id": user_id}
 
@@ -142,6 +175,12 @@ class TravelPlanService:
                     doc["updated_at"] = doc["updated_at"].isoformat()
                 plans.append(doc)
 
+            # 缓存到Redis，过期时间1小时
+            import json
+            await self.redis.set(cache_key, json.dumps(plans, ensure_ascii=False), ex=3600
+            )
+            logger.debug(f"用户旅行计划已缓存到Redis: {user_id}")
+
             logger.debug(f"查询到 {len(plans)} 个旅行计划 (用户: {user_id})")
             return plans
 
@@ -161,6 +200,23 @@ class TravelPlanService:
             Dict: 计划详情，不存在返回None
         """
         try:
+            # 构建缓存键
+            cache_key = f"travel_plan:{plan_id}"
+            if user_id is not None:
+                cache_key += f":user:{user_id}"
+
+            # 先尝试从Redis获取
+            cached_plan = await self.redis.get(cache_key)
+            if cached_plan:
+                import json
+                try:
+                    plan = json.loads(cached_plan)
+                    logger.debug(f"从Redis缓存获取旅行计划详情: {plan_id}")
+                    return plan
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             query = {"plan_id": plan_id}
 
             # 如果提供了user_id，增加权限检查
@@ -182,6 +238,12 @@ class TravelPlanService:
                 doc["created_at"] = doc["created_at"].isoformat()
             if isinstance(doc.get("updated_at"), datetime):
                 doc["updated_at"] = doc["updated_at"].isoformat()
+
+            # 缓存到Redis，过期时间2小时
+            import json
+            await self.redis.set(cache_key, json.dumps(doc, ensure_ascii=False), ex=7200
+            )
+            logger.debug(f"旅行计划详情已缓存到Redis: {plan_id}")
 
             return doc
 
@@ -224,6 +286,22 @@ class TravelPlanService:
 
             if result.modified_count > 0:
                 logger.info(f"计划已更新: {plan_id}")
+
+                # 清除计划详情缓存
+                await self.redis.delete(f"travel_plan:{plan_id}")
+                await self.redis.delete(f"travel_plan:{plan_id}:user:{user_id}")
+                logger.debug(f"已清除旅行计划详情缓存: {plan_id}")
+
+                # 清除用户的旅行计划列表缓存
+                cache_pattern = f"user:{user_id}:travel_plans:*"
+                cached_keys = await self.redis.keys(cache_pattern)
+                if cached_keys:
+                    await self.redis.delete(*cached_keys)
+                    logger.debug(f"已清除用户旅行计划列表缓存: {user_id}, 共 {len(cached_keys)} 个缓存项")
+
+                # 清除用户统计数据缓存
+                await self.redis.delete(f"user:{user_id}:travel_stats")
+
                 return True
             else:
                 logger.warning(f"计划未更新（不存在或无变化）: {plan_id}")
@@ -260,6 +338,22 @@ class TravelPlanService:
             if result.modified_count > 0:
                 action = "收藏" if is_favorite else "取消收藏"
                 logger.info(f"计划已{action}: {plan_id}")
+
+                # 清除计划详情缓存
+                await self.redis.delete(f"travel_plan:{plan_id}")
+                await self.redis.delete(f"travel_plan:{plan_id}:user:{user_id}")
+                logger.debug(f"已清除旅行计划详情缓存: {plan_id}")
+
+                # 清除用户的旅行计划列表缓存
+                cache_pattern = f"user:{user_id}:travel_plans:*"
+                cached_keys = await self.redis.keys(cache_pattern)
+                if cached_keys:
+                    await self.redis.delete(*cached_keys)
+                    logger.debug(f"已清除用户旅行计划列表缓存: {user_id}, 共 {len(cached_keys)} 个缓存项")
+
+                # 清除用户统计数据缓存
+                await self.redis.delete(f"user:{user_id}:travel_stats")
+
                 return True
             else:
                 logger.warning(f"标记收藏失败（计划不存在）: {plan_id}")
@@ -296,6 +390,22 @@ class TravelPlanService:
             if result.modified_count > 0:
                 action = "已完成" if is_completed else "未完成"
                 logger.info(f"计划标记为{action}: {plan_id}")
+
+                # 清除计划详情缓存
+                await self.redis.delete(f"travel_plan:{plan_id}")
+                await self.redis.delete(f"travel_plan:{plan_id}:user:{user_id}")
+                logger.debug(f"已清除旅行计划详情缓存: {plan_id}")
+
+                # 清除用户的旅行计划列表缓存
+                cache_pattern = f"user:{user_id}:travel_plans:*"
+                cached_keys = await self.redis.keys(cache_pattern)
+                if cached_keys:
+                    await self.redis.delete(*cached_keys)
+                    logger.debug(f"已清除用户旅行计划列表缓存: {user_id}, 共 {len(cached_keys)} 个缓存项")
+
+                # 清除用户统计数据缓存
+                await self.redis.delete(f"user:{user_id}:travel_stats")
+
                 return True
             else:
                 logger.warning(f"标记完成状态失败（计划不存在）: {plan_id}")
@@ -324,6 +434,22 @@ class TravelPlanService:
 
             if result.deleted_count > 0:
                 logger.info(f"计划已删除: {plan_id}")
+
+                # 清除计划详情缓存
+                await self.redis.delete(f"travel_plan:{plan_id}")
+                await self.redis.delete(f"travel_plan:{plan_id}:user:{user_id}")
+                logger.debug(f"已清除旅行计划详情缓存: {plan_id}")
+
+                # 清除用户的旅行计划列表缓存
+                cache_pattern = f"user:{user_id}:travel_plans:*"
+                cached_keys = await self.redis.keys(cache_pattern)
+                if cached_keys:
+                    await self.redis.delete(*cached_keys)
+                    logger.debug(f"已清除用户旅行计划列表缓存: {user_id}, 共 {len(cached_keys)} 个缓存项")
+
+                # 清除用户统计数据缓存
+                await self.redis.delete(f"user:{user_id}:travel_stats")
+
                 return True
             else:
                 logger.warning(f"删除失败（计划不存在）: {plan_id}")
@@ -344,6 +470,21 @@ class TravelPlanService:
             Dict: 统计数据
         """
         try:
+            # 构建缓存键
+            cache_key = f"user:{user_id}:travel_stats"
+
+            # 先尝试从Redis获取
+            cached_stats = await self.redis.get(cache_key)
+            if cached_stats:
+                import json
+                try:
+                    stats = json.loads(cached_stats)
+                    logger.debug(f"从Redis缓存获取用户旅行统计数据: {user_id}")
+                    return stats
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             collection = self.mongodb.get_collection(self.collection_name)
 
             # 聚合查询
@@ -368,19 +509,27 @@ class TravelPlanService:
 
             if result:
                 stats = result[0]
-                return {
+                stats_dict = {
                     "total_trips": stats.get("total_trips", 0),
                     "completed_trips": stats.get("completed_trips", 0),
                     "favorite_trips": stats.get("favorite_trips", 0),
                     "total_cities": len(stats.get("cities", []))
                 }
             else:
-                return {
+                stats_dict = {
                     "total_trips": 0,
                     "completed_trips": 0,
                     "favorite_trips": 0,
                     "total_cities": 0
                 }
+
+            # 缓存到Redis，过期时间1小时
+            import json
+            await self.redis.set(cache_key, json.dumps(stats_dict, ensure_ascii=False), ex=3600
+            )
+            logger.debug(f"用户旅行统计数据已缓存到Redis: {user_id}")
+
+            return stats_dict
 
         except Exception as e:
             logger.error(f"获取用户统计失败: {str(e)}")

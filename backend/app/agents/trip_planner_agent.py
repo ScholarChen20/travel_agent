@@ -2,6 +2,7 @@
 
 import json
 import time
+import asyncio
 from typing import Dict, Any, List, Optional
 from hello_agents import SimpleAgent
 from hello_agents.tools import MCPTool
@@ -435,17 +436,29 @@ INTENT_DETECTION_PROMPT = """你是意图识别专家。分析用户消息并识
 
 **意图类型:**
 1. trip_planning - 用户想要规划新的旅行
-2. info_query - 用户查询景点/天气/酒店信息
+2. info_query - 用户查询景点/天气/酒店/美食信息，或询问某个地方的介绍
 3. plan_modification - 用户想要修改已有计划
 4. general_chat - 一般对话
 
 **示例:**
 用户: "我想去北京玩3天" -> trip_planning
 用户: "故宫的门票多少钱" -> info_query
+用户: "故宫有什么好玩的" -> info_query
+用户: "介绍一下西湖" -> info_query
+用户: "北京有哪些景点" -> info_query
 用户: "把第二天的行程改一下" -> plan_modification
 用户: "你好" -> general_chat
 
 只返回意图类型,不要其他内容。"""
+
+
+GENERAL_CHAT_PROMPT = """你是一个专业的智能旅行规划助手，拥有丰富的旅行知识。你能够：
+1. 介绍各地景点、文化、美食、风俗
+2. 解答旅行相关问题（签证、交通、住宿等）
+3. 提供旅行建议和攻略
+4. 进行友好的日常对话
+
+请根据用户的问题，给出详细、准确、实用的回答。语气友好自然，用中文回答。"""
 
 
 class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
@@ -466,6 +479,13 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
             name="意图识别专家",
             llm=self.llm,
             system_prompt=INTENT_DETECTION_PROMPT
+        )
+
+        # 创建通用对话Agent（处理景点介绍、旅行问答等）
+        self.general_chat_agent = SimpleAgent(
+            name="旅行问答专家",
+            llm=self.llm,
+            system_prompt=GENERAL_CHAT_PROMPT
         )
 
         print("✅ 对话式多智能体系统初始化成功")
@@ -542,9 +562,9 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
             # 构建意图识别查询
             query = f"用户消息: {user_message}"
 
-            # 调用意图识别Agent
+            # 使用 to_thread 避免阻塞事件循环
             start_time = time.time()
-            intent_response = self.intent_agent.run(query)
+            intent_response = await asyncio.to_thread(self.intent_agent.run, query)
             execution_time = (time.time() - start_time) * 1000
 
             # 记录工具调用
@@ -571,6 +591,32 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         except Exception as e:
             print(f"⚠️  意图识别失败: {str(e)}")
             return "general_chat"
+
+    def _extract_city_from_message(self, message: str) -> Optional[str]:
+        """
+        从用户消息中提取城市名
+
+        Args:
+            message: 用户消息
+
+        Returns:
+            Optional[str]: 城市名，如果未找到则返回None
+        """
+        # 常见城市列表
+        cities = [
+            "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "成都",
+            "重庆", "武汉", "西安", "天津", "青岛", "大连", "厦门", "宁波",
+            "长沙", "郑州", "济南", "哈尔滨", "沈阳", "福州", "石家庄", "合肥",
+            "南昌", "昆明", "贵阳", "兰州", "太原", "乌鲁木齐", "拉萨", "呼和浩特",
+            "银川", "西宁", "海口", "三亚", "桂林", "丽江", "大理", "香格里拉"
+        ]
+
+        # 在消息中查找城市名
+        for city in cities:
+            if city in message:
+                return city
+
+        return None
 
     async def _handle_trip_planning(
         self,
@@ -629,11 +675,19 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         try:
             # 判断查询类型
             if "天气" in user_message:
-                # 提取城市名（简化版）
-                city = "北京"  # 实际应该从消息中提取
+                # 提取城市名
+                city = self._extract_city_from_message(user_message)
+                if not city:
+                    return {
+                        "session_id": session_id,
+                        "message": "请告诉我您想查询哪个城市的天气？",
+                        "intent": "info_query",
+                        "suggestions": ["北京天气", "上海天气", "南京天气"]
+                    }
+
                 start_time = time.time()
                 weather_query = f"请查询{city}的天气信息"
-                weather_response = self.weather_agent.run(weather_query)
+                weather_response = await asyncio.to_thread(self.weather_agent.run, weather_query)
                 execution_time = (time.time() - start_time) * 1000
 
                 # 记录工具调用
@@ -648,12 +702,37 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
 
                 response_message = f"为您查询到{city}的天气信息：\n{weather_response}"
 
-            elif "景点" in user_message or "门票" in user_message:
-                # 景点查询
-                response_message = "请告诉我您想了解哪个城市的景点信息？"
+            elif any(kw in user_message for kw in ["景点", "门票", "好玩", "介绍", "推荐", "哪里好", "去哪", "参观"]):
+                # 景点/地点查询
+                city = self._extract_city_from_message(user_message)
+                if city:
+                    start_time = time.time()
+                    attraction_query = f"请搜索{city}的景点：\n[TOOL_CALL:amap_maps_text_search:keywords=景点,city={city}]"
+                    attraction_response = await asyncio.to_thread(self.attraction_agent.run, attraction_query)
+                    execution_time = (time.time() - start_time) * 1000
+
+                    await self.dialog_service.log_tool_call(
+                        session_id=session_id,
+                        tool_name="attraction_query",
+                        input_params={"city": city, "query": user_message},
+                        output_result=attraction_response,
+                        execution_time_ms=execution_time,
+                        status="success"
+                    )
+                    response_message = f"为您查询到{city}的景点信息：\n{attraction_response}"
+                else:
+                    # 没有提取到城市，用通用Agent回答
+                    response_message = await asyncio.to_thread(
+                        self.general_chat_agent.run,
+                        f"用户问题：{user_message}\n请详细回答。"
+                    )
 
             else:
-                response_message = "我可以帮您查询天气、景点、酒店等信息，请问您想了解什么？"
+                # 其他信息查询，用通用Agent回答
+                response_message = await asyncio.to_thread(
+                    self.general_chat_agent.run,
+                    f"用户问题：{user_message}\n请详细回答。"
+                )
 
             return {
                 "session_id": session_id,
@@ -719,11 +798,15 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
             Dict: 响应结果
         """
         try:
-            # 简单的问候回复
-            if "你好" in user_message or "hello" in user_message.lower():
-                response_message = "您好！我是智能旅行规划助手，可以帮您规划旅行、查询景点信息、推荐酒店等。有什么可以帮您的吗？"
-            else:
-                response_message = "我是旅行规划助手，可以帮您规划旅行行程。请问有什么可以帮您的吗？"
+            # 构建带对话历史的查询
+            history = context.get("messages", [])[-6:]  # 最近3轮对话
+            history_text = ""
+            for msg in history:
+                role = "用户" if msg.get("role") == "user" else "助手"
+                history_text += f"{role}：{msg.get('content', '')}\n"
+
+            query = f"对话历史：\n{history_text}\n当前用户消息：{user_message}\n\n请回答用户的问题。"
+            response_message = await asyncio.to_thread(self.general_chat_agent.run, query)
 
             return {
                 "session_id": session_id,

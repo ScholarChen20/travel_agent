@@ -27,6 +27,8 @@ class SocialService:
         """初始化服务"""
         self.mongodb = get_mongodb_client()
         self.mysql_db = get_mysql_db()
+        from ..database.redis_client import get_redis_client
+        self.redis = get_redis_client()
         self.posts_collection = "social_posts"
         self.comments_collection = "social_comments"
         self.likes_collection = "social_likes"
@@ -92,6 +94,38 @@ class SocialService:
             await collection.insert_one(post_doc)
 
             logger.info(f"帖子已创建: {post_id} (用户: {user_id}, 审核: {moderation_result['status']})")
+
+            # 清除相关缓存
+            # 1. 清除用户的帖子列表缓存
+            user_posts_pattern = f"user:{user_id}:posts:*"
+            user_posts_keys = await self.redis.keys(user_posts_pattern)
+            if user_posts_keys:
+                await self.redis.delete(*user_posts_keys)
+                logger.debug(f"已清除用户帖子列表缓存: {user_id}, 共 {len(user_posts_keys)} 个缓存项")
+
+            # 2. 清除用户的Feed流缓存（只清除当前用户的，避免影响其他用户）
+            user_feed_pattern = f"user:{user_id}:feed:*"
+            user_feed_keys = await self.redis.keys(user_feed_pattern)
+            if user_feed_keys:
+                await self.redis.delete(*user_feed_keys)
+                logger.debug(f"已清除用户Feed流缓存: {user_id}, 共 {len(user_feed_keys)} 个缓存项")
+
+            # 3. 清除热门标签缓存
+            popular_tags_pattern = f"popular_tags:*"
+            popular_tags_keys = await self.redis.keys(popular_tags_pattern)
+            if popular_tags_keys:
+                await self.redis.delete(*popular_tags_keys)
+                logger.debug(f"已清除热门标签缓存，共 {len(popular_tags_keys)} 个缓存项")
+
+            # 4. 清除标签帖子缓存（如果有标签）
+            if tags:
+                for tag in tags:
+                    tag_posts_pattern = f"tag:{tag}:posts:*"
+                    tag_posts_keys = await self.redis.keys(tag_posts_pattern)
+                    if tag_posts_keys:
+                        await self.redis.delete(*tag_posts_keys)
+                        logger.debug(f"已清除标签帖子缓存: {tag}, 共 {len(tag_posts_keys)} 个缓存项")
+
             return post_id
 
         except Exception as e:
@@ -161,6 +195,21 @@ class SocialService:
             List[Dict]: 帖子列表
         """
         try:
+            # 构建缓存键
+            cache_key = f"user:{user_id}:feed:limit:{limit}:offset:{offset}"
+
+            # 先尝试从Redis获取
+            cached_feed = await self.redis.get(cache_key)
+            if cached_feed:
+                import json
+                try:
+                    feed = json.loads(cached_feed)
+                    logger.debug(f"从Redis缓存获取个性化Feed流: {user_id}")
+                    return feed
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             collection = self.mongodb.get_collection(self.posts_collection)
 
             # 获取关注的用户列表
@@ -218,7 +267,15 @@ class SocialService:
             unique_posts.sort(key=lambda x: x["created_at"], reverse=True)
 
             # 应用分页
-            return unique_posts[:limit]
+            feed_result = unique_posts[:limit]
+
+            # 缓存到Redis，过期时间10分钟
+            import json
+            await self.redis.set(cache_key, json.dumps(feed_result, ensure_ascii=False), ex=600
+            )
+            logger.debug(f"个性化Feed流已缓存到Redis: {user_id}")
+
+            return feed_result
 
         except Exception as e:
             logger.error(f"获取Feed流失败: {str(e)}")
@@ -259,7 +316,6 @@ class SocialService:
                 )
 
                 logger.debug(f"取消点赞: {post_id} (用户: {user_id})")
-                return False
             else:
                 # 点赞
                 like_doc = {
@@ -277,7 +333,47 @@ class SocialService:
                 )
 
                 logger.debug(f"点赞: {post_id} (用户: {user_id})")
-                return True
+
+            # 清除相关缓存
+            # 1. 清除帖子详情缓存
+            await self.redis.delete(f"post:{post_id}:detail")
+            logger.debug(f"已清除帖子详情缓存: {post_id}")
+
+            # 2. 清除用户的Feed流缓存（只清除当前用户的，避免影响其他用户）
+            user_feed_pattern = f"user:{user_id}:feed:*"
+            user_feed_keys = await self.redis.keys(user_feed_pattern)
+            if user_feed_keys:
+                await self.redis.delete(*user_feed_keys)
+                logger.debug(f"已清除用户Feed流缓存: {user_id}, 共 {len(user_feed_keys)} 个缓存项")
+
+            # 3. 尝试获取帖子的用户ID，清除其帖子列表缓存
+            try:
+                post = await posts_collection.find_one({"post_id": post_id}, {"user_id": 1})
+                if post and "user_id" in post:
+                    post_user_id = post["user_id"]
+                    user_posts_pattern = f"user:{post_user_id}:posts:*"
+                    user_posts_keys = await self.redis.keys(user_posts_pattern)
+                    if user_posts_keys:
+                        await self.redis.delete(*user_posts_keys)
+                        logger.debug(f"已清除帖子作者的帖子列表缓存: {post_user_id}, 共 {len(user_posts_keys)} 个缓存项")
+            except Exception as e:
+                logger.error(f"获取帖子用户ID失败: {str(e)}")
+
+            # 4. 尝试获取帖子的标签，清除标签帖子缓存
+            try:
+                post = await posts_collection.find_one({"post_id": post_id}, {"tags": 1})
+                if post and "tags" in post:
+                    tags = post["tags"]
+                    for tag in tags:
+                        tag_posts_pattern = f"tag:{tag}:posts:*"
+                        tag_posts_keys = await self.redis.keys(tag_posts_pattern)
+                        if tag_posts_keys:
+                            await self.redis.delete(*tag_posts_keys)
+                            logger.debug(f"已清除标签帖子缓存: {tag}, 共 {len(tag_posts_keys)} 个缓存项")
+            except Exception as e:
+                logger.error(f"获取帖子标签失败: {str(e)}")
+
+            return not existing_like
 
         except Exception as e:
             logger.error(f"点赞操作失败: {str(e)}")
@@ -406,6 +502,21 @@ class SocialService:
             List[Dict]: 帖子列表
         """
         try:
+            # 构建缓存键
+            cache_key = f"user:{user_id}:posts:limit:{limit}:offset:{offset}"
+
+            # 先尝试从Redis获取
+            cached_posts = await self.redis.get(cache_key)
+            if cached_posts:
+                import json
+                try:
+                    posts = json.loads(cached_posts)
+                    logger.debug(f"从Redis缓存获取用户帖子: {user_id}")
+                    return posts
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             collection = self.mongodb.get_collection(self.posts_collection)
 
             cursor = collection.find({
@@ -417,6 +528,12 @@ class SocialService:
             async for post in cursor:
                 formatted_post = await self._format_post(post, None)
                 posts.append(formatted_post)
+
+            # 缓存到Redis，过期时间1小时
+            import json
+            await self.redis.set(cache_key, json.dumps(posts, ensure_ascii=False), ex=3600
+            )
+            logger.debug(f"用户帖子已缓存到Redis: {user_id}")
 
             return posts
 
@@ -435,6 +552,21 @@ class SocialService:
             List[Dict]: 标签列表 [{tag: str, count: int}]
         """
         try:
+            # 构建缓存键
+            cache_key = f"popular_tags:limit:{limit}"
+
+            # 先尝试从Redis获取
+            cached_tags = await self.redis.get(cache_key)
+            if cached_tags:
+                import json
+                try:
+                    tags = json.loads(cached_tags)
+                    logger.debug(f"从Redis缓存获取热门标签")
+                    return tags
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             collection = self.mongodb.get_collection(self.posts_collection)
 
             # 聚合查询统计标签
@@ -456,6 +588,12 @@ class SocialService:
                 for item in result
             ]
 
+            # 缓存到Redis，过期时间30分钟
+            import json
+            await self.redis.set(cache_key, json.dumps(tags, ensure_ascii=False), ex=1800
+            )
+            logger.debug(f"热门标签已缓存到Redis")
+
             return tags
 
         except Exception as e:
@@ -473,6 +611,38 @@ class SocialService:
             Dict: 帖子详情
         """
         try:
+            # 构建缓存键
+            cache_key = f"post:{post_id}:detail"
+
+            # 先尝试从Redis获取
+            cached_post = await self.redis.get(cache_key)
+            if cached_post:
+                import json
+                try:
+                    post = json.loads(cached_post)
+                    logger.debug(f"从Redis缓存获取帖子详情: {post_id}")
+                    
+                    # 异步更新浏览数，不阻塞返回
+                    async def update_view_count():
+                        try:
+                            collection = self.mongodb.get_collection(self.posts_collection)
+                            await collection.update_one(
+                                {"post_id": post_id},
+                                {"$inc": {"view_count": 1}}
+                            )
+                            # 清除缓存，以便下次获取时更新浏览数
+                            await self.redis.delete(cache_key)
+                        except Exception as e:
+                            logger.error(f"更新浏览数失败: {str(e)}")
+                    
+                    import asyncio
+                    asyncio.create_task(update_view_count())
+                    
+                    return post
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             collection = self.mongodb.get_collection(self.posts_collection)
             post = await collection.find_one({"post_id": post_id})
 
@@ -485,7 +655,16 @@ class SocialService:
                 {"$inc": {"view_count": 1}}
             )
 
-            return await self._format_post(post, None)
+            # 格式化帖子
+            formatted_post = await self._format_post(post, None)
+
+            # 缓存到Redis，过期时间1小时
+            import json
+            await self.redis.set(cache_key, json.dumps(formatted_post, ensure_ascii=False), ex=3600
+            )
+            logger.debug(f"帖子详情已缓存到Redis: {post_id}")
+
+            return formatted_post
 
         except Exception as e:
             logger.error(f"获取帖子详情失败: {str(e)}")
@@ -545,6 +724,21 @@ class SocialService:
             List[Dict]: 帖子列表
         """
         try:
+            # 构建缓存键
+            cache_key = f"tag:{tag}:posts:limit:{limit}:offset:{offset}"
+
+            # 先尝试从Redis获取
+            cached_posts = await self.redis.get(cache_key)
+            if cached_posts:
+                import json
+                try:
+                    posts = json.loads(cached_posts)
+                    logger.debug(f"从Redis缓存获取标签帖子: {tag}")
+                    return posts
+                except Exception as e:
+                    logger.warning(f"解析Redis缓存失败: {str(e)}")
+
+            # 从MongoDB获取
             collection = self.mongodb.get_collection(self.posts_collection)
 
             cursor = collection.find({
@@ -556,6 +750,12 @@ class SocialService:
             async for post in cursor:
                 formatted_post = await self._format_post(post, None)
                 posts.append(formatted_post)
+
+            # 缓存到Redis，过期时间1小时
+            import json
+            await self.redis.set(cache_key, json.dumps(posts, ensure_ascii=False), ex=3600
+            )
+            logger.debug(f"标签帖子已缓存到Redis: {tag}")
 
             return posts
 

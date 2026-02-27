@@ -2,7 +2,7 @@ import axios from '@/utils/axios'
 
 interface CreateSessionResponse {
   session_id: string
-  created_at: string
+  message: string
 }
 
 interface ChatRequest {
@@ -10,9 +10,10 @@ interface ChatRequest {
 }
 
 interface ChatResponse {
-  response: string
-  tool_calls?: any[]
-  timestamp: string
+  session_id: string
+  message: string
+  intent: string
+  suggestions: string[]
 }
 
 interface Session {
@@ -33,21 +34,28 @@ interface Message {
 
 export const dialogService = {
   async createSession(): Promise<CreateSessionResponse> {
-    const response = await axios.post('/api/dialog/sessions')
+    const response = await axios.post('/api/dialog/sessions', { initial_context: {} })
     return response.data
   },
 
   async chat(sessionId: string, data: ChatRequest): Promise<ChatResponse> {
-    const response = await axios.post(`/api/dialog/sessions/${sessionId}/chat`, data)
+    const response = await axios.post('/api/dialog/chat', {
+      session_id: sessionId,
+      message: data.message
+    })
     return response.data
   },
 
   async getSessions(): Promise<Session[]> {
     const response = await axios.get('/api/dialog/sessions')
-    return response.data
+    const raw: any[] = response.data.sessions || []
+    return raw.map(s => ({
+      ...s,
+      id: s.id ?? s.session_id,
+    }))
   },
 
-  async getSession(sessionId: string): Promise<Session> {
+  async getSession(sessionId: string): Promise<{ messages: Message[] }> {
     const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
     return response.data
   },
@@ -56,13 +64,21 @@ export const dialogService = {
     await axios.delete(`/api/dialog/sessions/${sessionId}`)
   },
 
-  async getMessages(sessionId: string): Promise<Message[]> {
-    const response = await axios.get(`/api/dialog/sessions/${sessionId}/messages`)
-    return response.data
+  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+    await axios.patch(`/api/dialog/sessions/${sessionId}`, { title })
   },
 
-  createWebSocket(sessionId: string, token: string): WebSocket {
-    const wsUrl = `ws://localhost:8000/api/dialog/ws/${sessionId}?token=${token}`
-    return new WebSocket(wsUrl)
+  async getMessages(sessionId: string): Promise<Message[]> {
+    const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
+    return response.data.messages || []
+  },
+
+  /**
+   * 建立 SSE 连接。token 通过 query param 传递（EventSource 不支持自定义请求头）。
+   */
+  createSSE(sessionId: string, token: string): EventSource {
+    const baseUrl = (axios.defaults.baseURL || '').replace(/\/$/, '')
+    const url = `${baseUrl}/api/dialog/sse/${sessionId}?token=${encodeURIComponent(token)}`
+    return new EventSource(url)
   }
 }

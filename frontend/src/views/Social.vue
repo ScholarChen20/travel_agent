@@ -3,7 +3,12 @@
     <!-- 顶部导航栏 -->
     <div class="top-header">
       <div class="header-content">
-        <h2 class="page-title">旅行动态</h2>
+        <div class="header-left">
+          <a-button type="text" class="back-home-btn" @click="router.push('/')">
+            <LeftOutlined /> 首页
+          </a-button>
+          <h2 class="page-title">旅行动态</h2>
+        </div>
         <a-button type="primary" size="large" @click="showCreateModal = true" class="post-btn">
           <template #icon><EditOutlined /></template>
           发布动态
@@ -106,12 +111,18 @@
         <!-- 热门话题 -->
         <div class="sidebar-card">
           <div class="card-title">热门话题</div>
-          <div class="hot-topics">
-            <div v-for="i in 5" :key="i" class="topic-item">
-              <span class="topic-rank">{{ i }}</span>
-              <span class="topic-name">#旅行分享#</span>
+          <a-spin :spinning="loadingHotTopics">
+            <div class="hot-topics">
+              <div v-if="hotTopics.length === 0 && !loadingHotTopics" class="no-topics">
+                <a-empty description="暂无热门话题" :image="Empty.PRESENTED_IMAGE_SIMPLE" />
+              </div>
+              <div v-else v-for="topic in hotTopics" :key="topic.rank" class="topic-item">
+                <span class="topic-rank" :class="{ 'top-three': topic.rank <= 3 }">{{ topic.rank }}</span>
+                <span class="topic-name">{{ topic.title }}</span>
+                <span class="topic-hot">{{ formatHotValue(topic.hot_value) }}</span>
+              </div>
             </div>
-          </div>
+          </a-spin>
         </div>
       </div>
     </div>
@@ -230,6 +241,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
 import {
   EditOutlined,
@@ -237,12 +249,14 @@ import {
   HeartFilled,
   CommentOutlined,
   ShareAltOutlined,
-  PlusOutlined
+  PlusOutlined,
+  LeftOutlined
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialStore } from '@/stores/social'
 import { socialService } from '@/services/social'
 
+const router = useRouter()
 const socialStore = useSocialStore()
 const authStore = useAuthStore()
 
@@ -263,9 +277,35 @@ const loadingComments = ref(false)
 const commentContent = ref('')
 const submittingComment = ref(false)
 
+// 热门话题相关
+const hotTopics = ref<any[]>([])
+const loadingHotTopics = ref(false)
+
 onMounted(async () => {
   await loadFeed()
+  await loadHotTopics()
 })
+
+// 加载热门话题
+async function loadHotTopics() {
+  try {
+    loadingHotTopics.value = true
+    const topics = await socialService.getHotTopics(20)
+    hotTopics.value = topics
+  } catch (error) {
+    console.error('加载热门话题失败:', error)
+  } finally {
+    loadingHotTopics.value = false
+  }
+}
+
+// 格式化热度值
+function formatHotValue(value: number): string {
+  if (value >= 10000) {
+    return (value / 10000).toFixed(1) + '万'
+  }
+  return value.toString()
+}
 
 // 加载动态列表
 async function loadFeed() {
@@ -476,6 +516,21 @@ function formatTime(time: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-home-btn {
+  color: #666;
+  font-size: 14px;
+}
+
+.back-home-btn:hover {
+  color: #1890ff;
 }
 
 .page-title {
@@ -737,9 +792,30 @@ function formatTime(time: string) {
   flex-shrink: 0;
 }
 
+.topic-rank.top-three {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+  color: #fff;
+  font-weight: 700;
+}
+
 .topic-name {
+  flex: 1;
   font-size: 14px;
   color: #262626;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-hot {
+  font-size: 12px;
+  color: #ff6b6b;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.no-topics {
+  padding: 20px 0;
 }
 
 /* 空状态 */

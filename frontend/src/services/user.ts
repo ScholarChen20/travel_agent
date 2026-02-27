@@ -76,7 +76,12 @@ export const userService = {
 
   async getVisitedCities(): Promise<string[]> {
     const response = await axios.get('/api/user/visited-cities')
-    return response.data
+    return response.data.cities || response.data
+  },
+
+  async updateVisitedCities(cities: string[]): Promise<string[]> {
+    const response = await axios.put('/api/user/visited-cities', { cities })
+    return response.data.cities || response.data
   },
 
   async changePassword(data: ChangePasswordRequest): Promise<void> {
