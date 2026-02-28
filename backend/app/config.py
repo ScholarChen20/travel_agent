@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     """应用配置"""
 
     # 应用基本配置
-    app_name: str = "HelloAgents智能旅行助手"
+    app_name: str = "TravelAI智能旅行助手"
     app_version: str = "1.0.0"
     debug: bool = False
 
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # CORS配置 - 使用字符串,在代码中分割
-    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:3000"
+    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:3000,http://43.138.139.21"
 
     # 高德地图API配置
     amap_api_key: str = "8aa3f70ef5cb613094d14ea0fe797dd7"
@@ -46,21 +46,21 @@ class Settings(BaseSettings):
 
     # ============ 新增：数据库配置 ============
     # MySQL配置
-    mysql_host: str = "localhost"
+    mysql_host: str = "43.138.139.21"
     mysql_port: int = 3306
     mysql_user: str = "root"
     mysql_password: str = "123456"  # 从.env读取
     mysql_database: str = "travel_agent"
 
     # MongoDB配置
-    mongodb_host: str = "localhost"
+    mongodb_host: str = "43.138.139.21"
     mongodb_port: int = 27017
     mongodb_user: str = ""  # 可选，没有用户名则留空
     mongodb_password: str = ""  # 可选，没有密码则留空
     mongodb_database: str = "test"
 
     # Redis配置
-    redis_host: str = "localhost"
+    redis_host: str = "43.138.139.21"
     redis_port: int = 6379
     redis_password: str = "123456"  # 从.env读取
     redis_db: int = 0

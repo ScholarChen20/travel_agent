@@ -2,7 +2,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { message } from 'ant-design-vue'
 
-export const API_BASE_URL = 'http://localhost:8000'
+export const API_BASE_URL = '/api'
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,

@@ -336,7 +336,7 @@ async def login(request: LoginRequest):
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
+                detail="用户名错误"
             )
 
         # 4. 验证密码
@@ -347,7 +347,7 @@ async def login(request: LoginRequest):
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
+                detail="密码错误"
             )
 
         # 5. 检查用户状态

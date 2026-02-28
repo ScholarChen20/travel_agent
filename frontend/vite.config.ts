@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+// @ts-ignore
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
@@ -14,7 +15,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://43.138.139.21:8000',
         changeOrigin: true
       }
     }

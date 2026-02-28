@@ -1,5 +1,5 @@
 # 前端构建镜像
-FROM node:18-alpine as build
+FROM node:18-alpine AS build
 
 WORKDIR /app
 
@@ -12,8 +12,11 @@ RUN npm install
 # 复制源码
 COPY . .
 
+# 赋予vite执行权限
+RUN chmod +x ./node_modules/.bin/vite
+
 # 构建生产版本
-RUN npm run build
+RUN ./node_modules/.bin/vite build
 
 # Nginx镜像
 FROM nginx:1.25-alpine
