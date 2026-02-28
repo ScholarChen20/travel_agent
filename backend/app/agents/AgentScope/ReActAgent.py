@@ -20,6 +20,9 @@ import asyncio
 import os
 
 from agentscope.tool import Toolkit, execute_python_code
+from hello_agents import HelloAgentsLLM, SimpleAgent, SearchTool
+
+
 async def creating_react_agent():
     toolkit = Toolkit()
     toolkit.register_tool_function(execute_python_code) # 注册 python 代码执行工具
@@ -28,7 +31,7 @@ async def creating_react_agent():
         name = "Jarvis",
         sys_prompt= """你是一个名为贾维斯的人工智能机器人，你是为钢铁侠量身定做的机器人，你可以识别主人的一切指令要求并快速分析所有结果""",
         model = DashScopeChatModel(
-            api_key='sk-1c854040b85549a3be779d4e95665176111',
+            api_key=os.getenv('DASHSCOPE_API_KEY'),
             model_name="qwen-max",
             stream=True,
             enable_thinking=True,
@@ -129,5 +132,20 @@ def mag():
     print(json.dumps(serialized_msg, indent=4, ensure_ascii=False))
 
 if __name__ == '__main__':
-    asyncio.run(creating_react_agent())  # asyncio表示异步执行
+    # print("开始执行")
+    # print(os.getenv('DASHSCOPE_API_KEY'))
+    # asyncio.run(creating_react_agent())  # asyncio表示异步执行
+
+    from hello_agents.tools import CalculatorTool,SearchTool
+    from hello_agents.agents import ReActAgent
+    llm = HelloAgentsLLM(
+        model='qwen-plus',
+        api_key=os.getenv('DASHSCOPE_API_KEY'),
+        base_url='https://dashscope.aliyuncs.com/compatible-mode/v1',
+        provider='qwen'
+    )
+    agent = ReActAgent(name="AI数学计算助手", llm=llm, system_prompt="你是一个数学计算助手，请用中文回答问题。你擅长计算三位数以内的加减乘除、开平方开根号等操作")
+    agent.add_tool(CalculatorTool())
+    # agent.add_tool(SearchTool())
+    agent.run("2+3*4的值是多少")
 

@@ -1,4 +1,4 @@
-# HelloAgents智能旅行助手 🌍✈️
+# 智能旅行助手 🌍✈️
 
 基于HelloAgents框架构建的智能旅行规划助手,集成高德地图MCP服务,提供个性化的旅行计划生成。
 
@@ -17,6 +17,10 @@
 - **API**: FastAPI
 - **MCP工具**: amap-mcp-server (高德地图)
 - **LLM**: 支持多种LLM提供商(OpenAI, DeepSeek等)
+- **数据库**: MySQL, MongoDB
+- **缓存**: Redis
+- **队列**: Redis Stream
+
 
 ### 前端
 - **框架**: Vue 3 + TypeScript
@@ -121,6 +125,60 @@ npm run dev
 
 5. 打开浏览器访问 `http://localhost:5173`
 
+6. 生产环境部署
+# 安装Docker
+```bash
+sudo apt-get update
+sudo apt-get install docker.io -y
+
+# 安装Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# 验证安装
+docker --version
+docker-compose --version
+```
+# 上传项目文件
+```bash
+sudo mkdir -p /opt/travel-agent
+
+# 上传文件（可以使用scp、rsync等工具）
+scp -r ./frontend /opt/travel-agent/
+scp -r ./backend /opt/travel-agent/
+scp docker-compose.yml /opt/travel-agent/
+```
+
+# 进入项目目录
+```bash
+cd /opt/travel-agent
+
+# 构建并启动所有服务
+docker-compose up -d --build
+# 查看服务状态
+docker-compose ps
+# 查看服务日志（可选）
+docker-compose logs -f
+```
+
+# 初始化数据库
+```bash
+# 进入后端容器
+docker exec -it travel-agent-backend-1 bash
+
+# 运行MongoDB初始化脚本
+python scripts/init_mongodb.py
+# 退出容器
+exit
+```
+
+# 验证服务
+```bash
+# 检查前端服务
+curl http://localhost
+# 检查后端API
+curl http://localhost/api/health
+```
 ## 📝 使用指南
 
 1. 在首页填写旅行信息:
