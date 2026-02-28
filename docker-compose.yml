@@ -1,0 +1,79 @@
+version: '3.14'
+
+services:
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+      - mongodb
+      - redis
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MYSQL_HOST=192.168.100.128
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=123456
+      - MYSQL_DATABASE=travel_agent
+      - MONGODB_HOST=192.168.100.128
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=test
+      - REDIS_HOST=192.168.100.128
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=123456
+      - REDIS_DB=1
+      - JWT_SECRET_KEY=UoFj5OGotDPJFlQLFTHQDZtB7QDtR3lG01Xk+iDVnY4=
+    restart: always
+
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+      - MYSQL_DATABASE=travel_agent
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/scripts/init_mysql.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+  # MongoDB数据库
+  mongodb:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: always
+
+  # Redis缓存
+  redis:
+    image: redis:7.0
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass 123321
+    volumes:
+      - redis-data:/data
+    restart: always
+
+volumes:
+  mysql-data:
+  mongo-data:
+  redis-data:
