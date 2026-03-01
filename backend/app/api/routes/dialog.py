@@ -21,6 +21,7 @@ from asyncio import Queue
 from ...services.dialog_service import get_dialog_service
 from ...agents.trip_planner_agent import get_conversational_planner
 from ...middleware.auth_middleware import get_current_user, CurrentUser, verify_token
+from ...utils.response import ApiResponse
 
 
 router = APIRouter(prefix="/dialog", tags=["对话管理"])
@@ -47,43 +48,13 @@ async def get_current_user_sse(
     return user
 
 
-# ========== 请求/响应模型 ==========
+# ========== 请求模型 ==========
 
 class ChatRequest(BaseModel):
     """对话请求"""
     session_id: Optional[str] = Field(None, description="会话ID（可选，不提供则创建新会话）")
     message: str = Field(..., description="用户消息")
     voice_data: Optional[str] = Field(None, description="语音数据（Base64编码，可选）")
-
-
-class ChatResponse(BaseModel):
-    """对话响应"""
-    session_id: str = Field(..., description="会话ID")
-    message: str = Field(..., description="助手回复")
-    intent: str = Field(..., description="识别的意图")
-    suggestions: List[str] = Field(default=[], description="建议回复")
-
-
-class SessionListResponse(BaseModel):
-    """会话列表响应"""
-    total: int = Field(..., description="总数")
-    sessions: List[dict] = Field(..., description="会话列表")
-
-
-class SessionDetailResponse(BaseModel):
-    """会话详情响应"""
-    session_id: str = Field(..., description="会话ID")
-    user_id: int = Field(..., description="用户ID")
-    context: dict = Field(..., description="会话上下文")
-    message_count: int = Field(..., description="消息数量")
-    messages: List[dict] = Field(..., description="消息列表")
-    created_at: str = Field(..., description="创建时间")
-    updated_at: str = Field(..., description="更新时间")
-
-
-class MessageResponse(BaseModel):
-    """通用消息响应"""
-    message: str = Field(..., description="消息内容")
 
 
 class UpdateSessionRequest(BaseModel):
@@ -96,15 +67,9 @@ class CreateSessionRequest(BaseModel):
     initial_context: dict = Field(default={}, description="初始上下文")
 
 
-class CreateSessionResponse(BaseModel):
-    """创建会话响应"""
-    session_id: str = Field(..., description="会话ID")
-    message: str = Field(..., description="消息")
-
-
 # ========== API端点 ==========
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat")
 async def chat(
     request: ChatRequest,
     current_user: CurrentUser = Depends(get_current_user)
@@ -121,7 +86,6 @@ async def chat(
     try:
         dialog_service = get_dialog_service()
 
-        # 如果没有提供session_id，创建新会话
         session_id = request.session_id
         if not session_id:
             session_id = await dialog_service.create_session(
@@ -130,10 +94,8 @@ async def chat(
             )
             logger.info(f"创建新会话: {session_id} (用户: {current_user.username})")
 
-        # 获取对话式Agent
         conversational_planner = get_conversational_planner(dialog_service)
 
-        # 处理对话
         response = await conversational_planner.chat(
             session_id=session_id,
             user_id=current_user.id,
@@ -152,7 +114,15 @@ async def chat(
             "suggestions": response.get("suggestions", [])
         })
 
-        return ChatResponse(**response)
+        return ApiResponse.success(
+            data={
+                "session_id": session_id,
+                "message": response["message"],
+                "intent": response["intent"],
+                "suggestions": response.get("suggestions", [])
+            },
+            msg="对话处理完成"
+        )
 
     except Exception as e:
         logger.error(f"对话处理失败: {str(e)}")
@@ -162,7 +132,7 @@ async def chat(
         )
 
 
-@router.post("/sessions", response_model=CreateSessionResponse)
+@router.post("/sessions", status_code=status.HTTP_201_CREATED)
 async def create_session(
     request: CreateSessionRequest = CreateSessionRequest(),
     current_user: CurrentUser = Depends(get_current_user)
@@ -185,9 +155,9 @@ async def create_session(
         # 删除redis中的会话缓存
         dialog_service.delete_session_cache(user_id=current_user.id)
 
-        return CreateSessionResponse(
-            session_id=session_id,
-            message="会话创建成功"
+        return ApiResponse.created(
+            data={"session_id": session_id},
+            msg="会话创建成功"
         )
 
     except Exception as e:
@@ -198,7 +168,7 @@ async def create_session(
         )
 
 
-@router.get("/sessions", response_model=SessionListResponse)
+@router.get("/sessions")
 async def list_sessions(
     is_active: Optional[bool] = None,
     limit: int = 20,
@@ -220,9 +190,9 @@ async def list_sessions(
             skip=skip
         )
 
-        return SessionListResponse(
-            total=len(sessions),
-            sessions=sessions
+        return ApiResponse.success(
+            data={"total": len(sessions), "sessions": sessions},
+            msg="获取成功"
         )
 
     except Exception as e:
@@ -233,7 +203,7 @@ async def list_sessions(
         )
 
 
-@router.get("/sessions/{session_id}", response_model=SessionDetailResponse)
+@router.get("/sessions/{session_id}")
 async def get_session_detail(
     session_id: str,
     current_user: CurrentUser = Depends(get_current_user)
@@ -246,7 +216,6 @@ async def get_session_detail(
     try:
         dialog_service = get_dialog_service()
 
-        # 获取会话上下文
         context = await dialog_service.get_session_context(session_id)
 
         if not context:
@@ -255,14 +224,13 @@ async def get_session_detail(
                 detail="会话不存在"
             )
 
-        # 验证权限
         if context["user_id"] != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="无权访问此会话"
             )
 
-        return SessionDetailResponse(**context)
+        return ApiResponse.success(data=context, msg="获取成功")
 
     except HTTPException:
         raise
@@ -274,7 +242,7 @@ async def get_session_detail(
         )
 
 
-@router.patch("/sessions/{session_id}", response_model=MessageResponse)
+@router.patch("/sessions/{session_id}")
 async def update_session(
     session_id: str,
     request: UpdateSessionRequest,
@@ -290,7 +258,7 @@ async def update_session(
         )
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
-        return MessageResponse(message="标题已更新")
+        return ApiResponse.success(data={}, msg="标题已更新")
     except HTTPException:
         raise
     except Exception as e:
@@ -298,7 +266,7 @@ async def update_session(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新失败")
 
 
-@router.delete("/sessions/{session_id}", response_model=MessageResponse)
+@router.delete("/sessions/{session_id}")
 async def delete_session(
     session_id: str,
     current_user: CurrentUser = Depends(get_current_user)
@@ -324,7 +292,7 @@ async def delete_session(
 
         logger.info(f"会话已删除: {session_id} (用户: {current_user.username})")
 
-        return MessageResponse(message="会话已删除")
+        return ApiResponse.success(data={}, msg="会话已删除")
 
     except HTTPException:
         raise
@@ -350,7 +318,6 @@ async def get_session_logs(
     try:
         dialog_service = get_dialog_service()
 
-        # 验证会话权限
         context = await dialog_service.get_session_context(session_id)
         if not context or context["user_id"] != current_user.id:
             raise HTTPException(
@@ -358,14 +325,12 @@ async def get_session_logs(
                 detail="无权访问此会话"
             )
 
-        # 获取工具调用日志
         logs = await dialog_service.get_session_tool_logs(session_id, limit)
 
-        return {
-            "session_id": session_id,
-            "total": len(logs),
-            "logs": logs
-        }
+        return ApiResponse.success(
+            data={"session_id": session_id, "total": len(logs), "logs": logs},
+            msg="获取成功"
+        )
 
     except HTTPException:
         raise
@@ -391,7 +356,6 @@ async def sse_endpoint(
     响应会通过此连接实时推送到前端。
     每 25 秒发一次心跳防止连接超时。
     """
-    # 验证会话归属
     dialog_service = get_dialog_service()
     context = await dialog_service.get_session_context(session_id)
     if not context or context["user_id"] != current_user.id:
@@ -400,14 +364,12 @@ async def sse_endpoint(
     queue = get_session_queue(session_id)
 
     async def event_generator():
-        # 发送连接成功事件
         yield f"data: {json.dumps({'type': 'connected', 'session_id': session_id}, ensure_ascii=False)}\n\n"
         while True:
             try:
                 data = await asyncio.wait_for(queue.get(), timeout=25)
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
             except asyncio.TimeoutError:
-                # 心跳，保持连接
                 yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
 
     return StreamingResponse(
@@ -464,7 +426,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await manager.connect(session_id, websocket)
 
     try:
-        # 发送欢迎消息
         await manager.send_message(session_id, {
             "type": "connected",
             "session_id": session_id,
@@ -472,22 +433,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         })
 
         while True:
-            # 接收客户端消息
             data = await websocket.receive_text()
 
             try:
                 message_data = json.loads(data)
 
-                # 处理不同类型的消息
                 if message_data.get("type") == "ping":
-                    # 心跳响应
                     await manager.send_message(session_id, {
                         "type": "pong",
                         "timestamp": message_data.get("timestamp")
                     })
 
                 elif message_data.get("type") == "chat":
-                    # 对话消息
                     user_message = message_data.get("message")
                     user_id = message_data.get("user_id")
 
@@ -498,13 +455,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         })
                         continue
 
-                    # 发送处理中状态
                     await manager.send_message(session_id, {
                         "type": "processing",
                         "message": "正在处理您的消息..."
                     })
 
-                    # 处理对话
                     dialog_service = get_dialog_service()
                     conversational_planner = get_conversational_planner(dialog_service)
 
@@ -514,7 +469,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         user_message=user_message
                     )
 
-                    # 发送响应
                     await manager.send_message(session_id, {
                         "type": "response",
                         **response

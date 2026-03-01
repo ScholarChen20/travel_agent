@@ -1,6 +1,6 @@
 """FastAPI主应用"""
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -8,6 +8,7 @@ from pathlib import Path
 from loguru import logger
 
 from ..config import get_settings, validate_config, print_config
+from ..utils.response import ApiResponse
 from ..database.mysql import get_mysql_db, init_mysql_db
 from ..database.mongodb import get_mongodb_client, init_mongodb_client
 from ..database.redis_client import get_redis_client, init_redis_client
@@ -45,19 +46,32 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# 全局异常处理器 - 确保所有错误响应都包含CORS头
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "*",
+    "Access-Control-Allow-Headers": "*",
+}
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """统一 HTTP 异常响应格式"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ApiResponse.error(msg=str(exc.detail), code=exc.status_code),
+        headers=_CORS_HEADERS
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    """全局异常处理器 - 确保所有错误响应都包含CORS头"""
     logger.error(f"全局异常捕获: {type(exc).__name__}: {str(exc)}")
     return JSONResponse(
         status_code=500,
-        content={"detail": f"服务器内部错误: {str(exc)}"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
+        content=ApiResponse.internal_error(msg=f"服务器内部错误: {str(exc)}"),
+        headers=_CORS_HEADERS
     )
 
 # 注册路由

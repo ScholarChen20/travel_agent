@@ -23,12 +23,13 @@ from ...database.redis_client import get_redis_client
 from ...database.models import User, UserProfile
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...config import get_settings
+from ...utils.response import ApiResponse
 
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
 
-# ========== 请求/响应模型 ==========
+# ========== 请求模型 ==========
 
 class RegisterRequest(BaseModel):
     """注册请求"""
@@ -48,22 +49,6 @@ class LoginRequest(BaseModel):
     device_id: str = Field(default="default", description="设备ID")
 
 
-class TokenResponse(BaseModel):
-    """Token响应"""
-    access_token: str = Field(..., description="访问Token")
-    token_type: str = Field(default="bearer", description="Token类型")
-    expires_in: int = Field(..., description="过期时间（秒）")
-    expires_at: str = Field(..., description="过期时间（ISO格式）")
-    user: dict = Field(..., description="用户信息")
-
-
-class CaptchaResponse(BaseModel):
-    """验证码响应"""
-    session_id: str = Field(..., description="会话ID")
-    image_base64: str = Field(..., description="验证码图片Base64")
-    expires_in: int = Field(..., description="有效期（秒）")
-
-
 class ForgotPasswordRequest(BaseModel):
     """忘记密码请求"""
     email: EmailStr = Field(..., description="注册邮箱")
@@ -73,11 +58,6 @@ class ResetPasswordRequest(BaseModel):
     """重置密码请求"""
     token: str = Field(..., description="重置Token")
     new_password: str = Field(..., min_length=8, description="新密码")
-
-
-class MessageResponse(BaseModel):
-    """通用消息响应"""
-    message: str = Field(..., description="消息内容")
 
 
 # ========== 辅助函数 ==========
@@ -136,7 +116,7 @@ def serialize_user(user: User) -> dict:
 
 # ========== API端点 ==========
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(request: RegisterRequest):
     """
     用户注册
@@ -260,7 +240,7 @@ async def register(request: RegisterRequest):
             token_data["access_token"]
         )
         logger.info(f"JWT Token存储成功: {user_id}")
-        
+
         await redis_client.expire(
             f"jwt:user:{user_id}",
             settings.jwt_access_token_expire_days * 86400
@@ -269,18 +249,19 @@ async def register(request: RegisterRequest):
 
         logger.info(f"新用户注册成功: {username} (ID: {user_id})")
 
-        return TokenResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            expires_in=token_data["expires_in"],
-            expires_at=token_data["expires_at"],
-            user=user_data
+        return ApiResponse.created(
+            data={
+                "access_token": token_data["access_token"],
+                "token_type": token_data["token_type"],
+                "expires_in": token_data["expires_in"],
+                "expires_at": token_data["expires_at"],
+                "user": user_data
+            },
+            msg="注册成功"
         )
     except HTTPException:
-        # 重新抛出HTTPException，保持原有行为
         raise
     except Exception as e:
-        # 捕获所有其他异常，返回500错误
         logger.error(f"注册失败: {request.username}, error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -288,7 +269,7 @@ async def register(request: RegisterRequest):
         ) from e
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 async def login(request: LoginRequest):
     """
     用户登录
@@ -384,32 +365,26 @@ async def login(request: LoginRequest):
 
         logger.info(f"用户登录成功: {user.username} (ID: {user.id}, 设备: {request.device_id})")
 
-        return TokenResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            expires_in=token_data["expires_in"],
-            expires_at=token_data["expires_at"],
-            user=serialize_user(user)
+        return ApiResponse.success(
+            data={
+                "access_token": token_data["access_token"],
+                "token_type": token_data["token_type"],
+                "expires_in": token_data["expires_in"],
+                "expires_at": token_data["expires_at"],
+                "user": serialize_user(user)
+            },
+            msg="登录成功"
         )
 
 
-@router.post("/logout", response_model=MessageResponse)
+@router.post("/logout")
 async def logout(current_user: CurrentUser = Depends(get_current_user)):
     """
     用户登出
 
     将当前Token加入黑名单
     """
-    from fastapi import Request
-    from fastapi.security import HTTPBearer
-
     redis_client = get_redis_client()
-    auth_service = get_auth_service()
-    settings = get_settings()
-
-    # 从请求头获取Token
-    # 注意：这里需要从request中提取token
-    # 由于Depends已经验证过，我们可以从Redis删除Token
 
     # 删除Redis中的Token
     await redis_client.hdel(
@@ -417,15 +392,12 @@ async def logout(current_user: CurrentUser = Depends(get_current_user)):
         current_user.device_id
     )
 
-    # 注意：这里简化处理，实际应该将JTI加入黑名单
-    # 但由于我们已经从Redis删除了Token，重新验证时会失败
-
     logger.info(f"用户登出成功: {current_user.username} (ID: {current_user.id})")
 
-    return MessageResponse(message="登出成功")
+    return ApiResponse.success(data={}, msg="登出成功")
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh")
 async def refresh_token(current_user: CurrentUser = Depends(get_current_user)):
     """
     刷新Token
@@ -462,16 +434,19 @@ async def refresh_token(current_user: CurrentUser = Depends(get_current_user)):
     with mysql_db.get_session() as session:
         user = session.query(User).filter(User.id == current_user.id).first()
 
-        return TokenResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            expires_in=token_data["expires_in"],
-            expires_at=token_data["expires_at"],
-            user=serialize_user(user)
+        return ApiResponse.success(
+            data={
+                "access_token": token_data["access_token"],
+                "token_type": token_data["token_type"],
+                "expires_in": token_data["expires_in"],
+                "expires_at": token_data["expires_at"],
+                "user": serialize_user(user)
+            },
+            msg="Token刷新成功"
         )
 
 
-@router.get("/captcha", response_model=CaptchaResponse)
+@router.get("/captcha")
 async def get_captcha():
     """
     获取验证码
@@ -495,14 +470,17 @@ async def get_captcha():
 
     logger.debug(f"生成验证码: {session_id} -> {code}")
 
-    return CaptchaResponse(
-        session_id=session_id,
-        image_base64=image_base64,
-        expires_in=settings.captcha_expiry_seconds
+    return ApiResponse.success(
+        data={
+            "session_id": session_id,
+            "image_base64": image_base64,
+            "expires_in": settings.captcha_expiry_seconds
+        },
+        msg="获取验证码成功"
     )
 
 
-@router.post("/forgot-password", response_model=MessageResponse)
+@router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
     """
     忘记密码
@@ -518,26 +496,19 @@ async def forgot_password(request: ForgotPasswordRequest):
 
         if not user:
             # 为了安全，不透露用户是否存在
-            return MessageResponse(
-                message="如果该邮箱已注册，您将收到重置密码的邮件"
-            )
+            return ApiResponse.success(data={}, msg="如果该邮箱已注册，您将收到重置密码的邮件")
 
         # 生成重置Token
         reset_token = auth_service.create_reset_token(user.id, user.email)
 
         # TODO: 发送邮件
-        # 这里应该发送包含reset_token的邮件链接
-        # 例如: https://example.com/reset-password?token={reset_token}
-
         logger.info(f"生成密码重置Token: {user.email}")
         logger.debug(f"重置Token: {reset_token}")  # 仅用于开发调试
 
-        return MessageResponse(
-            message="如果该邮箱已注册，您将收到重置密码的邮件"
-        )
+        return ApiResponse.success(data={}, msg="如果该邮箱已注册，您将收到重置密码的邮件")
 
 
-@router.post("/reset-password", response_model=MessageResponse)
+@router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
     """
     重置密码
@@ -585,32 +556,30 @@ async def reset_password(request: ResetPasswordRequest):
 
         logger.info(f"密码重置成功: {user.email}")
 
-        return MessageResponse(message="密码重置成功，请使用新密码登录")
+        return ApiResponse.success(data={}, msg="密码重置成功，请使用新密码登录")
 
 
-@router.get("/me", response_model=dict)
+@router.get("/me")
 async def get_current_user_info(
     current_user: CurrentUser = Depends(get_current_user)
 ):
     """
     获取当前登录用户信息
-    
+
     Returns:
         dict: 当前登录用户的详细信息
     """
     mysql_db = get_mysql_db()
-    
+
     with mysql_db.get_session() as session:
-        # 根据CurrentUser中的用户ID查询完整用户信息
         user = session.query(User).filter(User.id == current_user.id).first()
-        
+
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
             )
-        
+
         logger.info(f"获取用户信息: {user.username} (ID: {user.id})")
-        
-        # 使用serialize_user函数返回标准化的用户信息
-        return serialize_user(user)
+
+        return ApiResponse.success(data=serialize_user(user), msg="获取成功")

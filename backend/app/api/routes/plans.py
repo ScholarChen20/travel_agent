@@ -18,36 +18,13 @@ from loguru import logger
 
 from ...services.travel_plan_service import get_travel_plan_service
 from ...middleware.auth_middleware import get_current_user, CurrentUser
+from ...utils.response import ApiResponse
 
 
 router = APIRouter(prefix="/plans", tags=["旅行计划"])
 
 
-# ========== 请求/响应模型 ==========
-
-class PlanListResponse(BaseModel):
-    """计划列表响应"""
-    total: int = Field(..., description="总数")
-    plans: List[dict] = Field(..., description="计划列表")
-
-
-class PlanDetailResponse(BaseModel):
-    """计划详情响应"""
-    plan_id: str = Field(..., description="计划ID")
-    user_id: int = Field(..., description="用户ID")
-    city: str = Field(..., description="城市")
-    start_date: str = Field(..., description="开始日期")
-    end_date: Optional[str] = Field(None, description="结束日期")
-    days: List[dict] = Field(..., description="每日行程")
-    weather_info: Optional[List[dict]] = Field(default=[], description="天气信息")
-    budget: Optional[dict] = Field(None, description="预算详情")
-    overall_suggestions: Optional[str] = Field(None, description="总体建议")
-    preferences: Optional[dict] = Field(default={}, description="用户偏好")
-    is_favorite: bool = Field(default=False, description="是否收藏")
-    is_completed: bool = Field(default=False, description="是否完成")
-    created_at: str = Field(..., description="创建时间")
-    updated_at: str = Field(..., description="更新时间")
-
+# ========== 请求模型 ==========
 
 class UpdatePlanRequest(BaseModel):
     """更新计划请求"""
@@ -56,24 +33,14 @@ class UpdatePlanRequest(BaseModel):
     preferences: Optional[dict] = Field(None, description="用户偏好")
 
 
-class ToggleFavoriteRequest(BaseModel):
-    """切换收藏请求"""
-    is_favorite: bool = Field(..., description="是否收藏")
-
-
 class MarkCompleteRequest(BaseModel):
     """标记完成请求"""
     is_completed: bool = Field(..., description="是否完成")
 
 
-class MessageResponse(BaseModel):
-    """通用消息响应"""
-    message: str = Field(..., description="消息内容")
-
-
 # ========== API端点 ==========
 
-@router.get("", response_model=PlanListResponse)
+@router.get("")
 async def get_user_plans(
     city: Optional[str] = Query(None, description="城市筛选"),
     is_favorite: Optional[bool] = Query(None, description="是否收藏筛选"),
@@ -93,7 +60,6 @@ async def get_user_plans(
 
         logger.info(f"查询计划列表 - 用户ID: {current_user.id}, 用户名: {current_user.username}")
 
-        # 查询计划列表
         plans = await plan_service.get_user_plans(
             user_id=current_user.id,
             city=city,
@@ -105,9 +71,9 @@ async def get_user_plans(
 
         logger.info(f"查询到 {len(plans)} 个计划")
 
-        return PlanListResponse(
-            total=len(plans),
-            plans=plans
+        return ApiResponse.success(
+            data={"total": len(plans), "plans": plans},
+            msg="获取成功"
         )
 
     except Exception as e:
@@ -118,7 +84,7 @@ async def get_user_plans(
         )
 
 
-@router.get("/{plan_id}", response_model=PlanDetailResponse)
+@router.get("/{plan_id}")
 async def get_plan_detail(
     plan_id: str,
     current_user: CurrentUser = Depends(get_current_user)
@@ -131,7 +97,6 @@ async def get_plan_detail(
     try:
         plan_service = get_travel_plan_service()
 
-        # 查询计划
         plan = await plan_service.get_plan_by_id(plan_id, user_id=current_user.id)
 
         if not plan:
@@ -141,16 +106,12 @@ async def get_plan_detail(
             )
 
         # 确保必填字段存在
-        if 'is_completed' not in plan or plan['is_completed'] is None:
-            plan['is_completed'] = False
-        if 'is_favorite' not in plan or plan['is_favorite'] is None:
-            plan['is_favorite'] = False
-        if 'preferences' not in plan or plan['preferences'] is None:
-            plan['preferences'] = {}
-        if 'weather_info' not in plan or plan['weather_info'] is None:
-            plan['weather_info'] = []
+        plan.setdefault('is_completed', False)
+        plan.setdefault('is_favorite', False)
+        plan.setdefault('preferences', {})
+        plan.setdefault('weather_info', [])
 
-        return PlanDetailResponse(**plan)
+        return ApiResponse.success(data=plan, msg="获取成功")
 
     except HTTPException:
         raise
@@ -164,7 +125,7 @@ async def get_plan_detail(
         )
 
 
-@router.put("/{plan_id}", response_model=MessageResponse)
+@router.put("/{plan_id}")
 async def update_plan(
     plan_id: str,
     request: UpdatePlanRequest,
@@ -178,7 +139,6 @@ async def update_plan(
     try:
         plan_service = get_travel_plan_service()
 
-        # 构建更新字段
         updates = {}
         if request.days is not None:
             updates["days"] = request.days
@@ -193,7 +153,6 @@ async def update_plan(
                 detail="没有提供更新字段"
             )
 
-        # 更新计划
         success = await plan_service.update_plan(
             plan_id=plan_id,
             user_id=current_user.id,
@@ -208,7 +167,7 @@ async def update_plan(
 
         logger.info(f"计划已更新: {plan_id} (用户: {current_user.username})")
 
-        return MessageResponse(message="计划已更新")
+        return ApiResponse.success(data={}, msg="计划已更新")
 
     except HTTPException:
         raise
@@ -220,7 +179,7 @@ async def update_plan(
         )
 
 
-@router.post("/{plan_id}/favorite", response_model=MessageResponse)
+@router.post("/{plan_id}/favorite")
 async def toggle_favorite(
     plan_id: str,
     current_user: CurrentUser = Depends(get_current_user)
@@ -233,7 +192,6 @@ async def toggle_favorite(
     try:
         plan_service = get_travel_plan_service()
 
-        # 先获取当前状态
         plan = await plan_service.get_plan_by_id(plan_id, user_id=current_user.id)
         if not plan:
             raise HTTPException(
@@ -241,7 +199,6 @@ async def toggle_favorite(
                 detail="计划不存在"
             )
 
-        # 切换收藏状态
         new_favorite_status = not plan.get('is_favorite', False)
         success = await plan_service.mark_favorite(
             plan_id=plan_id,
@@ -258,7 +215,7 @@ async def toggle_favorite(
         action = "已收藏" if new_favorite_status else "已取消收藏"
         logger.info(f"计划{action}: {plan_id} (用户: {current_user.username})")
 
-        return MessageResponse(message=f"计划{action}")
+        return ApiResponse.success(data={"is_favorite": new_favorite_status}, msg=f"计划{action}")
 
     except HTTPException:
         raise
@@ -270,7 +227,7 @@ async def toggle_favorite(
         )
 
 
-@router.post("/{plan_id}/complete", response_model=MessageResponse)
+@router.post("/{plan_id}/complete")
 async def mark_complete(
     plan_id: str,
     request: MarkCompleteRequest,
@@ -284,7 +241,6 @@ async def mark_complete(
     try:
         plan_service = get_travel_plan_service()
 
-        # 标记完成
         success = await plan_service.mark_completed(
             plan_id=plan_id,
             user_id=current_user.id,
@@ -300,7 +256,7 @@ async def mark_complete(
         action = "已完成" if request.is_completed else "未完成"
         logger.info(f"计划标记为{action}: {plan_id} (用户: {current_user.username})")
 
-        return MessageResponse(message=f"计划已标记为{action}")
+        return ApiResponse.success(data={"is_completed": request.is_completed}, msg=f"计划已标记为{action}")
 
     except HTTPException:
         raise
@@ -312,7 +268,7 @@ async def mark_complete(
         )
 
 
-@router.delete("/{plan_id}", response_model=MessageResponse)
+@router.delete("/{plan_id}")
 async def delete_plan(
     plan_id: str,
     current_user: CurrentUser = Depends(get_current_user)
@@ -325,7 +281,6 @@ async def delete_plan(
     try:
         plan_service = get_travel_plan_service()
 
-        # 删除计划
         success = await plan_service.delete_plan(
             plan_id=plan_id,
             user_id=current_user.id
@@ -339,7 +294,7 @@ async def delete_plan(
 
         logger.info(f"计划已删除: {plan_id} (用户: {current_user.username})")
 
-        return MessageResponse(message="计划已删除")
+        return ApiResponse.success(data={}, msg="计划已删除")
 
     except HTTPException:
         raise
@@ -365,7 +320,6 @@ async def export_plan(
     try:
         plan_service = get_travel_plan_service()
 
-        # 查询计划
         plan = await plan_service.get_plan_by_id(plan_id, user_id=current_user.id)
 
         if not plan:
@@ -375,8 +329,7 @@ async def export_plan(
             )
 
         if format == "json":
-            # 返回JSON格式
-            return plan
+            return ApiResponse.success(data=plan, msg="导出成功")
         elif format == "pdf":
             # TODO: 实现PDF导出
             raise HTTPException(
