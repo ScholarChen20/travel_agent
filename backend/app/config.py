@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from typing import List
+from urllib.parse import quote
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -20,7 +21,7 @@ class Settings(BaseSettings):
     """应用配置"""
 
     # 应用基本配置
-    app_name: str = "HelloAgents智能旅行助手"
+    app_name: str = "TravelAI智能旅行助手"
     app_version: str = "1.0.0"
     debug: bool = False
 
@@ -29,7 +30,7 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # CORS配置 - 使用字符串,在代码中分割
-    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
+    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:3000,http://43.138.139.21"
 
     # 高德地图API配置
     amap_api_key: str = "8aa3f70ef5cb613094d14ea0fe797dd7dk29"
@@ -46,24 +47,24 @@ class Settings(BaseSettings):
 
     # ============ 新增：数据库配置 ============
     # MySQL配置
-    mysql_host: str = "localhost"
+    mysql_host: str = "43.138.139.21"
     mysql_port: int = 3306
-    mysql_user: str = "root"
-    mysql_password: str = "123456"  # 从.env读取
+    mysql_user: str = "travel_agent_user"
+    mysql_password: str = "Tr@velA1g3nt#2025!Secure"  # 强密码，生产环境请从环境变量读取
     mysql_database: str = "travel_agent"
 
     # MongoDB配置
-    mongodb_host: str = "localhost"
+    mongodb_host: str = "43.138.139.21"
     mongodb_port: int = 27017
-    mongodb_user: str = ""  # 可选，没有用户名则留空
-    mongodb_password: str = ""  # 可选，没有密码则留空
-    mongodb_database: str = "test"
+    mongodb_user: str = "travel_agent_mongo"  # MongoDB用户名
+    mongodb_password: str = "M0ng0#Tr@vel2025!Secure"  # 强密码，生产环境请从环境变量读取
+    mongodb_database: str = "travel_agent"
 
     # Redis配置
-    redis_host: str = "localhost"
+    redis_host: str = "43.138.139.21"
     redis_port: int = 6379
-    redis_password: str = "123456"  # 从.env读取
-    redis_db: int = 0
+    redis_password: str = "R3d1s#Tr@vel2025!Secure"  # 强密码，生产环境请从环境变量读取
+    redis_db: int = 1
 
     # ============ 新增：JWT配置 ============
     jwt_secret_key: str = "UoFj5OGotDPJFlQLFTHQDZtB7QDtR3lG01Xk+iDVnY4="  # 必须在.env中设置，用于JWT签名
@@ -93,6 +94,17 @@ class Settings(BaseSettings):
     # 日志配置
     log_level: str = "INFO"
 
+    # ============ 新增：防刷配置 ============
+    anti_spam_enabled: bool = True
+    allowed_countries_str: str = "CN"           # 逗号分隔的允许国家代码
+    device_register_cooldown: int = 300         # 设备注册冷却时间（秒，5分钟）
+    ip_register_hourly_limit: int = 10          # 每小时每IP最多注册次数
+    ip_block_duration: int = 86400              # IP封禁时长（秒，24小时）
+    bloom_filter_size: int = 100_000            # 布隆过滤器容量
+    bloom_filter_error_rate: float = 0.01       # 布隆过滤器误判率
+    bloom_filter_key: str = "bloom:registered_devices"  # Redis存储键
+    geoip_cache_ttl: int = 86400                # IP地理位置缓存TTL（秒）
+
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -102,6 +114,10 @@ class Settings(BaseSettings):
         """获取CORS origins列表"""
         return [origin.strip() for origin in self.cors_origins.split(',')]
 
+    def get_allowed_countries(self) -> List[str]:
+        """获取允许注册的国家代码列表"""
+        return [c.strip() for c in self.allowed_countries_str.split(",") if c.strip()]
+
     @property
     def mysql_url(self) -> str:
         """
@@ -110,7 +126,8 @@ class Settings(BaseSettings):
         格式: mysql+pymysql://user:password@host:port/database?charset=utf8mb4
         """
         if self.mysql_password:
-            return f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}?charset=utf8mb4"
+            encoded_password = quote(self.mysql_password, safe='')
+            return f"mysql+pymysql://{self.mysql_user}:{encoded_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}?charset=utf8mb4"
         else:
             return f"mysql+pymysql://{self.mysql_user}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}?charset=utf8mb4"
 
@@ -122,9 +139,12 @@ class Settings(BaseSettings):
         格式: mongodb://username:password@host:port 或 mongodb://host:port
         """
         if self.mongodb_user and self.mongodb_password:
-            return f"mongodb://{self.mongodb_user}:{self.mongodb_password}@{self.mongodb_host}:{self.mongodb_port}"
+            encoded_user = quote(self.mongodb_user, safe='')
+            encoded_password = quote(self.mongodb_password, safe='')
+            return f"mongodb://{encoded_user}:{encoded_password}@{self.mongodb_host}:{self.mongodb_port}"
         elif self.mongodb_user:
-            return f"mongodb://{self.mongodb_user}@{self.mongodb_host}:{self.mongodb_port}"
+            encoded_user = quote(self.mongodb_user, safe='')
+            return f"mongodb://{encoded_user}@{self.mongodb_host}:{self.mongodb_port}"
         else:
             return f"mongodb://{self.mongodb_host}:{self.mongodb_port}"
 
@@ -136,7 +156,8 @@ class Settings(BaseSettings):
         格式: redis://:password@host:port/db 或 redis://host:port/db
         """
         if self.redis_password:
-            return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
+            encoded_password = quote(self.redis_password, safe='')
+            return f"redis://:{encoded_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
         else:
             return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 

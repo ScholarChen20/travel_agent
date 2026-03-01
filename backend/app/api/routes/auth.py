@@ -13,22 +13,24 @@
 
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Request, status, Depends
 from pydantic import BaseModel, EmailStr, Field
 from loguru import logger
 
 from ...services.auth_service import get_auth_service
+from ...services.anti_spam_service import get_anti_spam_service
 from ...database.mysql import get_mysql_db
 from ...database.redis_client import get_redis_client
 from ...database.models import User, UserProfile
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...config import get_settings
+from ...utils.response import ApiResponse
 
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
 
-# ========== 请求/响应模型 ==========
+# ========== 请求模型 ==========
 
 class RegisterRequest(BaseModel):
     """注册请求"""
@@ -37,6 +39,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, description="密码")
     captcha_code: str = Field(..., min_length=4, max_length=10, description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
+    device_id: str = Field(..., min_length=10, max_length=128, description="设备唯一标识")
 
 
 class LoginRequest(BaseModel):
@@ -46,22 +49,6 @@ class LoginRequest(BaseModel):
     captcha_code: str = Field(..., description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
     device_id: str = Field(default="default", description="设备ID")
-
-
-class TokenResponse(BaseModel):
-    """Token响应"""
-    access_token: str = Field(..., description="访问Token")
-    token_type: str = Field(default="bearer", description="Token类型")
-    expires_in: int = Field(..., description="过期时间（秒）")
-    expires_at: str = Field(..., description="过期时间（ISO格式）")
-    user: dict = Field(..., description="用户信息")
-
-
-class CaptchaResponse(BaseModel):
-    """验证码响应"""
-    session_id: str = Field(..., description="会话ID")
-    image_base64: str = Field(..., description="验证码图片Base64")
-    expires_in: int = Field(..., description="有效期（秒）")
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -75,12 +62,27 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, description="新密码")
 
 
-class MessageResponse(BaseModel):
-    """通用消息响应"""
-    message: str = Field(..., description="消息内容")
-
-
 # ========== 辅助函数 ==========
+
+def _get_client_ip(request: Request) -> str:
+    """
+    从请求中提取客户端真实IP。
+
+    优先级：X-Real-IP → X-Forwarded-For（首个IP）→ request.client.host
+    """
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    if request.client:
+        return request.client.host
+
+    return "127.0.0.1"
+
 
 async def verify_captcha(session_id: str, code: str) -> bool:
     """
@@ -136,18 +138,20 @@ def serialize_user(user: User) -> dict:
 
 # ========== API端点 ==========
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest):
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register(request: RegisterRequest, http_request: Request):
     """
     用户注册
 
     流程：
+    0. 防刷检查（IP国家/IP频率/设备冷却）
     1. 验证验证码
     2. 检查用户名和邮箱是否已存在
     3. 验证密码强度
     4. 创建用户和用户档案
     5. 生成JWT Token
     6. 存储Token到Redis
+    7. 记录设备和IP注册信息
     """
     print(f"========== 注册接口被调用 ==========")
     print(f"用户名: {request.username}")
@@ -164,6 +168,25 @@ async def register(request: RegisterRequest):
     logger.debug(f"注册请求参数: {request.json()}")
 
     try:
+        # 0. 防刷检查（在验证码验证之前，避免消耗验证码）
+        if settings.anti_spam_enabled:
+            ip = _get_client_ip(http_request)
+            anti_spam = get_anti_spam_service()
+            allowed, error_code, retry_after = await anti_spam.check_register_allowed(
+                request.device_id, ip
+            )
+            if not allowed:
+                headers = {"Retry-After": str(retry_after)} if retry_after else {}
+                error_messages = {
+                    "SPAM_IP_COUNTRY": (403, "当前地区暂不支持注册"),
+                    "SPAM_IP_RATE_LIMIT": (429, "注册过于频繁，请稍后再试"),
+                    "SPAM_DEVICE_REGISTERED": (429, "该设备注册过于频繁，请5分钟后再试"),
+                }
+                http_status, detail = error_messages.get(error_code, (429, "请求过于频繁"))
+                raise HTTPException(
+                    status_code=http_status, detail=detail, headers=headers
+                )
+
         # 1. 验证验证码
         logger.info(f"验证验证码: {request.captcha_session_id}, {request.captcha_code}")
         if not await verify_captcha(request.captcha_session_id, request.captcha_code):
@@ -260,7 +283,7 @@ async def register(request: RegisterRequest):
             token_data["access_token"]
         )
         logger.info(f"JWT Token存储成功: {user_id}")
-        
+
         await redis_client.expire(
             f"jwt:user:{user_id}",
             settings.jwt_access_token_expire_days * 86400
@@ -269,18 +292,26 @@ async def register(request: RegisterRequest):
 
         logger.info(f"新用户注册成功: {username} (ID: {user_id})")
 
-        return TokenResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            expires_in=token_data["expires_in"],
-            expires_at=token_data["expires_at"],
-            user=user_data
+        # 8. 记录设备和IP（注册成功后）
+        if settings.anti_spam_enabled:
+            _ip = _get_client_ip(http_request)
+            _anti_spam = get_anti_spam_service()
+            await _anti_spam.mark_device_registered(request.device_id)
+            await _anti_spam.increment_ip_counter(_ip)
+
+        return ApiResponse.created(
+            data={
+                "access_token": token_data["access_token"],
+                "token_type": token_data["token_type"],
+                "expires_in": token_data["expires_in"],
+                "expires_at": token_data["expires_at"],
+                "user": user_data
+            },
+            msg="注册成功"
         )
     except HTTPException:
-        # 重新抛出HTTPException，保持原有行为
         raise
     except Exception as e:
-        # 捕获所有其他异常，返回500错误
         logger.error(f"注册失败: {request.username}, error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -288,7 +319,7 @@ async def register(request: RegisterRequest):
         ) from e
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 async def login(request: LoginRequest):
     """
     用户登录
@@ -336,7 +367,7 @@ async def login(request: LoginRequest):
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
+                detail="用户名错误"
             )
 
         # 4. 验证密码
@@ -347,7 +378,7 @@ async def login(request: LoginRequest):
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名或密码错误"
+                detail="密码错误"
             )
 
         # 5. 检查用户状态
@@ -384,32 +415,26 @@ async def login(request: LoginRequest):
 
         logger.info(f"用户登录成功: {user.username} (ID: {user.id}, 设备: {request.device_id})")
 
-        return TokenResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            expires_in=token_data["expires_in"],
-            expires_at=token_data["expires_at"],
-            user=serialize_user(user)
+        return ApiResponse.success(
+            data={
+                "access_token": token_data["access_token"],
+                "token_type": token_data["token_type"],
+                "expires_in": token_data["expires_in"],
+                "expires_at": token_data["expires_at"],
+                "user": serialize_user(user)
+            },
+            msg="登录成功"
         )
 
 
-@router.post("/logout", response_model=MessageResponse)
+@router.post("/logout")
 async def logout(current_user: CurrentUser = Depends(get_current_user)):
     """
     用户登出
 
     将当前Token加入黑名单
     """
-    from fastapi import Request
-    from fastapi.security import HTTPBearer
-
     redis_client = get_redis_client()
-    auth_service = get_auth_service()
-    settings = get_settings()
-
-    # 从请求头获取Token
-    # 注意：这里需要从request中提取token
-    # 由于Depends已经验证过，我们可以从Redis删除Token
 
     # 删除Redis中的Token
     await redis_client.hdel(
@@ -417,15 +442,12 @@ async def logout(current_user: CurrentUser = Depends(get_current_user)):
         current_user.device_id
     )
 
-    # 注意：这里简化处理，实际应该将JTI加入黑名单
-    # 但由于我们已经从Redis删除了Token，重新验证时会失败
-
     logger.info(f"用户登出成功: {current_user.username} (ID: {current_user.id})")
 
-    return MessageResponse(message="登出成功")
+    return ApiResponse.success(data={}, msg="登出成功")
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh")
 async def refresh_token(current_user: CurrentUser = Depends(get_current_user)):
     """
     刷新Token
@@ -462,16 +484,19 @@ async def refresh_token(current_user: CurrentUser = Depends(get_current_user)):
     with mysql_db.get_session() as session:
         user = session.query(User).filter(User.id == current_user.id).first()
 
-        return TokenResponse(
-            access_token=token_data["access_token"],
-            token_type=token_data["token_type"],
-            expires_in=token_data["expires_in"],
-            expires_at=token_data["expires_at"],
-            user=serialize_user(user)
+        return ApiResponse.success(
+            data={
+                "access_token": token_data["access_token"],
+                "token_type": token_data["token_type"],
+                "expires_in": token_data["expires_in"],
+                "expires_at": token_data["expires_at"],
+                "user": serialize_user(user)
+            },
+            msg="Token刷新成功"
         )
 
 
-@router.get("/captcha", response_model=CaptchaResponse)
+@router.get("/captcha")
 async def get_captcha():
     """
     获取验证码
@@ -495,14 +520,17 @@ async def get_captcha():
 
     logger.debug(f"生成验证码: {session_id} -> {code}")
 
-    return CaptchaResponse(
-        session_id=session_id,
-        image_base64=image_base64,
-        expires_in=settings.captcha_expiry_seconds
+    return ApiResponse.success(
+        data={
+            "session_id": session_id,
+            "image_base64": image_base64,
+            "expires_in": settings.captcha_expiry_seconds
+        },
+        msg="获取验证码成功"
     )
 
 
-@router.post("/forgot-password", response_model=MessageResponse)
+@router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
     """
     忘记密码
@@ -518,26 +546,19 @@ async def forgot_password(request: ForgotPasswordRequest):
 
         if not user:
             # 为了安全，不透露用户是否存在
-            return MessageResponse(
-                message="如果该邮箱已注册，您将收到重置密码的邮件"
-            )
+            return ApiResponse.success(data={}, msg="如果该邮箱已注册，您将收到重置密码的邮件")
 
         # 生成重置Token
         reset_token = auth_service.create_reset_token(user.id, user.email)
 
         # TODO: 发送邮件
-        # 这里应该发送包含reset_token的邮件链接
-        # 例如: https://example.com/reset-password?token={reset_token}
-
         logger.info(f"生成密码重置Token: {user.email}")
         logger.debug(f"重置Token: {reset_token}")  # 仅用于开发调试
 
-        return MessageResponse(
-            message="如果该邮箱已注册，您将收到重置密码的邮件"
-        )
+        return ApiResponse.success(data={}, msg="如果该邮箱已注册，您将收到重置密码的邮件")
 
 
-@router.post("/reset-password", response_model=MessageResponse)
+@router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest):
     """
     重置密码
@@ -585,32 +606,30 @@ async def reset_password(request: ResetPasswordRequest):
 
         logger.info(f"密码重置成功: {user.email}")
 
-        return MessageResponse(message="密码重置成功，请使用新密码登录")
+        return ApiResponse.success(data={}, msg="密码重置成功，请使用新密码登录")
 
 
-@router.get("/me", response_model=dict)
+@router.get("/me")
 async def get_current_user_info(
     current_user: CurrentUser = Depends(get_current_user)
 ):
     """
     获取当前登录用户信息
-    
+
     Returns:
         dict: 当前登录用户的详细信息
     """
     mysql_db = get_mysql_db()
-    
+
     with mysql_db.get_session() as session:
-        # 根据CurrentUser中的用户ID查询完整用户信息
         user = session.query(User).filter(User.id == current_user.id).first()
-        
+
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="用户不存在"
             )
-        
+
         logger.info(f"获取用户信息: {user.username} (ID: {user.id})")
-        
-        # 使用serialize_user函数返回标准化的用户信息
-        return serialize_user(user)
+
+        return ApiResponse.success(data=serialize_user(user), msg="获取成功")
