@@ -13,11 +13,12 @@
 
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Request, status, Depends
 from pydantic import BaseModel, EmailStr, Field
 from loguru import logger
 
 from ...services.auth_service import get_auth_service
+from ...services.anti_spam_service import get_anti_spam_service
 from ...database.mysql import get_mysql_db
 from ...database.redis_client import get_redis_client
 from ...database.models import User, UserProfile
@@ -38,6 +39,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, description="密码")
     captcha_code: str = Field(..., min_length=4, max_length=10, description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
+    device_id: str = Field(..., min_length=10, max_length=128, description="设备唯一标识")
 
 
 class LoginRequest(BaseModel):
@@ -61,6 +63,26 @@ class ResetPasswordRequest(BaseModel):
 
 
 # ========== 辅助函数 ==========
+
+def _get_client_ip(request: Request) -> str:
+    """
+    从请求中提取客户端真实IP。
+
+    优先级：X-Real-IP → X-Forwarded-For（首个IP）→ request.client.host
+    """
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    if request.client:
+        return request.client.host
+
+    return "127.0.0.1"
+
 
 async def verify_captcha(session_id: str, code: str) -> bool:
     """
@@ -117,17 +139,19 @@ def serialize_user(user: User) -> dict:
 # ========== API端点 ==========
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest):
+async def register(request: RegisterRequest, http_request: Request):
     """
     用户注册
 
     流程：
+    0. 防刷检查（IP国家/IP频率/设备冷却）
     1. 验证验证码
     2. 检查用户名和邮箱是否已存在
     3. 验证密码强度
     4. 创建用户和用户档案
     5. 生成JWT Token
     6. 存储Token到Redis
+    7. 记录设备和IP注册信息
     """
     print(f"========== 注册接口被调用 ==========")
     print(f"用户名: {request.username}")
@@ -144,6 +168,25 @@ async def register(request: RegisterRequest):
     logger.debug(f"注册请求参数: {request.json()}")
 
     try:
+        # 0. 防刷检查（在验证码验证之前，避免消耗验证码）
+        if settings.anti_spam_enabled:
+            ip = _get_client_ip(http_request)
+            anti_spam = get_anti_spam_service()
+            allowed, error_code, retry_after = await anti_spam.check_register_allowed(
+                request.device_id, ip
+            )
+            if not allowed:
+                headers = {"Retry-After": str(retry_after)} if retry_after else {}
+                error_messages = {
+                    "SPAM_IP_COUNTRY": (403, "当前地区暂不支持注册"),
+                    "SPAM_IP_RATE_LIMIT": (429, "注册过于频繁，请稍后再试"),
+                    "SPAM_DEVICE_REGISTERED": (429, "该设备注册过于频繁，请5分钟后再试"),
+                }
+                http_status, detail = error_messages.get(error_code, (429, "请求过于频繁"))
+                raise HTTPException(
+                    status_code=http_status, detail=detail, headers=headers
+                )
+
         # 1. 验证验证码
         logger.info(f"验证验证码: {request.captcha_session_id}, {request.captcha_code}")
         if not await verify_captcha(request.captcha_session_id, request.captcha_code):
@@ -248,6 +291,13 @@ async def register(request: RegisterRequest):
         logger.info(f"JWT Token过期时间设置成功: {user_id}")
 
         logger.info(f"新用户注册成功: {username} (ID: {user_id})")
+
+        # 8. 记录设备和IP（注册成功后）
+        if settings.anti_spam_enabled:
+            _ip = _get_client_ip(http_request)
+            _anti_spam = get_anti_spam_service()
+            await _anti_spam.mark_device_registered(request.device_id)
+            await _anti_spam.increment_ip_counter(_ip)
 
         return ApiResponse.created(
             data={

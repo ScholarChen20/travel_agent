@@ -94,6 +94,17 @@ class Settings(BaseSettings):
     # 日志配置
     log_level: str = "INFO"
 
+    # ============ 新增：防刷配置 ============
+    anti_spam_enabled: bool = True
+    allowed_countries_str: str = "CN"           # 逗号分隔的允许国家代码
+    device_register_cooldown: int = 300         # 设备注册冷却时间（秒，5分钟）
+    ip_register_hourly_limit: int = 10          # 每小时每IP最多注册次数
+    ip_block_duration: int = 86400              # IP封禁时长（秒，24小时）
+    bloom_filter_size: int = 100_000            # 布隆过滤器容量
+    bloom_filter_error_rate: float = 0.01       # 布隆过滤器误判率
+    bloom_filter_key: str = "bloom:registered_devices"  # Redis存储键
+    geoip_cache_ttl: int = 86400                # IP地理位置缓存TTL（秒）
+
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -102,6 +113,10 @@ class Settings(BaseSettings):
     def get_cors_origins_list(self) -> List[str]:
         """获取CORS origins列表"""
         return [origin.strip() for origin in self.cors_origins.split(',')]
+
+    def get_allowed_countries(self) -> List[str]:
+        """获取允许注册的国家代码列表"""
+        return [c.strip() for c in self.allowed_countries_str.split(",") if c.strip()]
 
     @property
     def mysql_url(self) -> str:
