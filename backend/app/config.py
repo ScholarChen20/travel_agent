@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from typing import List
+from urllib.parse import quote
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -48,22 +49,22 @@ class Settings(BaseSettings):
     # MySQL配置
     mysql_host: str = "43.138.139.21"
     mysql_port: int = 3306
-    mysql_user: str = "root"
-    mysql_password: str = "123456"  # 从.env读取
+    mysql_user: str = "travel_agent_user"
+    mysql_password: str = "Tr@velA1g3nt#2025!Secure"  # 强密码，生产环境请从环境变量读取
     mysql_database: str = "travel_agent"
 
     # MongoDB配置
     mongodb_host: str = "43.138.139.21"
     mongodb_port: int = 27017
-    mongodb_user: str = ""  # 可选，没有用户名则留空
-    mongodb_password: str = ""  # 可选，没有密码则留空
-    mongodb_database: str = "test"
+    mongodb_user: str = "travel_agent_mongo"  # MongoDB用户名
+    mongodb_password: str = "M0ng0#Tr@vel2025!Secure"  # 强密码，生产环境请从环境变量读取
+    mongodb_database: str = "travel_agent"
 
     # Redis配置
     redis_host: str = "43.138.139.21"
     redis_port: int = 6379
-    redis_password: str = "123456"  # 从.env读取
-    redis_db: int = 0
+    redis_password: str = "R3d1s#Tr@vel2025!Secure"  # 强密码，生产环境请从环境变量读取
+    redis_db: int = 1
 
     # ============ 新增：JWT配置 ============
     jwt_secret_key: str = "UoFj5OGotDPJFlQLFTHQDZtB7QDtR3lG01Xk+iDVnY4="  # 必须在.env中设置，用于JWT签名
@@ -110,7 +111,8 @@ class Settings(BaseSettings):
         格式: mysql+pymysql://user:password@host:port/database?charset=utf8mb4
         """
         if self.mysql_password:
-            return f"mysql+pymysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}?charset=utf8mb4"
+            encoded_password = quote(self.mysql_password, safe='')
+            return f"mysql+pymysql://{self.mysql_user}:{encoded_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}?charset=utf8mb4"
         else:
             return f"mysql+pymysql://{self.mysql_user}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}?charset=utf8mb4"
 
@@ -122,9 +124,12 @@ class Settings(BaseSettings):
         格式: mongodb://username:password@host:port 或 mongodb://host:port
         """
         if self.mongodb_user and self.mongodb_password:
-            return f"mongodb://{self.mongodb_user}:{self.mongodb_password}@{self.mongodb_host}:{self.mongodb_port}"
+            encoded_user = quote(self.mongodb_user, safe='')
+            encoded_password = quote(self.mongodb_password, safe='')
+            return f"mongodb://{encoded_user}:{encoded_password}@{self.mongodb_host}:{self.mongodb_port}"
         elif self.mongodb_user:
-            return f"mongodb://{self.mongodb_user}@{self.mongodb_host}:{self.mongodb_port}"
+            encoded_user = quote(self.mongodb_user, safe='')
+            return f"mongodb://{encoded_user}@{self.mongodb_host}:{self.mongodb_port}"
         else:
             return f"mongodb://{self.mongodb_host}:{self.mongodb_port}"
 
@@ -136,7 +141,8 @@ class Settings(BaseSettings):
         格式: redis://:password@host:port/db 或 redis://host:port/db
         """
         if self.redis_password:
-            return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
+            encoded_password = quote(self.redis_password, safe='')
+            return f"redis://:{encoded_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
         else:
             return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
