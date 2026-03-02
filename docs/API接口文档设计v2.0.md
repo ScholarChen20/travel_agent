@@ -883,6 +883,299 @@ Authorization: Bearer <token>
 
 ---
 
+## 10. 智能推荐系统 API (`/api/recommendations`)
+
+> 需要认证
+
+### 10.1 获取个性化推荐
+```http
+GET /api/recommendations
+Authorization: Bearer <token>
+
+Query Parameters:
+- preferences: 兴趣标签列表 (e.g., ["自然风光", "美食"])
+- location: 当前位置 (e.g., "北京")
+- limit: 返回数量 (default: 10)
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "msg": "请求成功",
+  "data": {
+    "attractions": [
+      {
+        "id": "attraction_1",
+        "name": "故宫",
+        "rating": 4.8,
+        "distance": 2.5,
+        "tags": ["历史文化", "古建筑"],
+        "image_url": "https://example.com/gugong.jpg"
+      }
+    ],
+    "restaurants": [
+      {
+        "id": "restaurant_1",
+        "name": "全聚德",
+        "rating": 4.5,
+        "cuisine": "北京烤鸭",
+        "price_range": "¥200-300"
+      }
+    ],
+    "hotels": [
+      {
+        "id": "hotel_1",
+        "name": "北京饭店",
+        "rating": 4.7,
+        "price": 800,
+        "distance": 3.0
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 11. 预算管理 API (`/api/budget`)
+
+> 需要认证
+
+### 11.1 创建预算
+```http
+POST /api/budget/create
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "trip_id": "trip_xxx",
+  "total_budget": 5000,
+  "categories": [
+    {"name": "住宿", "budget": 2000},
+    {"name": "餐饮", "budget": 1500},
+    {"name": "交通", "budget": 1000},
+    {"name": "门票", "budget": 500}
+  ]
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "msg": "预算创建成功",
+  "data": {
+    "budget_id": "budget_xxx",
+    "trip_id": "trip_xxx",
+    "total_budget": 5000,
+    "remaining_budget": 5000,
+    "categories": [...]
+  }
+}
+```
+
+### 11.2 添加消费记录
+```http
+POST /api/budget/expense
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "budget_id": "budget_xxx",
+  "category": "餐饮",
+  "amount": 200,
+  "description": "午餐",
+  "date": "2026-03-15"
+}
+```
+
+### 11.3 获取预算详情
+```http
+GET /api/budget/{budget_id}
+Authorization: Bearer <token>
+```
+
+---
+
+## 12. 实时信息服务 API (`/api/real-time`)
+
+### 12.1 查询航班动态
+```http
+GET /api/real-time/flights
+Authorization: Bearer <token>
+
+Query Parameters:
+- flight_number: 航班号 (e.g., "CA1234")
+- departure: 出发地 (e.g., "北京")
+- arrival: 目的地 (e.g., "上海")
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "msg": "请求成功",
+  "data": {
+    "flight_number": "CA1234",
+    "status": "正常",
+    "departure_time": "2026-03-15T14:00:00",
+    "arrival_time": "2026-03-15T16:30:00",
+    "gate": "A12",
+    "terminal": "T3"
+  }
+}
+```
+
+### 12.2 查询天气
+```http
+GET /api/real-time/weather
+Authorization: Bearer <token>
+
+Query Parameters:
+- city: 城市名称 (e.g., "北京")
+- days: 预报天数 (default: 7)
+```
+
+### 12.3 查询景点状态
+```http
+GET /api/real-time/poi-status
+Authorization: Bearer <token>
+
+Query Parameters:
+- poi_id: 景点ID (e.g., "poi_123")
+```
+
+---
+
+## 13. 离线功能 API (`/api/offline`)
+
+### 13.1 下载离线地图
+```http
+GET /api/offline/map/{city}
+Authorization: Bearer <token>
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "msg": "请求成功",
+  "data": {
+    "download_url": "https://example.com/beijing_map.zip",
+    "file_size": 1024,
+    "version": "1.0"
+  }
+}
+```
+
+### 13.2 同步离线数据
+```http
+POST /api/offline/sync
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "trip_id": "trip_xxx",
+  "data": {...}
+}
+```
+
+---
+
+## 14. 多语言支持 API (`/api/translate`)
+
+### 14.1 文本翻译
+```http
+POST /api/translate
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "text": "Hello",
+  "from": "en",
+  "to": "zh"
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "msg": "翻译成功",
+  "data": {
+    "original": "Hello",
+    "translated": "你好",
+    "from": "en",
+    "to": "zh"
+  }
+}
+```
+
+### 14.2 语音翻译
+```http
+POST /api/translate/voice
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "voice_data": "base64_encoded_audio",
+  "from": "en",
+  "to": "zh"
+}
+```
+
+---
+
+## 15. 语音交互 API (`/api/voice`)
+
+### 15.1 语音指令
+```http
+POST /api/voice/command
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**请求体**:
+```json
+{
+  "voice_data": "base64_encoded_audio",
+  "language": "zh-CN"
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "msg": "语音指令处理完成",
+  "data": {
+    "intent": "query_weather",
+    "parameters": {
+      "city": "北京"
+    },
+    "response": "北京今天天气晴朗，温度15-25摄氏度"
+  }
+}
+```
+
+---
+
 ## 技术支持
 
 - **API文档**: http://localhost:8000/docs

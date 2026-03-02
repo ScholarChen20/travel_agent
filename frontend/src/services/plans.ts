@@ -20,7 +20,7 @@ interface UpdatePlanRequest {
 
 export const plansService = {
   async getPlans(limit = 50, offset = 0): Promise<TravelPlan[]> {
-    const response = await axios.get('/api/plans', {
+    const response = await axios.get('/plans', {
       params: { limit, skip: offset }
     })
     // 后端返回 {total, plans}，我们需要提取 plans 数组并转换字段名
@@ -41,7 +41,7 @@ export const plansService = {
   },
 
   async getPlan(planId: string): Promise<TravelPlan> {
-    const response = await axios.get(`/api/plans/${planId}`)
+    const response = await axios.get(`/plans/${planId}`)
     const plan = response.data
     return {
       id: plan.plan_id,
@@ -58,7 +58,7 @@ export const plansService = {
   },
 
   async updatePlan(planId: string, data: UpdatePlanRequest): Promise<TravelPlan> {
-    const response = await axios.put(`/api/plans/${planId}`, data)
+    const response = await axios.put(`/plans/${planId}`, data)
     const plan = response.data
     return {
       id: plan.plan_id,
@@ -75,15 +75,15 @@ export const plansService = {
   },
 
   async deletePlan(planId: string): Promise<void> {
-    await axios.delete(`/api/plans/${planId}`)
+    await axios.delete(`/plans/${planId}`)
   },
 
   async toggleFavorite(planId: string): Promise<void> {
-    await axios.post(`/api/plans/${planId}/favorite`)
+    await axios.post(`/plans/${planId}/favorite`)
   },
 
   async exportPlan(planId: string, format: 'json' | 'pdf' = 'json'): Promise<Blob> {
-    const response = await axios.get(`/api/plans/${planId}/export`, {
+    const response = await axios.get(`/plans/${planId}/export`, {
       params: { format },
       responseType: 'blob'
     })
