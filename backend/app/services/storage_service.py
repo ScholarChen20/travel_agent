@@ -177,7 +177,7 @@ class StorageService:
         try:
             # 生成唯一文件名
             file_ext = self._get_file_extension(file.filename)
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"media_{user_id}_{timestamp}_{secrets.token_urlsafe(8)}{file_ext}"
 
             # 读取文件内容

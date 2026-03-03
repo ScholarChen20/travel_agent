@@ -206,7 +206,7 @@ class MultiAgentTripPlanner:
 
             # 创建行程规划Agent(不需要工具)
             print("  - 创建行程规划Agent...")
-            self.planner_agent = ReActAgent(
+            self.planner_agent = SimpleAgent(
                 name="行程规划专家",
                 llm=self.llm,
                 system_prompt=PLANNER_AGENT_PROMPT

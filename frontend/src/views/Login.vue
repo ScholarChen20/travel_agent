@@ -54,7 +54,7 @@
               <template #icon>
                 <img src="https://s1.aigei.com/prevfiles/a1e58cc43503479c844e1aa484a59773.png?e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:zRYwLlopENRzCxyfEjG49VDpsMY=" class="feishu-logo" alt="飞书" />
               </template>
-              使用飞书账号登录
+              使用飞书登录
             </a-button>
           </a-form-item>
 
@@ -136,8 +136,12 @@ async function handleLogin() {
     authStore.setUser(result.user)
     message.success('登录成功')
 
-    const redirect = route.query.redirect as string || '/'
-    router.push(redirect)
+    if (result.user.role === 'admin') {
+      router.push('/admin')
+    } else {
+      const redirect = route.query.redirect as string || '/'
+      router.push(redirect)
+    }
   } catch (error: any) {
     message.error(error.response?.data?.detail || '登录失败')
     loadCaptcha()

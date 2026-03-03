@@ -120,7 +120,7 @@ class DashboardService:
                 total_users = session.query(User).count()
 
                 # 今日活跃用户（假设last_login_at不为空即为活跃）
-                today = datetime.utcnow().date()
+                today = datetime.now().date()
                 active_users_today = session.query(User).filter(
                     func.date(User.last_login_at) == today
                 ).count()
@@ -212,7 +212,7 @@ class DashboardService:
             comment_collection = self.mongodb_client.get_collection(self.comments_collection)
             total_comments = await comment_collection.count_documents({})
 
-            today = datetime.utcnow().date()
+            today = datetime.now().date()
             posts_created_today = await post_collection.count_documents({
                 "created_at": {
                     "$gte": datetime(today.year, today.month, today.day),
@@ -285,7 +285,7 @@ class DashboardService:
 
             # 从MongoDB查询旅行计划
             travel_plans = self.mongodb_client.get_collection(self.plans_collection)
-            today = datetime.utcnow().date()
+            today = datetime.now().date()
 
             # 每日旅行计划创建量
             daily_plan_creation = await travel_plans.count_documents({
@@ -419,7 +419,7 @@ class DashboardService:
                 end_date = datetime.strptime(request.end_date, "%Y-%m-%d").date()
             else:
                 # 默认返回最近7天的数据
-                end_date = datetime.utcnow().date()
+                end_date = datetime.now().date()
                 start_date = end_date - timedelta(days=6)
 
             # 生成日期范围

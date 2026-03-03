@@ -14745,10 +14745,5 @@ CREATE TABLE `users`  (
 -- ----------------------------
 -- Records of users
 -- ----------------------------
-INSERT INTO `users` VALUES (1, 'ccc', '1523910137@qq.com', '$2b$12$qQ7YmOeDtuTw6B75XyS51efwZndfJhG2FEQ6strXfc62tGBmJQ8ke', '13599616147', 'https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_1_hHQar-12eac.png', '我很爱海鲜，很爱玩，到处旅游', 'user', 1, 0, '2026-01-19 10:02:32', '2026-01-21 06:38:56', '2026-01-20 07:01:44');
-INSERT INTO `users` VALUES (2, 'admin', 'admin@123.com', '$12$qQ7YmOeDtuTw6B75XyS51efwZndfJhG2FEQ6strXfc62tGBmJQ8ke', '12346', 'https://java-webai-1.oss-cn-beijing.aliyuncs.com/2025/08/b9866466-fe39-4574-bb03-afc1d27c20a9.png', '我很爱海鲜，很爱玩，到处旅游', 'admin', 1, 0, '2026-01-20 11:03:19', '2026-01-21 11:03:59', NULL);
-INSERT INTO `users` VALUES (3, '杰尼龟', '123@qq.com', '$2a$12$dWdFvgTo6/l63nDMXjbPSOocGUlB6sWmhdz1cOVSHB2JpoaLq.aKy', '12345678901', 'https://avatars.githubusercontent.com/u/123456789?v=4', '这个人很懒', 'user', 1, 0, '2026-01-30 17:03:40', '2026-02-02 16:12:05', NULL);
-INSERT INTO `users` VALUES (4, 'heihei', '12346@qq.com', '$2a$12$dWdFvgTo6/l63nDMXjbPSOocGUlB6sWmhdz1cOVSHB2JpoaLq.aKy', '12345678901', 'https://avatars.githubusercontent.com/u/123456789?v=4', '这个人很懒', 'user', 1, 0, '2026-01-30 17:31:23', '2026-01-30 17:32:46', NULL);
-INSERT INTO `users` VALUES (5, 'yy', 'yy@163.com', '$2a$10$gz7U2IhB3JAoU.gjmx/cwu0wGZxcqAI5THxlipqo8Jls8L7PHHYk2', '18125694451', NULL, '很懒', 'user', 1, 0, '2026-02-02 16:16:31', '2026-02-07 15:12:55', '2026-02-03 10:31:55');
-INSERT INTO `users` VALUES (6, 'user123', 'user@example.com', '$2a$10$gz7U2IhB3JAoU.gjmx/cwu0wGZxcqAI5THxlipqo8Jls8L7PHHYk2', '13800138000', 'https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg', '很懒', 'user', 1, 0, '2026-02-03 10:55:19', '2026-02-26 09:56:28', '2026-02-26 02:29:14');
+INSERT INTO `users` VALUES (1, 'admin', 'admin@123.com', '$2a$10$OKU4EkkNZMbV/vo5XQ3I4.yKdCgwgvu3u6thPvpLZ7UAliXT56Cpi', '13800138000', 'https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg', '我是管理员', 'admin', 1, 0, '2026-02-03 10:55:19', '2026-02-26 09:56:28', '2026-02-26 02:29:14');
 SET FOREIGN_KEY_CHECKS = 1;

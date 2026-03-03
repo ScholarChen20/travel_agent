@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_email (email),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
+-- ----------------------------
+-- Records of users
+-- ----------------------------
+INSERT INTO `users` VALUES (1, 'admin', 'admin@123.com', '$2a$10$OKU4EkkNZMbV/vo5XQ3I4.yKdCgwgvu3u6thPvpLZ7UAliXT56Cpi', '13800138000', 'https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg', '我是管理员', 'admin', 1, 0, '2026-02-03 10:55:19', '2026-02-26 09:56:28', '2026-02-26 02:29:14');
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- 用户档案表
 CREATE TABLE IF NOT EXISTS user_profiles (

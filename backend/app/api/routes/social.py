@@ -298,7 +298,7 @@ async def create_comment(
                 "user_avatar": current_user.avatar_url,
                 "post_id": post_id,
                 "parent_id": request.parent_id,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now().isoformat()
             },
             msg="评论发表成功"
         )

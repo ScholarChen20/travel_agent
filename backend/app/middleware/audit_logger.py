@@ -49,7 +49,7 @@ async def log_audit(
             "ip_address": ip_address,
             "user_agent": user_agent,
             "details": details or {},
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now()
         }
 
         await collection.insert_one(log_doc)

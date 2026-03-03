@@ -275,7 +275,7 @@ class TravelPlanService:
                 updates.pop(field, None)
 
             # 自动更新时间戳
-            updates["updated_at"] = datetime.utcnow()
+            updates["updated_at"] = datetime.now()
 
             # 更新MongoDB
             collection = self.mongodb.get_collection(self.collection_name)
@@ -330,7 +330,7 @@ class TravelPlanService:
                 {
                     "$set": {
                         "is_favorite": is_favorite,
-                        "updated_at": datetime.utcnow()
+                        "updated_at": datetime.now()
                     }
                 }
             )
@@ -382,7 +382,7 @@ class TravelPlanService:
                 {
                     "$set": {
                         "is_completed": is_completed,
-                        "updated_at": datetime.utcnow()
+                        "updated_at": datetime.now()
                     }
                 }
             )

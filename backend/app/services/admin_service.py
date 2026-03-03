@@ -187,7 +187,7 @@ class AdminService:
 
             update_data = {
                 "moderation_status": status,
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.now()
             }
 
             if reason:

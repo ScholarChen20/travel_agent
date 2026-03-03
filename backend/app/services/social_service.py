@@ -36,7 +36,7 @@ class SocialService:
 
         # 内容审核黑名单
         self.blacklist_keywords = [
-            "广告", "spam", "诈骗", "违法", "色情", "赌博"
+            "广告", "spam", "诈骗", "违法", "色情", "赌博", "恐怖", "暴力"
         ]
 
         logger.info("社交服务已初始化")
@@ -85,8 +85,8 @@ class SocialService:
                 "like_count": 0,
                 "comment_count": 0,
                 "view_count": 0,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             }
 
             # 保存到MongoDB
@@ -235,7 +235,7 @@ class SocialService:
 
             # 2. 热门内容 (30%)
             # 时间衰减：只看最近7天的内容
-            week_ago = datetime.utcnow() - timedelta(days=7)
+            week_ago = datetime.now() - timedelta(days=7)
             popular_cursor = collection.find({
                 "moderation_status": "approved",
                 "created_at": {"$gte": week_ago}
@@ -322,7 +322,7 @@ class SocialService:
                     "like_id": f"like_{secrets.token_urlsafe(12)}",
                     "user_id": user_id,
                     "post_id": post_id,
-                    "created_at": datetime.utcnow()
+                    "created_at": datetime.now()
                 }
                 await likes_collection.insert_one(like_doc)
 
@@ -414,7 +414,7 @@ class SocialService:
                 "content": content,
                 "parent_id": parent_id,
                 "like_count": 0,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now()
             }
 
             # 保存评论
@@ -473,7 +473,7 @@ class SocialService:
                     "follow_id": f"follow_{secrets.token_urlsafe(12)}",
                     "follower_id": follower_id,
                     "following_id": following_id,
-                    "created_at": datetime.utcnow()
+                    "created_at": datetime.now()
                 }
                 await follows_collection.insert_one(follow_doc)
 

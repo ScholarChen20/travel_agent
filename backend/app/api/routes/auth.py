@@ -10,7 +10,7 @@
 - POST /api/auth/forgot-password - 忘记密码
 - POST /api/auth/reset-password - 重置密码
 """
-
+import subprocess
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, status, Depends
@@ -84,6 +84,18 @@ def _get_client_ip(request: Request) -> str:
 
     return "127.0.0.1"
 
+def get_device_id():
+    """获取设备ID"""
+    try:
+        command = "wmic csproduct get uuid"   # Windows 获取主板id
+        # command = "sudo dmidecode -s system-uuid"   # Linux 获取主板id
+        result = subprocess.check_output(command, shell=True).decode().strip()
+
+        device_id = result.split("\n")[1].strip()
+        return device_id
+    except Exception as e:
+        print(f"Error: {e}")
+    return None
 
 async def verify_captcha(session_id: str, code: str) -> bool:
     """
@@ -172,9 +184,10 @@ async def register(request: RegisterRequest, http_request: Request):
         # 0. 防刷检查（在验证码验证之前，避免消耗验证码）
         if settings.anti_spam_enabled:
             ip = _get_client_ip(http_request)
+            device_id = get_device_id()
             anti_spam = get_anti_spam_service()
             allowed, error_code, retry_after = await anti_spam.check_register_allowed(
-                request.device_id, ip
+                device_id, ip
             )
             if not allowed:
                 headers = {"Retry-After": str(retry_after)} if retry_after else {}
@@ -409,7 +422,7 @@ async def login(request: LoginRequest):
         )
 
         # 8. 更新最后登录时间
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = datetime.now()
 
         # 9. 清除限流计数
         await redis_client.delete(rate_limit_key)
@@ -422,7 +435,8 @@ async def login(request: LoginRequest):
                 "token_type": token_data["token_type"],
                 "expires_in": token_data["expires_in"],
                 "expires_at": token_data["expires_at"],
-                "user": serialize_user(user)
+                "user": serialize_user(user),
+                "role": user.role
             },
             msg="登录成功"
         )
