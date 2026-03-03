@@ -22,7 +22,7 @@ class User(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(100), unique=True, nullable=False, index=True)
-    password_hash = Column(String(500), nullable=False)
+    password_hash = Column(String(500), nullable=True)   # 飞书用户无密码，允许为空
     phone = Column(String(20), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
@@ -32,6 +32,11 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
+    # 飞书账号绑定
+    feishu_open_id = Column(String(100), unique=True, nullable=True, index=True,
+                            comment='飞书用户 open_id (ou_xxx)')
+    feishu_union_id = Column(String(100), unique=True, nullable=True,
+                             comment='飞书用户 union_id (on_xxx)')
 
     # 关系
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")

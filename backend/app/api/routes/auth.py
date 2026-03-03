@@ -19,6 +19,7 @@ from loguru import logger
 
 from ...services.auth_service import get_auth_service
 from ...services.anti_spam_service import get_anti_spam_service
+from ...services.feishu_service import get_feishu_service
 from ...database.mysql import get_mysql_db
 from ...database.redis_client import get_redis_client
 from ...database.models import User, UserProfile
@@ -633,3 +634,209 @@ async def get_current_user_info(
         logger.info(f"获取用户信息: {user.username} (ID: {user.id})")
 
         return ApiResponse.success(data=serialize_user(user), msg="获取成功")
+
+
+# ========== 飞书 OAuth2 登录 ==========
+
+class FeishuCallbackRequest(BaseModel):
+    """飞书回调请求"""
+    code: str = Field(..., description="飞书授权码")
+    state: str = Field(..., description="CSRF 防护随机串")
+
+
+@router.get("/feishu/authorize")
+async def feishu_authorize():
+    """
+    获取飞书授权跳转 URL
+
+    生成 state 存入 Redis（TTL 10 分钟）防 CSRF，
+    返回完整的飞书授权页地址供前端跳转。
+    """
+    settings = get_settings()
+
+    if not settings.feishu_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="飞书登录功能未启用"
+        )
+
+    import secrets as _secrets
+    from urllib.parse import urlencode
+
+    redis_client = get_redis_client()
+    state = _secrets.token_urlsafe(32)
+
+    # state 存 Redis，10 分钟有效，防 CSRF / 重放
+    await redis_client.set(f"feishu:oauth_state:{state}", "1", ex=600)
+
+    params = urlencode({
+        "client_id": settings.feishu_app_id,   # 新版 OIDC 端点用 client_id
+        "redirect_uri": settings.feishu_redirect_uri,
+        "response_type": "code",                # 新版端点必填
+        "state": state,
+    })
+    authorize_url = f"https://accounts.feishu.cn/open-apis/authen/v1/authorize?{params}"
+
+    logger.info(f"生成飞书授权 URL, state={state[:8]}..., redirect_uri={settings.feishu_redirect_uri}")
+    logger.debug(f"完整授权 URL: {authorize_url}")
+    return ApiResponse.success(
+        data={"authorize_url": authorize_url},
+        msg="获取授权地址成功"
+    )
+
+
+@router.post("/feishu/callback")
+async def feishu_callback(request: FeishuCallbackRequest):
+    """
+    飞书授权回调处理
+
+    流程：
+    1. 校验 state（防 CSRF）
+    2. 用 code 换取飞书 user_access_token
+    3. 获取飞书用户信息
+    4. 查找已绑定用户 或 自动注册新用户
+    5. 签发系统 JWT Token
+    """
+    settings = get_settings()
+    redis_client = get_redis_client()
+    mysql_db = get_mysql_db()
+    auth_service = get_auth_service()
+    feishu_service = get_feishu_service()
+
+    if not settings.feishu_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="飞书登录功能未启用"
+        )
+
+    # 1. 校验 state
+    state_key = f"feishu:oauth_state:{request.state}"
+    if not await redis_client.exists(state_key):
+        logger.warning(f"飞书回调 state 无效或已过期: {request.state[:8]}...")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="授权状态无效或已过期，请重新登录"
+        )
+    await redis_client.delete(state_key)  # 一次性使用，防重放
+
+    # 2. code 换 user_access_token（同时含用户基础信息）
+    token_data = await feishu_service.exchange_code_for_token(request.code)
+    user_access_token = token_data.get("access_token")
+
+    # 3. 获取飞书用户详细信息（二次确认身份）
+    feishu_user = await feishu_service.get_feishu_user_info(user_access_token)
+
+    open_id = feishu_user.get("open_id") or token_data.get("open_id")
+    union_id = feishu_user.get("union_id") or token_data.get("union_id")
+    feishu_name = feishu_user.get("name") or feishu_user.get("en_name") or "飞书用户"
+    feishu_email = feishu_user.get("email") or feishu_user.get("enterprise_email") or ""
+    feishu_avatar = feishu_user.get("avatar_url") or feishu_user.get("avatar_big") or ""
+
+    if not open_id:
+        logger.error("飞书用户信息缺少 open_id")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="飞书服务暂时不可用，请稍后重试"
+        )
+
+    # 4. 查找用户 或 自动注册
+    import secrets as _secrets
+    is_new_user = False
+
+    with mysql_db.get_session() as session:
+        user = session.query(User).filter(
+            User.feishu_open_id == open_id
+        ).first()
+
+        if user:
+            # 已绑定用户：同步飞书最新头像
+            if feishu_avatar and user.avatar_url != feishu_avatar:
+                user.avatar_url = feishu_avatar
+            logger.info(f"飞书用户已存在: {user.username} (ID: {user.id})")
+        else:
+            # 首次飞书登录：自动注册
+            is_new_user = True
+
+            # 生成唯一 username
+            base_name = feishu_name[:40]
+            username = base_name
+            if session.query(User).filter(User.username == username).first():
+                username = f"{base_name}_{_secrets.token_hex(2)}"
+
+            # 生成唯一 email
+            if feishu_email:
+                email = feishu_email
+                if session.query(User).filter(User.email == email).first():
+                    email = f"{open_id}@feishu.local"
+            else:
+                email = f"{open_id}@feishu.local"
+
+            user = User(
+                username=username,
+                email=email,
+                password_hash=None,       # 飞书用户无密码
+                avatar_url=feishu_avatar,
+                role="user",
+                is_active=True,
+                is_verified=True,         # 飞书已做身份验证
+                feishu_open_id=open_id,
+                feishu_union_id=union_id,
+            )
+            session.add(user)
+            session.flush()  # 获取自增 ID
+
+            profile = UserProfile(
+                user_id=user.id,
+                travel_preferences=[],
+                visited_cities=[],
+                travel_stats={"total_trips": 0, "total_cities": 0}
+            )
+            session.add(profile)
+            logger.info(f"飞书新用户自动注册: {username} (ID: {user.id})")
+
+        # 检查账号状态
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="账户已被禁用，请联系管理员"
+            )
+
+        user.last_login_at = datetime.utcnow()
+
+        user_id = user.id
+        username = user.username
+        role = user.role
+        user_data = serialize_user(user)
+
+    # 5. 签发系统 JWT Token
+    token_result = auth_service.create_access_token(
+        user_id=user_id,
+        username=username,
+        role=role,
+        device_id="feishu"
+    )
+
+    # 6. Token 写入 Redis
+    await redis_client.hset(
+        f"jwt:user:{user_id}", "feishu", token_result["access_token"]
+    )
+    await redis_client.expire(
+        f"jwt:user:{user_id}",
+        settings.jwt_access_token_expire_days * 86400
+    )
+
+    logger.info(
+        f"飞书登录成功: {username} (ID: {user_id}, 新用户={is_new_user})"
+    )
+
+    return ApiResponse.success(
+        data={
+            "access_token": token_result["access_token"],
+            "token_type": token_result["token_type"],
+            "expires_in": token_result["expires_in"],
+            "expires_at": token_result["expires_at"],
+            "user": user_data,
+            "is_new_user": is_new_user,
+        },
+        msg="登录成功"
+    )

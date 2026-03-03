@@ -9,9 +9,8 @@ import json
 import os
 from ..database.redis_client import get_redis_client
 from ..config import get_settings
-
+from loguru import logger
 settings = get_settings()
-redis_client = get_redis_client()
 
 
 class VoiceCommandRequest(BaseModel):
@@ -70,12 +69,25 @@ class VoiceEnhancedService:
             "navigate": ["导航", "路线", "怎么去", "怎么走"],
             "general_help": ["帮助", "怎么", "什么", "你好"]
         }
+        self.redis = None
+        self._init_redis()
+        logger.info("预算服务已初始化")
+
+    def _init_redis(self):
+        """初始化Redis客户端"""
+        try:
+            from ..database.redis_client import get_redis_client
+            self.redis = get_redis_client()
+            logger.debug("Redis客户端初始化成功")
+        except Exception as e:
+            logger.warning(f"Redis客户端初始化失败: {str(e)}")
+            self.redis = None
 
     def recognize_voice(self, request: VoiceRecognizeRequest) -> VoiceRecognizeResponse:
         """语音识别"""
         cache_key = f"voice:recognize:{hash(request.voice_data)}:{request.language}"
-        cached_result = redis_client.get(cache_key)
-        
+        cached_result = self.redis.get(cache_key)
+
         if cached_result:
             try:
                 return VoiceRecognizeResponse(**json.loads(cached_result))
@@ -83,14 +95,14 @@ class VoiceEnhancedService:
                 pass
 
         recognized_text = self._do_recognize(request.voice_data, request.language)
-        
+
         result = VoiceRecognizeResponse(
             recognized_text=recognized_text,
             language=request.language,
             confidence=0.85
         )
 
-        redis_client.setex(cache_key, 3600, json.dumps(result.model_dump(), default=str))
+        self.redis.setex(cache_key, 3600, json.dumps(result.model_dump(), default=str))
         return result
 
     def _do_recognize(self, voice_data: str, language: str) -> str:
@@ -100,8 +112,8 @@ class VoiceEnhancedService:
     def synthesize_voice(self, request: VoiceSynthesizeRequest) -> VoiceSynthesizeResponse:
         """语音合成"""
         cache_key = f"voice:synthesize:{hash(request.text)}:{request.language}"
-        cached_result = redis_client.get(cache_key)
-        
+        cached_result = self.redis.get(cache_key)
+
         if cached_result:
             try:
                 return VoiceSynthesizeResponse(**json.loads(cached_result))
@@ -109,14 +121,14 @@ class VoiceEnhancedService:
                 pass
 
         voice_data = self._do_synthesize(request.text, request.language)
-        
+
         result = VoiceSynthesizeResponse(
             voice_data=voice_data,
             text=request.text,
             language=request.language
         )
 
-        redis_client.setex(cache_key, 86400, json.dumps(result.model_dump(), default=str))
+        self.redis.setex(cache_key, 86400, json.dumps(result.model_dump(), default=str))
         return result
 
     def _do_synthesize(self, text: str, language: str) -> str:
@@ -129,11 +141,11 @@ class VoiceEnhancedService:
         intent = self._parse_intent(recognized_text)
         parameters = self._extract_parameters(recognized_text, intent)
         response_text = self._generate_response(intent, parameters, recognized_text)
-        
+
         response_voice = None
         if response_text:
             response_voice = self._do_synthesize(response_text, request.language)
-        
+
         return VoiceCommandResponse(
             recognized_text=recognized_text,
             intent=intent,
@@ -154,7 +166,7 @@ class VoiceEnhancedService:
     def _extract_parameters(self, text: str, intent: str) -> Dict[str, Any]:
         """提取参数"""
         parameters = {}
-        
+
         if intent == "plan_trip":
             parameters["city"] = "北京"
             parameters["days"] = 3
@@ -162,7 +174,7 @@ class VoiceEnhancedService:
             parameters["keywords"] = text
         elif intent == "check_weather":
             parameters["city"] = "北京"
-        
+
         return parameters
 
     def _generate_response(self, intent: str, parameters: Dict, original_text: str) -> str:
@@ -176,5 +188,5 @@ class VoiceEnhancedService:
             "general_help": "您好！我是您的旅行助手，可以帮您规划旅行、查询景点、查看天气等。请问有什么可以帮您的？",
             "unknown": "抱歉，我没有理解您的意思。请您再说一遍好吗？"
         }
-        
+
         return responses.get(intent, responses["unknown"])

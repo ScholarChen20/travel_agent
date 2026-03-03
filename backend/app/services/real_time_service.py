@@ -1,153 +1,146 @@
 """实时信息服务"""
 
-import requests
+from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
 from datetime import datetime
+from loguru import logger
 import json
-from ..database.redis_client import get_redis_client
+
+from ..database.mysql import get_mysql_db
+from ..database.models import User, UserProfile
 from ..config import get_settings
 
 settings = get_settings()
-redis_client = get_redis_client()
 
 
-class FlightStatusRequest(BaseModel):
-    """航班状态请求"""
-    flight_number: str = Field(..., description="航班号")
-    date: Optional[str] = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"), description="航班日期")
+# ========== 请求模型 ==========
+
+class RealTimeRequest(BaseModel):
+    """实时信息请求"""
+    user_id: str = Field(..., description="用户ID")
+    location: Optional[str] = Field(default=None, description="当前位置")
+    type: str = Field(default="all", description="信息类型")
 
 
-class FlightStatusResponse(BaseModel):
-    """航班状态响应"""
-    flight_number: str = Field(..., description="航班号")
-    status: str = Field(..., description="航班状态")
-    departure_time: str = Field(..., description="起飞时间")
-    arrival_time: str = Field(..., description="到达时间")
-    delay: Optional[int] = Field(default=None, description="延误时间（分钟）")
-    gate: Optional[str] = Field(default=None, description="登机口")
-    terminal: Optional[str] = Field(default=None, description="航站楼")
+# ========== 响应模型 ==========
+
+class RealTimeItem(BaseModel):
+    """实时信息项"""
+    id: str = Field(..., description="信息ID")
+    title: str = Field(..., description="信息标题")
+    description: str = Field(..., description="信息描述")
+    type: str = Field(..., description="信息类型")
+    location: str = Field(..., description="位置")
+    timestamp: datetime = Field(default_factory=datetime.now, description="时间戳")
+    url: Optional[str] = Field(default=None, description="详情链接")
 
 
-class WeatherRequest(BaseModel):
-    """天气请求"""
-    city: str = Field(..., description="城市名称")
-    days: int = Field(default=7, description="查询天数")
-
-
-class WeatherItem(BaseModel):
-    """天气项"""
-    date: str = Field(..., description="日期")
-    temp_max: float = Field(..., description="最高温度")
-    temp_min: float = Field(..., description="最低温度")
-    condition: str = Field(..., description="天气状况")
-    humidity: int = Field(..., description="湿度")
-    precipitation: float = Field(default=0.0, description="降水量")
-
-
-class WeatherResponse(BaseModel):
-    """天气响应"""
-    city: str = Field(..., description="城市名称")
-    weather_list: List[WeatherItem] = Field(..., description="天气列表")
+class RealTimeResponse(BaseModel):
+    """实时信息响应"""
+    items: List[RealTimeItem] = Field(..., description="实时信息列表")
     updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
 
 
-class AttractionStatusRequest(BaseModel):
-    """景点状态请求"""
-    attraction_id: str = Field(..., description="景点ID")
-
-
-class AttractionStatusResponse(BaseModel):
-    """景点状态响应"""
-    attraction_id: str = Field(..., description="景点ID")
-    name: str = Field(..., description="景点名称")
-    status: str = Field(..., description="景点状态")
-    open_time: str = Field(..., description="开放时间")
-    ticket_price: float = Field(..., description="门票价格")
-    crowd_level: int = Field(..., ge=1, le=5, description="拥挤程度（1-5）")
-
+# ========== 服务类 ==========
 
 class RealTimeService:
-    """实时信息服务"""
+    """实时信息服务类"""
 
     def __init__(self):
-        self.amap_key = settings.amap_api_key if hasattr(settings, 'amap_api_key') else ""
+        """初始化服务"""
+        self.mysql_db = get_mysql_db()
+        # 延迟初始化Redis客户端
+        self.redis = None
+        self._init_redis()
+        logger.info("实时信息服务已初始化")
 
-    def get_flight_status(self, request: FlightStatusRequest) -> FlightStatusResponse:
-        """查询航班动态"""
-        cache_key = f"flight:{request.flight_number}:{request.date}"
-        cached_result = redis_client.get(cache_key)
-        
-        if cached_result:
-            try:
-                return FlightStatusResponse(**json.loads(cached_result))
-            except:
-                pass
+    def _init_redis(self):
+        """初始化Redis客户端"""
+        try:
+            from ..database.redis_client import get_redis_client
+            self.redis = get_redis_client()
+            logger.debug("Redis客户端初始化成功")
+        except Exception as e:
+            logger.warning(f"Redis客户端初始化失败: {str(e)}")
+            self.redis = None
 
-        result = FlightStatusResponse(
-            flight_number=request.flight_number,
-            status="准点",
-            departure_time="08:00",
-            arrival_time="10:30",
-            delay=0,
-            gate="A12",
-            terminal="T3"
-        )
+    async def get_real_time_info(self, request: RealTimeRequest) -> RealTimeResponse:
+        """获取实时信息"""
+        try:
+            logger.info(f"为用户{request.user_id}获取实时信息，类型: {request.type}")
 
-        redis_client.setex(cache_key, 3600, json.dumps(result.model_dump()))
-        return result
+            # 从Redis缓存获取实时信息
+            if self.redis:
+                cache_key = f"real_time:{request.user_id}:{request.type}"
+                cached_info = await self.redis.get(cache_key)
+                if cached_info:
+                    info_data = json.loads(cached_info)
+                    logger.debug("从Redis缓存获取实时信息")
+                    return RealTimeResponse(**info_data)
 
-    def get_weather(self, request: WeatherRequest) -> WeatherResponse:
-        """查询天气"""
-        cache_key = f"weather:{request.city}:{request.days}"
-        cached_result = redis_client.get(cache_key)
-        
-        if cached_result:
-            try:
-                data = json.loads(cached_result)
-                return WeatherResponse(**data)
-            except:
-                pass
+            # 模拟实时信息数据
+            items = [
+                RealTimeItem(
+                    id="traffic_1",
+                    title="当前路况",
+                    description="您当前位置附近的交通状况良好，没有拥堵",
+                    type="traffic",
+                    location="北京朝阳区",
+                    url="https://traffic.example.com/chaoyang"
+                ),
+                RealTimeItem(
+                    id="weather_1",
+                    title="今日天气",
+                    description="今日晴，气温15-25°C，适合出行",
+                    type="weather",
+                    location="北京",
+                    url="https://weather.example.com/beijing"
+                ),
+                RealTimeItem(
+                    id="event_1",
+                    title="本地活动",
+                    description="本周末有一场音乐节在奥林匹克公园举办",
+                    type="event",
+                    location="北京奥林匹克公园",
+                    url="https://event.example.com/music-festival"
+                )
+            ]
 
-        weather_list = []
-        for i in range(request.days):
-            date = (datetime.now() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-            weather_list.append(WeatherItem(
-                date=date,
-                temp_max=25.0 + i,
-                temp_min=15.0 + i,
-                condition="晴" if i % 2 == 0 else "多云",
-                humidity=60 + i * 2,
-                precipitation=0.0
-            ))
+            # 构建响应
+            response = RealTimeResponse(
+                items=items
+            )
 
-        result = WeatherResponse(
-            city=request.city,
-            weather_list=weather_list
-        )
+            # 缓存实时信息到Redis，过期时间5分钟
+            if self.redis:
+                cache_key = f"real_time:{request.user_id}:{request.type}"
+                await self.redis.set(cache_key, json.dumps(response.model_dump(), ensure_ascii=False), ex=300)
+                logger.debug(f"实时信息已缓存到Redis: {cache_key}")
 
-        redis_client.setex(cache_key, 1800, json.dumps(result.model_dump()))
-        return result
+            logger.info(f"为用户{request.user_id}成功获取实时信息，共{len(items)}条")
+            return response
 
-    def get_attraction_status(self, request: AttractionStatusRequest) -> AttractionStatusResponse:
-        """查询景点状态"""
-        cache_key = f"attraction:{request.attraction_id}"
-        cached_result = redis_client.get(cache_key)
-        
-        if cached_result:
-            try:
-                return AttractionStatusResponse(**json.loads(cached_result))
-            except:
-                pass
+        except Exception as e:
+            logger.error(f"获取实时信息失败: {str(e)}")
+            # 返回空数据
+            return RealTimeResponse(
+                items=[]
+            )
 
-        result = AttractionStatusResponse(
-            attraction_id=request.attraction_id,
-            name="故宫博物院",
-            status="开放中",
-            open_time="08:30-17:00",
-            ticket_price=60.0,
-            crowd_level=3
-        )
 
-        redis_client.setex(cache_key, 7200, json.dumps(result.model_dump()))
-        return result
+# ========== 全局实例（单例模式） ==========
+
+_real_time_service: Optional[RealTimeService] = None
+
+
+def get_real_time_service() -> RealTimeService:
+    """
+    获取全局实时信息服务实例（单例）
+
+    Returns:
+        RealTimeService: 实时信息服务实例
+    """
+    global _real_time_service
+    if _real_time_service is None:
+        _real_time_service = RealTimeService()
+    return _real_time_service

@@ -41,6 +41,23 @@
             </a-button>
           </a-form-item>
 
+          <a-divider class="divider-text">或</a-divider>
+
+          <a-form-item>
+            <a-button
+              block
+              size="large"
+              class="feishu-btn"
+              :loading="feishuLoading"
+              @click="handleFeishuLogin"
+            >
+              <template #icon>
+                <img src="https://s1.aigei.com/prevfiles/a1e58cc43503479c844e1aa484a59773.png?e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:zRYwLlopENRzCxyfEjG49VDpsMY=" class="feishu-logo" alt="飞书" />
+              </template>
+              使用飞书账号登录
+            </a-button>
+          </a-form-item>
+
           <div class="auth-footer">
             <span class="footer-text">还没有账号？</span>
             <router-link to="/register" class="link-text">立即注册</router-link>
@@ -78,6 +95,7 @@ const form = ref({
 })
 
 const loading = ref(false)
+const feishuLoading = ref(false)
 const captchaImage = ref('')
 
 onMounted(() => {
@@ -91,6 +109,17 @@ async function loadCaptcha() {
     form.value.captcha_session_id = result.session_id
   } catch (error) {
     message.error('获取验证码失败')
+  }
+}
+
+async function handleFeishuLogin() {
+  feishuLoading.value = true
+  try {
+    const { authorize_url } = await authService.getFeishuAuthorizeUrl()
+    window.location.href = authorize_url
+  } catch {
+    message.error('获取飞书授权地址失败，请稍后重试')
+    feishuLoading.value = false
   }
 }
 
@@ -254,6 +283,39 @@ async function handleLogin() {
 .submit-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(102, 126, 234, 0.6);
+}
+
+.divider-text {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.feishu-btn {
+  height: 48px;
+  border-radius: var(--border-radius-full);
+  border: 1px solid var(--border-color);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s;
+}
+
+.feishu-btn:hover {
+  border-color: #1456f0;
+  color: #1456f0;
+  box-shadow: 0 4px 12px rgba(20, 86, 240, 0.15);
+}
+
+.feishu-logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  border-radius: 4px;
 }
 
 .auth-footer {

@@ -64,6 +64,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Admin',
     component: () => import('@/views/Admin.vue'),
     meta: { requiresAuth: true, requiresRole: 'admin' }
+  },
+  {
+    path: '/auth/feishu/callback',
+    name: 'FeishuCallback',
+    component: () => import('@/views/FeishuCallback.vue'),
+    meta: { requiresAuth: false }
   }
 ]
 

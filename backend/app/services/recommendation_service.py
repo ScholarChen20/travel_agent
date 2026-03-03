@@ -1,72 +1,70 @@
-"""智能推荐系统服务"""
+"""智能推荐服务"""
 
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Dict, Optional
+from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
-import json
 from loguru import logger
-from ..database.redis_client import get_redis_client
+import json
+import random
+
 from ..database.mysql import get_mysql_db
 from ..database.models import User, UserProfile
+from ..database.mongodb import get_mongodb_client
 from ..config import get_settings
 
 settings = get_settings()
-redis_client = get_redis_client()
-mysql_db = get_mysql_db()
 
+
+# ========== 请求模型 ==========
 
 class RecommendationRequest(BaseModel):
     """推荐请求"""
-    user_id: Optional[str] = Field(None, description="用户ID")
-    preferences: Optional[List[str]] = Field(None, description="兴趣标签列表")
-    location: Optional[str] = Field(None, description="当前位置")
-    limit: int = Field(default=10, description="返回数量")
+    user_id: str = Field(..., description="用户ID")
+    num_recommendations: int = Field(default=5, description="推荐数量")
+    context: Optional[Dict[str, Any]] = Field(default=None, description="上下文信息")
 
 
-class AttractionRecommendation(BaseModel):
-    """景点推荐"""
-    id: str = Field(..., description="景点ID")
-    name: str = Field(..., description="景点名称")
-    rating: float = Field(..., description="评分")
-    distance: float = Field(..., description="距离")
-    tags: List[str] = Field(..., description="标签")
-    image_url: Optional[str] = Field(None, description="图片URL")
+# ========== 响应模型 ==========
 
-
-class RestaurantRecommendation(BaseModel):
-    """餐厅推荐"""
-    id: str = Field(..., description="餐厅ID")
-    name: str = Field(..., description="餐厅名称")
-    rating: float = Field(..., description="评分")
-    cuisine: str = Field(..., description="菜系")
-    price_range: str = Field(..., description="价格范围")
-
-
-class HotelRecommendation(BaseModel):
-    """酒店推荐"""
-    id: str = Field(..., description="酒店ID")
-    name: str = Field(..., description="酒店名称")
-    rating: float = Field(..., description="评分")
-    price: float = Field(..., description="价格")
-    distance: float = Field(..., description="距离")
+class RecommendationItem(BaseModel):
+    """推荐项"""
+    id: str = Field(..., description="推荐项ID")
+    title: str = Field(..., description="推荐项标题")
+    description: str = Field(..., description="推荐项描述")
+    score: float = Field(..., description="推荐得分")
+    type: str = Field(..., description="推荐类型")
+    image_url: Optional[str] = Field(default=None, description="图片URL")
 
 
 class RecommendationResponse(BaseModel):
     """推荐响应"""
-    attractions: List[AttractionRecommendation] = Field(..., description="景点推荐")
-    restaurants: List[RestaurantRecommendation] = Field(..., description="餐厅推荐")
-    hotels: List[HotelRecommendation] = Field(..., description="酒店推荐")
+    recommendations: List[RecommendationItem] = Field(..., description="推荐列表")
+    updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
 
+
+# ========== 服务类 ==========
 
 class RecommendationService:
-    """推荐系统服务"""
+    """智能推荐服务类"""
 
     def __init__(self):
-        self.user_preferences = self._load_user_preferences()
-        self.user_item_matrix = self._build_user_item_matrix()
-        self.user_similarity = cosine_similarity(self.user_item_matrix) if self.user_item_matrix.size > 0 else np.array([])
+        """初始化服务"""
+        self.mysql_db = get_mysql_db()
+        self.mongodb_client = get_mongodb_client()
+        # 延迟初始化Redis客户端
+        self.redis = None
+        self._init_redis()
+        logger.info("推荐服务已初始化")
+
+    def _init_redis(self):
+        """初始化Redis客户端"""
+        try:
+            from ..database.redis_client import get_redis_client
+            self.redis = get_redis_client()
+            logger.debug("Redis客户端初始化成功")
+        except Exception as e:
+            logger.warning(f"Redis客户端初始化失败: {str(e)}")
+            self.redis = None
 
     def _load_user_preferences(self) -> Dict:
         """从数据库加载用户偏好"""
@@ -74,7 +72,7 @@ class RecommendationService:
         
         try:
             # 从MySQL数据库查询用户偏好
-            with mysql_db.get_session() as session:
+            with self.mysql_db.get_session() as session:
                 # 查询所有用户及其档案
                 users = session.query(User).all()
                 
@@ -114,111 +112,189 @@ class RecommendationService:
             
         return preferences
 
-    def _build_user_item_matrix(self) -> np.ndarray:
-        """构建用户-物品矩阵"""
-        users = list(self.user_preferences.keys())
-        items = self._get_all_items()
-        if not users or not items:
-            return np.array([])
-        matrix = np.zeros((len(users), len(items)))
-        for i, user in enumerate(users):
-            for j, item in enumerate(items):
-                matrix[i][j] = self._get_user_item_score(user, item)
-        return matrix
+    async def _load_poi_data(self) -> Dict:
+        """加载景点数据"""
+        pois = {}
+        
+        try:
+            # 从MongoDB查询景点数据
+            pois_collection = self.mongodb_client.pois
+            poi_list = await pois_collection.find({}).to_list(length=None)
+            
+            for poi in poi_list:
+                poi_id = str(poi["_id"])
+                pois[poi_id] = {
+                    "id": poi_id,
+                    "name": poi["name"],
+                    "description": poi["description"],
+                    "category": poi["category"],
+                    "location": poi["location"],
+                    "score": poi["score"] or 0.0,
+                    "image_url": poi.get("image_url")
+                }
+                
+            logger.info(f"从MongoDB加载了{len(pois)}个景点数据")
+            
+        except Exception as e:
+            logger.error(f"从MongoDB加载景点数据失败: {str(e)}")
+            # 加载失败时使用默认数据
+            pois = {
+                "poi_1": {
+                    "id": "poi_1",
+                    "name": "大理古城",
+                    "description": "大理古城是中国历史文化名城，有着悠久的历史和独特的白族文化",
+                    "category": "历史文化",
+                    "location": "云南大理",
+                    "score": 4.8,
+                    "image_url": "https://via.placeholder.com/300x200"
+                },
+                "poi_2": {
+                    "id": "poi_2",
+                    "name": "洱海",
+                    "description": "洱海是云南第二大淡水湖，湖水清澈，风景秀丽",
+                    "category": "自然风光",
+                    "location": "云南大理",
+                    "score": 4.9,
+                    "image_url": "https://via.placeholder.com/300x200"
+                },
+                "poi_3": {
+                    "id": "poi_3",
+                    "name": "兵马俑",
+                    "description": "兵马俑是世界第八大奇迹，是中国古代雕塑艺术的杰作",
+                    "category": "历史文化",
+                    "location": "陕西西安",
+                    "score": 4.9,
+                    "image_url": "https://via.placeholder.com/300x200"
+                }
+            }
+            logger.warning("使用默认景点数据")
+            
+        return pois
 
-    def _get_all_items(self) -> List[str]:
-        """获取所有物品列表"""
-        return ["故宫", "天安门", "长城", "全聚德", "北京饭店", "故宫博物馆"]
-
-    def _get_user_item_score(self, user: str, item: str) -> float:
-        """计算用户对物品的评分"""
-        if user not in self.user_preferences:
-            return 0.0
-        user_prefs = self.user_preferences[user]["preferences"]
+    def _calculate_similarity(self, user_preferences: Dict, poi: Dict) -> float:
+        """计算用户偏好与景点的相似度"""
         score = 0.0
-        if "故宫" in item and "历史文化" in user_prefs:
-            score = 0.8
-        if "全聚德" in item and "美食" in user_prefs:
-            score = 0.9
+        
+        # 偏好匹配
+        if "preferences" in user_preferences:
+            user_prefs = user_preferences["preferences"]
+            poi_category = poi["category"]
+            
+            # 检查是否有匹配的偏好
+            for pref in user_prefs:
+                if pref in poi_category:
+                    score += 0.5
+            
+            # 位置匹配
+            if "location" in user_preferences:
+                user_location = user_preferences["location"]
+                poi_location = poi["location"]
+                
+                if user_location in poi_location or poi_location in user_location:
+                    score += 0.3
+            
+            # 评分加成
+            score += poi["score"] / 10.0
+            
+            # 随机扰动
+            score += random.uniform(0, 0.1)
+            
+            # 归一化
+            score = min(score, 1.0)
+            
         return score
 
-    def _get_user_index(self, user_id: str) -> int:
-        """获取用户索引"""
-        users = list(self.user_preferences.keys())
-        if user_id not in users:
-            return 0
-        return users.index(user_id)
-
-    def _get_item_by_index(self, item_idx: int) -> str:
-        """根据索引获取物品"""
-        items = self._get_all_items()
-        if item_idx < 0 or item_idx >= len(items):
-            return ""
-        return items[item_idx]
-
-    def recommend(self, request: RecommendationRequest) -> RecommendationResponse:
-        """获取推荐结果"""
-        cache_key = f"recommendations:{request.user_id}:{request.location}:{request.limit}"
-        cached_result = redis_client.get(cache_key)
-        if cached_result:
-            try:
-                return RecommendationResponse(**json.loads(cached_result))
-            except:
-                pass
-
-        user_id = request.user_id or "user_1"
-        user_idx = self._get_user_index(user_id)
-        
-        # 如果用户ID存在于数据库中，获取用户的实际偏好
-        if user_id in self.user_preferences:
-            user_prefs = self.user_preferences[user_id]
-            logger.info(f"使用用户{user_id}的实际偏好: {user_prefs}")
-        else:
-            logger.warning(f"用户{user_id}不存在，使用默认偏好")
-        
-        if self.user_similarity.size > 0 and user_idx < self.user_similarity.shape[0]:
-            similarities = self.user_similarity[user_idx]
-            scores = np.dot(similarities, self.user_item_matrix) / np.sum(similarities) if np.sum(similarities) > 0 else np.zeros_like(similarities)
-        else:
-            scores = np.zeros(len(self._get_all_items()))
-
-        attractions = [
-            AttractionRecommendation(
-                id="attraction_1",
-                name="故宫",
-                rating=4.8,
-                distance=2.5,
-                tags=["历史文化", "古建筑"],
-                image_url="https://example.com/gugong.jpg"
+    async def recommend(self, request: RecommendationRequest) -> RecommendationResponse:
+        """生成推荐"""
+        try:
+            logger.info(f"为用户{request.user_id}生成推荐，数量: {request.num_recommendations}")
+            
+            # 加载用户偏好
+            user_preferences = self._load_user_preferences()
+            user_pref = user_preferences.get(request.user_id, {
+                "preferences": ["自然风光", "美食"],
+                "location": "北京"
+            })
+            
+            # 加载景点数据
+            poi_data = self._load_poi_data()
+            
+            # 计算相似度
+            recommendations = []
+            for poi_id, poi in poi_data.items():
+                score = self._calculate_similarity(user_pref, poi)
+                recommendations.append({
+                    "id": poi_id,
+                    "title": poi["name"],
+                    "description": poi["description"],
+                    "score": score,
+                    "type": poi["category"],
+                    "image_url": poi["image_url"]
+                })
+            
+            # 按得分排序
+            recommendations.sort(key=lambda x: x["score"], reverse=True)
+            
+            # 取前N个
+            top_recommendations = recommendations[:request.num_recommendations]
+            
+            # 转换为推荐项
+            recommendation_items = [
+                RecommendationItem(**item)
+                for item in top_recommendations
+            ]
+            
+            # 缓存推荐结果
+            if self.redis:
+                try:
+                    cache_key = f"recommendation:{request.user_id}"
+                    await self.redis.set(cache_key, json.dumps([item.model_dump() for item in recommendation_items]), ex=3600)
+                    logger.debug(f"推荐结果已缓存到Redis: {cache_key}")
+                except Exception as e:
+                    logger.warning(f"缓存推荐结果失败: {str(e)}")
+            
+            logger.info(f"为用户{request.user_id}成功生成{len(recommendation_items)}个推荐")
+            
+            return RecommendationResponse(
+                recommendations=recommendation_items
             )
-        ]
-        
-        restaurants = [
-            RestaurantRecommendation(
-                id="restaurant_1",
-                name="全聚德",
-                rating=4.5,
-                cuisine="北京烤鸭",
-                price_range="¥200-300"
+            
+        except Exception as e:
+            logger.error(f"生成推荐失败: {str(e)}")
+            # 返回默认推荐
+            return RecommendationResponse(
+                recommendations=[
+                    RecommendationItem(
+                        id="default_1",
+                        title="大理古城",
+                        description="大理古城是中国历史文化名城，有着悠久的历史和独特的白族文化",
+                        score=0.8,
+                        type="历史文化"
+                    ),
+                    RecommendationItem(
+                        id="default_2",
+                        title="洱海",
+                        description="洱海是云南第二大淡水湖，湖水清澈，风景秀丽",
+                        score=0.75,
+                        type="自然风光"
+                    )
+                ]
             )
-        ]
-        
-        hotels = [
-            HotelRecommendation(
-                id="hotel_1",
-                name="北京饭店",
-                rating=4.7,
-                price=800,
-                distance=3.0
-            )
-        ]
 
-        response = RecommendationResponse(
-            attractions=attractions,
-            restaurants=restaurants,
-            hotels=hotels
-        )
 
-        redis_client.setex(cache_key, 3600, json.dumps(response.model_dump()))
+# ========== 全局实例（单例模式） ==========
 
-        return response
+_recommendation_service: Optional[RecommendationService] = None
+
+
+def get_recommendation_service() -> RecommendationService:
+    """
+    获取全局推荐服务实例（单例）
+
+    Returns:
+        RecommendationService: 推荐服务实例
+    """
+    global _recommendation_service
+    if _recommendation_service is None:
+        _recommendation_service = RecommendationService()
+    return _recommendation_service

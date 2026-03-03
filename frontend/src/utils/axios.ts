@@ -36,7 +36,16 @@ axiosInstance.interceptors.response.use(
   async (error: AxiosError) => {
     // 直接操作localStorage，因为useAuthStore只能在Vue组件中使用
     if (error.response?.status === 401) {
-      // 清除localStorage中的用户数据
+      // 登录/注册/飞书回调接口本身返回401，不做跳转，让业务层处理
+      const url = error.config?.url || ''
+      if (
+        url.includes('/auth/login') ||
+        url.includes('/auth/register') ||
+        url.includes('/auth/feishu/')
+      ) {
+        return Promise.reject(error)
+      }
+      // 其他接口401 = token过期，清除并跳转登录页
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       message.error('登录已过期，请重新登录')

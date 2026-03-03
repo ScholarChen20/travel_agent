@@ -67,3 +67,7 @@ alibabacloud-oss-v2>=1.0.0
 # ============ 新增：防刷机制 ============
 # 布隆过滤器（可选，未安装时降级为纯Redis模式）
 pybloom-live>=4.0.0
+
+# ======== 飞书开放平台 =========
+lark_oapi
+speech_recognition

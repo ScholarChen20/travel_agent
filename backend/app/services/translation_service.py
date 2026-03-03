@@ -7,9 +7,8 @@ from datetime import datetime
 import json
 from ..database.redis_client import get_redis_client
 from ..config import get_settings
-
+from loguru import logger
 settings = get_settings()
-redis_client = get_redis_client()
 
 
 class TextTranslationRequest(BaseModel):
@@ -58,12 +57,25 @@ class TranslationService:
             "de": "德文",
             "es": "西班牙文",
             "ru": "俄文"
-        }
+        }        # 延迟初始化Redis客户端
+        self.redis = None
+        self._init_redis()
+        logger.info("预算服务已初始化")
+
+    def _init_redis(self):
+        """初始化Redis客户端"""
+        try:
+            from ..database.redis_client import get_redis_client
+            self.redis = get_redis_client()
+            logger.debug("Redis客户端初始化成功")
+        except Exception as e:
+            logger.warning(f"Redis客户端初始化失败: {str(e)}")
+            self.redis = None
 
     def translate_text(self, request: TextTranslationRequest) -> TextTranslationResponse:
         """翻译文本"""
         cache_key = f"translation:text:{hash(request.text)}:{request.from_lang}:{request.to_lang}"
-        cached_result = redis_client.get(cache_key)
+        cached_result = self.redis.get(cache_key)
         
         if cached_result:
             try:
@@ -80,7 +92,7 @@ class TranslationService:
             to_lang=request.to_lang
         )
 
-        redis_client.setex(cache_key, 86400, json.dumps(result.model_dump(), default=str))
+        self.redis.setex(cache_key, 86400, json.dumps(result.model_dump(), default=str))
         return result
 
     def _do_translate(self, text: str, from_lang: str, to_lang: str) -> str:

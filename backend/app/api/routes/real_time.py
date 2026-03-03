@@ -1,75 +1,60 @@
-"""实时信息服务API路由"""
+"""实时信息系统API路由"""
 
 from fastapi import APIRouter, Depends, Query, HTTPException
-from typing import Optional
+from typing import Optional, List
 from ...services.real_time_service import (
     RealTimeService,
-    FlightStatusRequest,
-    FlightStatusResponse,
-    WeatherRequest,
-    WeatherResponse,
-    AttractionStatusRequest,
-    AttractionStatusResponse
+    RealTimeRequest,
+    RealTimeResponse
 )
 from ...utils.response import ApiResponse, ResponseCode
 
-router = APIRouter(prefix="/real-time", tags=["实时信息服务"])
+router = APIRouter(prefix="/real-time", tags=["实时信息系统"])
 
 
 def get_real_time_service() -> RealTimeService:
     """获取实时信息服务实例"""
-    return RealTimeService()
+    from ...services.real_time_service import get_real_time_service
+    return get_real_time_service()
 
 
-@router.post("/flight/status", summary="查询航班动态")
-async def get_flight_status(
-    request: FlightStatusRequest,
+@router.post("/info", summary="获取实时信息", response_model=RealTimeResponse)
+async def get_real_time_info(
+    request: RealTimeRequest,
     real_time_service: RealTimeService = Depends(get_real_time_service)
 ):
     """
-    查询航班动态信息
+    获取实时信息，包括交通、天气、活动等
     """
     try:
-        result = real_time_service.get_flight_status(request)
-        return ApiResponse.success(data=result.model_dump())
+        result = await real_time_service.get_real_time_info(request)
+        return result
     except Exception as e:
         raise HTTPException(
             status_code=ResponseCode.INTERNAL_ERROR,
-            detail=f"查询航班动态失败: {str(e)}"
+            detail=f"获取实时信息失败: {str(e)}"
         )
 
 
-@router.post("/weather", summary="查询天气")
-async def get_weather(
-    request: WeatherRequest,
+@router.get("/overview", summary="获取实时信息概览")
+async def get_real_time_overview(
+    user_id: str = Query(..., description="用户ID"),
+    location: Optional[str] = Query(None, description="当前位置"),
     real_time_service: RealTimeService = Depends(get_real_time_service)
 ):
     """
-    查询天气预报
+    获取实时信息概览，包括交通、天气、活动等
     """
     try:
-        result = real_time_service.get_weather(request)
-        return ApiResponse.success(data=result.model_dump())
-    except Exception as e:
-        raise HTTPException(
-            status_code=ResponseCode.INTERNAL_ERROR,
-            detail=f"查询天气失败: {str(e)}"
+        request = RealTimeRequest(
+            user_id=user_id,
+            location=location,
+            type="all"
         )
-
-
-@router.post("/attraction/status", summary="查询景点状态")
-async def get_attraction_status(
-    request: AttractionStatusRequest,
-    real_time_service: RealTimeService = Depends(get_real_time_service)
-):
-    """
-    查询景点开放状态、拥挤程度等信息
-    """
-    try:
-        result = real_time_service.get_attraction_status(request)
+        result = await real_time_service.get_real_time_info(request)
         return ApiResponse.success(data=result.model_dump())
     except Exception as e:
         raise HTTPException(
             status_code=ResponseCode.INTERNAL_ERROR,
-            detail=f"查询景点状态失败: {str(e)}"
+            detail=f"获取实时信息概览失败: {str(e)}"
         )

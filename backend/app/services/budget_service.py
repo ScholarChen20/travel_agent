@@ -1,172 +1,242 @@
 """预算管理服务"""
 
+from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
 from datetime import datetime
+from loguru import logger
+from sqlalchemy import func, desc
 import json
-from ..database.mongodb import get_mongodb_client
-from ..database.redis_client import get_redis_client
 
-redis_client = get_redis_client()
-mongodb_client = get_mongodb_client()
+from ..database.mysql import get_mysql_db
+from ..database.models import User, UserProfile
+from ..config import get_settings
 
-
-class BudgetCategory(BaseModel):
-    """预算分类"""
-    name: str = Field(..., description="预算分类名称")
-    budget: float = Field(..., description="预算金额")
-    spent: float = Field(default=0.0, description="已花费金额")
+settings = get_settings()
 
 
-class BudgetCreateRequest(BaseModel):
-    """创建预算请求"""
-    trip_id: str = Field(..., description="旅行计划ID")
-    total_budget: float = Field(..., description="总预算")
-    categories: List[BudgetCategory] = Field(..., description="预算分类列表")
+# ========== 请求模型 ==========
 
+class BudgetRequest(BaseModel):
+    """预算请求"""
+    user_id: str = Field(..., description="用户ID")
+    budget_amount: float = Field(..., description="预算金额")
+    start_date: str = Field(..., description="开始日期")
+    end_date: str = Field(..., description="结束日期")
+    currency: str = Field(default="CNY", description="货币类型")
+    category: str = Field(default="all", description="预算类别")
+
+
+class ExpenseRequest(BaseModel):
+    """支出请求"""
+    user_id: str = Field(..., description="用户ID")
+    expense_amount: float = Field(..., description="支出金额")
+    expense_date: str = Field(..., description="支出日期")
+    category: str = Field(..., description="支出类别")
+    description: str = Field(default="", description="支出描述")
+    currency: str = Field(default="CNY", description="货币类型")
+
+
+# ========== 响应模型 ==========
 
 class BudgetResponse(BaseModel):
     """预算响应"""
     budget_id: str = Field(..., description="预算ID")
-    trip_id: str = Field(..., description="旅行计划ID")
-    total_budget: float = Field(..., description="总预算")
-    remaining_budget: float = Field(..., description="剩余预算")
-    categories: List[BudgetCategory] = Field(..., description="预算分类列表")
+    user_id: str = Field(..., description="用户ID")
+    budget_amount: float = Field(..., description="预算金额")
+    used_amount: float = Field(..., description="已使用金额")
+    remaining_amount: float = Field(..., description="剩余金额")
+    start_date: str = Field(..., description="开始日期")
+    end_date: str = Field(..., description="结束日期")
+    currency: str = Field(..., description="货币类型")
+    category: str = Field(..., description="预算类别")
+    status: str = Field(..., description="预算状态")
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
-    updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
 
 
-class ExpenseAddRequest(BaseModel):
-    """添加消费请求"""
-    budget_id: str = Field(..., description="预算ID")
-    category: str = Field(..., description="分类名称")
-    amount: float = Field(..., gt=0, description="消费金额")
-    description: str = Field(default="", description="消费描述")
+class ExpenseResponse(BaseModel):
+    """支出响应"""
+    expense_id: str = Field(..., description="支出ID")
+    user_id: str = Field(..., description="用户ID")
+    expense_amount: float = Field(..., description="支出金额")
+    expense_date: str = Field(..., description="支出日期")
+    category: str = Field(..., description="支出类别")
+    description: str = Field(..., description="支出描述")
+    currency: str = Field(..., description="货币类型")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
+
+class BudgetStatsResponse(BaseModel):
+    """预算统计响应"""
+    total_budget: float = Field(..., description="总预算")
+    total_used: float = Field(..., description="总支出")
+    total_remaining: float = Field(..., description="总剩余")
+    budget_usage_rate: float = Field(..., description="预算使用率（%）")
+    monthly_budget: float = Field(..., description="本月预算")
+    monthly_used: float = Field(..., description="本月支出")
+    monthly_remaining: float = Field(..., description="本月剩余")
+
+
+# ========== 服务类 ==========
 
 class BudgetService:
-    """预算管理服务"""
+    """预算管理服务类"""
 
     def __init__(self):
-        if mongodb_client:
-            self.budgets_collection = mongodb_client["budgets"]
-            self.expenses_collection = mongodb_client["expenses"]
-        else:
-            self.budgets_collection = None
-            self.expenses_collection = None
+        """初始化服务"""
+        self.mysql_db = get_mysql_db()
+        # 延迟初始化Redis客户端
+        self.redis = None
+        self._init_redis()
+        logger.info("预算服务已初始化")
 
-    def create_budget(self, request: BudgetCreateRequest) -> BudgetResponse:
+    def _init_redis(self):
+        """初始化Redis客户端"""
+        try:
+            from ..database.redis_client import get_redis_client
+            self.redis = get_redis_client()
+            logger.debug("Redis客户端初始化成功")
+        except Exception as e:
+            logger.warning(f"Redis客户端初始化失败: {str(e)}")
+            self.redis = None
+
+    async def create_budget(self, request: BudgetRequest) -> BudgetResponse:
         """创建预算"""
-        budget_id = f"budget_{int(datetime.now().timestamp())}"
-        
-        remaining_budget = request.total_budget - sum(category.spent for category in request.categories)
-        
-        budget_data = {
-            "budget_id": budget_id,
-            "trip_id": request.trip_id,
-            "total_budget": request.total_budget,
-            "remaining_budget": remaining_budget,
-            "categories": [cat.model_dump() for cat in request.categories],
-            "created_at": datetime.now(),
-            "updated_at": datetime.now()
-        }
+        try:
+            logger.info(f"为用户{request.user_id}创建预算")
 
-        if self.budgets_collection:
-            self.budgets_collection.insert_one(budget_data)
-        
-        cache_key = f"budget:{budget_id}"
-        redis_client.setex(cache_key, 3600, json.dumps(budget_data, default=str))
+            # 生成预算ID
+            budget_id = f"budget_{datetime.now().strftime('%Y%m%d%H%M%S')}_{request.user_id}"
 
-        return BudgetResponse(**budget_data)
-
-    def add_expense(self, request: ExpenseAddRequest) -> BudgetResponse:
-        """添加消费记录"""
-        budget = self._get_budget_from_db(request.budget_id)
-        if not budget:
-            raise Exception("预算不存在")
-
-        category_found = False
-        for category in budget["categories"]:
-            if category["name"] == request.category:
-                category["spent"] += request.amount
-                category_found = True
-                break
-        
-        if not category_found:
-            raise Exception(f"分类 {request.category} 不存在")
-
-        total_spent = sum(category["spent"] for category in budget["categories"])
-        budget["remaining_budget"] = budget["total_budget"] - total_spent
-        budget["updated_at"] = datetime.now()
-
-        if self.budgets_collection:
-            self.budgets_collection.update_one(
-                {"budget_id": request.budget_id},
-                {"$set": budget}
+            # 构建预算响应
+            response = BudgetResponse(
+                budget_id=budget_id,
+                user_id=request.user_id,
+                budget_amount=request.budget_amount,
+                used_amount=0.0,
+                remaining_amount=request.budget_amount,
+                start_date=request.start_date,
+                end_date=request.end_date,
+                currency=request.currency,
+                category=request.category,
+                status="active"
             )
 
-        expense_record = {
-            "budget_id": request.budget_id,
-            "category": request.category,
-            "amount": request.amount,
-            "description": request.description,
-            "created_at": datetime.now()
-        }
+            # 缓存预算到Redis
+            if self.redis:
+                cache_key = f"budget:{request.user_id}:{budget_id}"
+                await self.redis.set(cache_key, json.dumps(response.model_dump(), ensure_ascii=False), ex=3600*24*30)
+                logger.debug(f"预算已缓存到Redis: {cache_key}")
 
-        if self.expenses_collection:
-            self.expenses_collection.insert_one(expense_record)
+            logger.info(f"为用户{request.user_id}成功创建预算: {budget_id}")
+            return response
 
-        cache_key = f"budget:{request.budget_id}"
-        redis_client.setex(cache_key, 3600, json.dumps(budget, default=str))
-
-        return BudgetResponse(
-            budget_id=budget["budget_id"],
-            trip_id=budget["trip_id"],
-            total_budget=budget["total_budget"],
-            remaining_budget=budget["remaining_budget"],
-            categories=[BudgetCategory(**cat) for cat in budget["categories"]],
-            created_at=budget["created_at"],
-            updated_at=budget["updated_at"]
-        )
-
-    def get_budget(self, budget_id: str) -> BudgetResponse:
-        """获取预算详情"""
-        cache_key = f"budget:{budget_id}"
-        cached_budget = redis_client.get(cache_key)
-        
-        if cached_budget:
-            budget_data = json.loads(cached_budget)
-            return BudgetResponse(
-                budget_id=budget_data["budget_id"],
-                trip_id=budget_data["trip_id"],
-                total_budget=budget_data["total_budget"],
-                remaining_budget=budget_data["remaining_budget"],
-                categories=[BudgetCategory(**cat) for cat in budget_data["categories"]],
-                created_at=datetime.fromisoformat(budget_data["created_at"]),
-                updated_at=datetime.fromisoformat(budget_data["updated_at"])
+        except Exception as e:
+            logger.error(f"创建预算失败: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"创建预算失败: {str(e)}"
             )
 
-        budget = self._get_budget_from_db(budget_id)
-        if not budget:
-            raise Exception("预算不存在")
+    async def add_expense(self, request: ExpenseRequest) -> ExpenseResponse:
+        """添加支出"""
+        try:
+            logger.info(f"为用户{request.user_id}添加支出")
 
-        redis_client.setex(cache_key, 3600, json.dumps(budget, default=str))
+            # 生成支出ID
+            expense_id = f"expense_{datetime.now().strftime('%Y%m%d%H%M%S')}_{request.user_id}"
 
-        return BudgetResponse(
-            budget_id=budget["budget_id"],
-            trip_id=budget["trip_id"],
-            total_budget=budget["total_budget"],
-            remaining_budget=budget["remaining_budget"],
-            categories=[BudgetCategory(**cat) for cat in budget["categories"]],
-            created_at=budget["created_at"],
-            updated_at=budget["updated_at"]
-        )
+            # 构建支出响应
+            response = ExpenseResponse(
+                expense_id=expense_id,
+                user_id=request.user_id,
+                expense_amount=request.expense_amount,
+                expense_date=request.expense_date,
+                category=request.category,
+                description=request.description,
+                currency=request.currency
+            )
 
-    def _get_budget_from_db(self, budget_id: str) -> Optional[Dict]:
-        """从数据库获取预算"""
-        if not self.budgets_collection:
-            return None
-        budget = self.budgets_collection.find_one({"budget_id": budget_id})
-        if budget:
-            budget.pop("_id", None)
-        return budget
+            # 缓存支出到Redis
+            if self.redis:
+                cache_key = f"expense:{request.user_id}:{expense_id}"
+                await self.redis.set(cache_key, json.dumps(response.model_dump(), ensure_ascii=False), ex=3600*24*30)
+                logger.debug(f"支出已缓存到Redis: {cache_key}")
+
+            logger.info(f"为用户{request.user_id}成功添加支出: {expense_id}")
+            return response
+
+        except Exception as e:
+            logger.error(f"添加支出失败: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"添加支出失败: {str(e)}"
+            )
+
+    async def get_budget_stats(self, user_id: str) -> BudgetStatsResponse:
+        """获取预算统计"""
+        try:
+            logger.info(f"获取用户{user_id}的预算统计")
+
+            # 从Redis缓存获取预算统计
+            if self.redis:
+                cache_key = f"budget_stats:{user_id}"
+                cached_stats = await self.redis.get(cache_key)
+                if cached_stats:
+                    stats_data = json.loads(cached_stats)
+                    logger.debug("从Redis缓存获取预算统计")
+                    return BudgetStatsResponse(**stats_data)
+
+            # 模拟预算统计数据
+            total_budget = 10000.0
+            total_used = 3500.0
+            total_remaining = total_budget - total_used
+            budget_usage_rate = (total_used / total_budget) * 100
+
+            monthly_budget = 5000.0
+            monthly_used = 1200.0
+            monthly_remaining = monthly_budget - monthly_used
+
+            # 构建响应
+            response = BudgetStatsResponse(
+                total_budget=total_budget,
+                total_used=total_used,
+                total_remaining=total_remaining,
+                budget_usage_rate=round(budget_usage_rate, 2),
+                monthly_budget=monthly_budget,
+                monthly_used=monthly_used,
+                monthly_remaining=monthly_remaining
+            )
+
+            # 缓存预算统计到Redis
+            if self.redis:
+                cache_key = f"budget_stats:{user_id}"
+                await self.redis.set(cache_key, json.dumps(response.model_dump(), ensure_ascii=False), ex=3600)
+                logger.debug(f"预算统计已缓存到Redis: {cache_key}")
+
+            logger.info(f"获取用户{user_id}的预算统计成功")
+            return response
+
+        except Exception as e:
+            logger.error(f"获取预算统计失败: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"获取预算统计失败: {str(e)}"
+            )
+
+
+# ========== 全局实例（单例模式） ==========
+
+_budget_service: Optional[BudgetService] = None
+
+
+def get_budget_service() -> BudgetService:
+    """
+    获取全局预算服务实例（单例）
+
+    Returns:
+        BudgetService: 预算服务实例
+    """
+    global _budget_service
+    if _budget_service is None:
+        _budget_service = BudgetService()
+    return _budget_service

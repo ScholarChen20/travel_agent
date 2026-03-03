@@ -23,7 +23,7 @@ except ImportError:
 
 from .routes import trip, poi, map as map_routes
 from .routes import auth, plans, user, dialog, social, admin
-from .routes import recommendations, budget, real_time, offline, translation, voice_enhanced
+from .routes import recommendations, budget, real_time, offline, translation, voice_enhanced, dashboard
 
 # 获取配置
 settings = get_settings()
@@ -91,6 +91,7 @@ app.include_router(real_time.router, prefix="/api")  # 实时信息服务路由
 app.include_router(offline.router, prefix="/api")  # 离线功能支持路由
 app.include_router(translation.router, prefix="/api")  # 多语言支持路由
 app.include_router(voice_enhanced.router, prefix="/api")  # 语音交互增强路由
+app.include_router(dashboard.router, prefix="/api")  # 首页仪表盘路由
 
 # 配置静态文件服务（用于访问上传的文件）
 storage_path = Path("storage")
@@ -289,4 +290,3 @@ if __name__ == "__main__":
         port=settings.port,
         reload=True
     )
-
