@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 然后尝试加载HelloAgents的.env(如果存在)
-helloagents_env = Path(__file__).parent.parent.parent.parent / "HelloAgents" / ".env"
-if helloagents_env.exists():
-    load_dotenv(helloagents_env, override=False)  # 不覆盖已有的环境变量
+# helloagents_env = Path(__file__).parent.parent.parent.parent / "HelloAgents" / ".env"
+# if helloagents_env.exists():
+#     load_dotenv(helloagents_env, override=False)  # 不覆盖已有的环境变量
 
 
 class Settings(BaseSettings):
@@ -104,6 +104,13 @@ class Settings(BaseSettings):
     bloom_filter_error_rate: float = 0.01       # 布隆过滤器误判率
     bloom_filter_key: str = "bloom:registered_devices"  # Redis存储键
     geoip_cache_ttl: int = 86400                # IP地理位置缓存TTL（秒）
+
+    # ============ 飞书登录配置 ============
+    feishu_app_id: str = "cli_a92fbd3ee7f99cd9"  # 飞书应用 App ID（从开放平台获取）
+    feishu_app_secret: str = os.getenv("FEISHU_APP_SECRET")  # 飞书应用 App Secret（保密！）
+    feishu_redirect_uri: str = "https://leanna-prefamiliar-nonretroactively.ngrok-free.dev/auth/feishu/callback"  # 授权回调地址，如 http://localhost:5173/auth/feishu/callback
+
+    feishu_enabled: bool = True  # 是否启用飞书登录
 
     class Config:
         env_file = ".env"
