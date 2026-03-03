@@ -12,6 +12,7 @@ from ..utils.response import ApiResponse
 from ..database.mysql import get_mysql_db, init_mysql_db
 from ..database.mongodb import get_mongodb_client, init_mongodb_client
 from ..database.redis_client import get_redis_client, init_redis_client
+from ..middleware.audit_middleware import AuditMiddleware
 
 # 尝试导入调度器（可选功能）
 try:
@@ -46,6 +47,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# 注册审计日志中间件（在 CORS 之后，确保 CORS 头已处理）
+app.add_middleware(AuditMiddleware)
 
 _CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",

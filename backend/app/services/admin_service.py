@@ -29,6 +29,8 @@ class AdminService:
 
     def list_users(
         self,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
         role: Optional[str] = None,
         is_active: Optional[bool] = None,
         is_verified: Optional[bool] = None,
@@ -39,6 +41,8 @@ class AdminService:
         获取用户列表
 
         Args:
+            username: 用户名搜索
+            email: 邮箱搜索
             role: 角色筛选
             is_active: 激活状态筛选
             is_verified: 验证状态筛选
@@ -53,6 +57,10 @@ class AdminService:
                 query = session.query(User)
 
                 # 应用筛选
+                if username:
+                    query = query.filter(User.username.ilike(f"%{username}%"))
+                if email:
+                    query = query.filter(User.email.ilike(f"%{email}%"))
                 if role is not None:
                     query = query.filter(User.role == role)
                 if is_active is not None:
@@ -77,6 +85,8 @@ class AdminService:
                         "is_active": user.is_active,
                         "is_verified": user.is_verified,
                         "avatar_url": user.avatar_url,
+                        "feishu_open_id": user.feishu_open_id,
+                        "feishu_union_id": user.feishu_union_id,
                         "created_at": user.created_at.isoformat() if user.created_at else None,
                         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None
                     })
@@ -119,8 +129,87 @@ class AdminService:
             logger.error(f"更新用户状态失败: {str(e)}")
             raise
 
+    async def list_comments(
+        self,
+        content: Optional[str] = None,
+        post_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        获取评论列表
+
+        Args:
+            content: 评论内容搜索
+            post_id: 帖子ID筛选
+            user_id: 用户ID筛选
+            limit: 返回数量
+            offset: 偏移量
+
+        Returns:
+            Dict: {total: int, comments: List[Dict]}
+        """
+        try:
+            collection = self.mongodb.get_collection("social_comments")
+
+            query = {}
+            if content:
+                query["content"] = {"$regex": content, "$options": "i"}
+            if post_id:
+                query["post_id"] = post_id
+            if user_id is not None:
+                query["user_id"] = user_id
+
+            cursor = collection.find(query).sort("created_at", -1).skip(offset).limit(limit)
+
+            comments = []
+            async for comment in cursor:
+                comment.pop("_id", None)
+                if isinstance(comment.get("created_at"), datetime):
+                    comment["created_at"] = comment["created_at"].isoformat()
+                comments.append(comment)
+
+            total = await collection.count_documents(query)
+
+            return {
+                "total": total,
+                "comments": comments
+            }
+
+        except Exception as e:
+            logger.error(f"获取评论列表失败: {str(e)}")
+            raise
+
+    async def delete_comment(self, comment_id: str) -> bool:
+        """
+        删除评论
+
+        Args:
+            comment_id: 评论ID
+
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            collection = self.mongodb.get_collection("social_comments")
+
+            result = await collection.delete_one({"comment_id": comment_id})
+
+            if result.deleted_count > 0:
+                logger.info(f"评论已删除: {comment_id}")
+                return True
+            else:
+                logger.warning(f"删除失败（评论不存在）: {comment_id}")
+                return False
+
+        except Exception as e:
+            logger.error(f"删除评论失败: {str(e)}")
+            raise
+
     async def get_posts_for_moderation(
         self,
+        keyword: Optional[str] = None,
         status: str = "pending",
         limit: int = 50,
         offset: int = 0
@@ -129,6 +218,7 @@ class AdminService:
         获取待审核内容
 
         Args:
+            keyword: 关键词搜索
             status: 审核状态（pending/approved/rejected）
             limit: 返回数量
             offset: 偏移量
@@ -139,10 +229,13 @@ class AdminService:
         try:
             collection = self.mongodb.get_collection("social_posts")
 
-            # 查询
-            cursor = collection.find({
-                "moderation_status": status
-            }).sort("created_at", -1).skip(offset).limit(limit)
+            query = {"moderation_status": status}
+            if keyword:
+                query["$or"] = [
+                    {"title": {"$regex": keyword, "$options": "i"}},
+                    {"content": {"$regex": keyword, "$options": "i"}}
+                ]
+            cursor = collection.find(query).sort("created_at", -1).skip(offset).limit(limit)
 
             posts = []
             async for post in cursor:
@@ -153,8 +246,7 @@ class AdminService:
                     post["updated_at"] = post["updated_at"].isoformat()
                 posts.append(post)
 
-            # 获取总数
-            total = await collection.count_documents({"moderation_status": status})
+            total = await collection.count_documents(query)
 
             return {
                 "total": total,
@@ -259,10 +351,298 @@ class AdminService:
             logger.error(f"获取系统统计失败: {str(e)}")
             raise
 
+    async def get_visualization_data(self) -> Dict[str, Any]:
+        """
+        获取可视化图表数据
+
+        Returns:
+            Dict: 可视化数据
+        """
+        try:
+            data = {}
+            
+            # 最近7天用户注册趋势
+            data["user_trend"] = await self._get_user_registration_trend(7)
+            
+            # 最近7天帖子发布趋势
+            data["post_trend"] = await self._get_post_trend(7)
+            
+            # 内容审核状态分布
+            data["moderation_distribution"] = await self._get_moderation_distribution()
+            
+            # 用户活跃度分布
+            data["user_activity"] = await self._get_user_activity_distribution()
+            
+            # 帖子类型分布
+            data["content_type_distribution"] = await self._get_content_type_distribution()
+            
+            # Top热门内容
+            data["top_content"] = await self._get_top_content(5)
+            
+            # 互动统计
+            data["interaction_stats"] = await self._get_interaction_stats()
+
+            return data
+
+        except Exception as e:
+            logger.error(f"获取可视化数据失败: {str(e)}")
+            raise
+
+    async def _get_user_registration_trend(self, days: int) -> List[Dict[str, Any]]:
+        """获取用户注册趋势"""
+        try:
+            from datetime import datetime, timedelta
+            
+            trend = []
+            for i in range(days - 1, -1, -1):
+                date = datetime.now() - timedelta(days=i)
+                date_str = date.strftime("%Y-%m-%d")
+                next_date = (date + timedelta(days=1)).strftime("%Y-%m-%d")
+                
+                with self.mysql_db.get_session() as session:
+                    count = session.query(User).filter(
+                        User.created_at >= date_str,
+                        User.created_at < next_date
+                    ).count()
+                
+                trend.append({
+                    "date": date_str,
+                    "count": count
+                })
+            
+            return trend
+        except Exception as e:
+            logger.error(f"获取用户注册趋势失败: {str(e)}")
+            return []
+
+    async def _get_post_trend(self, days: int) -> List[Dict[str, Any]]:
+        """获取帖子发布趋势"""
+        try:
+            from datetime import datetime, timedelta
+            from ..database.models import Post
+            
+            trend = []
+            
+            for i in range(days - 1, -1, -1):
+                date = datetime.now() - timedelta(days=i)
+                date_str = date.strftime("%Y-%m-%d")
+                next_date = date + timedelta(days=1)
+                
+                with self.mysql_db.get_session() as session:
+                    count = session.query(Post).filter(
+                        Post.created_at >= date,
+                        Post.created_at < next_date
+                    ).count()
+                
+                trend.append({
+                    "date": date_str,
+                    "count": count
+                })
+            
+            return trend
+        except Exception as e:
+            logger.error(f"获取帖子发布趋势失败: {str(e)}")
+            return []
+
+    async def _get_moderation_distribution(self) -> List[Dict[str, Any]]:
+        """获取内容审核状态分布"""
+        try:
+            from ..database.models import Post
+            from sqlalchemy import func
+            
+            with self.mysql_db.get_session() as session:
+                results = session.query(
+                    Post.moderation_status,
+                    func.count(Post.id).label('count')
+                ).group_by(Post.moderation_status).all()
+            
+            distribution = []
+            status_map = {
+                "approved": {"name": "已通过", "color": "#52c41a"},
+                "pending": {"name": "待审核", "color": "#faad14"},
+                "rejected": {"name": "已拒绝", "color": "#ff4d4f"}
+            }
+            
+            for status, count in results:
+                info = status_map.get(status, {"name": str(status), "color": "#1890ff"})
+                distribution.append({
+                    "name": info["name"],
+                    "value": count,
+                    "color": info["color"]
+                })
+            
+            return distribution
+        except Exception as e:
+            logger.error(f"获取审核状态分布失败: {str(e)}")
+            return []
+
+    async def _get_user_activity_distribution(self) -> Dict[str, Any]:
+        """获取用户活跃度分布"""
+        try:
+            posts_collection = self.mongodb.get_collection("social_posts")
+            plans_collection = self.mongodb.get_collection("travel_plans")
+            
+            pipeline = [
+                {"$group": {"_id": "$user_id", "post_count": {"$sum": 1}}},
+                {"$bucket": {
+                    "groupBy": "$post_count",
+                    "boundaries": [0, 1, 3, 5, 10, float("inf")],
+                    "default": "other",
+                    "output": {"count": {"$sum": 1}}
+                }}
+            ]
+            
+            post_activity = await posts_collection.aggregate(pipeline).to_list(length=100)
+            
+            pipeline = [
+                {"$group": {"_id": "$user_id", "plan_count": {"$sum": 1}}},
+                {"$bucket": {
+                    "groupBy": "$plan_count",
+                    "boundaries": [0, 1, 3, 5, 10, float("inf")],
+                    "default": "other",
+                    "output": {"count": {"$sum": 1}}
+                }}
+            ]
+            
+            plan_activity = await plans_collection.aggregate(pipeline).to_list(length=100)
+            
+            return {
+                "post_activity": [
+                    {"name": "0篇", "value": 0, "color": "#d9d9d9"},
+                    {"name": "1-2篇", "value": 0, "color": "#91caff"},
+                    {"name": "3-4篇", "value": 0, "color": "#69c0ff"},
+                    {"name": "5-9篇", "value": 0, "color": "#40a9ff"},
+                    {"name": "10+篇", "value": 0, "color": "#1890ff"}
+                ],
+                "plan_activity": [
+                    {"name": "0个", "value": 0, "color": "#d9d9d9"},
+                    {"name": "1-2个", "value": 0, "color": "#95de64"},
+                    {"name": "3-4个", "value": 0, "color": "#73d13d"},
+                    {"name": "5-9个", "value": 0, "color": "#52c41a"},
+                    {"name": "10+个", "value": 0, "color": "#389e0d"}
+                ]
+            }
+        except Exception as e:
+            logger.error(f"获取用户活跃度分布失败: {str(e)}")
+            return {"post_activity": [], "plan_activity": []}
+
+    async def _get_content_type_distribution(self) -> List[Dict[str, Any]]:
+        """获取内容类型分布"""
+        try:
+            posts_collection = self.mongodb.get_collection("social_posts")
+            
+            pipeline = [
+                {"$group": {"_id": "$type", "count": {"$sum": 1}}},
+                {"$sort": {"count": -1}},
+                {"$limit": 10}
+            ]
+            
+            results = await posts_collection.aggregate(pipeline).to_list(length=100)
+            
+            colors = ["#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de", "#3ba272", "#fc8452", "#9a60b4", "#ea7ccc", "#ff4d4f"]
+            distribution = []
+            
+            for i, item in enumerate(results):
+                distribution.append({
+                    "name": item["_id"] or "未知",
+                    "value": item["count"],
+                    "color": colors[i % len(colors)]
+                })
+            
+            return distribution
+        except Exception as e:
+            logger.error(f"获取内容类型分布失败: {str(e)}")
+            return []
+
+    async def _get_top_content(self, limit: int) -> List[Dict[str, Any]]:
+        """获取热门内容"""
+        try:
+            posts_collection = self.mongodb.get_collection("social_posts")
+            
+            pipeline = [
+                {"$match": {"moderation_status": "approved"}},
+                {"$sort": {"like_count": -1, "view_count": -1}},
+                {"$limit": limit},
+                {"$project": {
+                    "post_id": 1,
+                    "title": 1,
+                    "content": 1,
+                    "author": 1,
+                    "like_count": 1,
+                    "view_count": 1,
+                    "comment_count": 1,
+                    "created_at": 1
+                }}
+            ]
+            
+            results = await posts_collection.aggregate(pipeline).to_list(length=limit)
+            
+            top_content = []
+            for item in results:
+                top_content.append({
+                    "post_id": item.get("post_id"),
+                    "title": item.get("title", "")[:30],
+                    "author": item.get("author", "未知"),
+                    "likes": item.get("like_count", 0),
+                    "views": item.get("view_count", 0),
+                    "comments": item.get("comment_count", 0),
+                    "created_at": item.get("created_at")
+                })
+            
+            return top_content
+        except Exception as e:
+            logger.error(f"获取热门内容失败: {str(e)}")
+            return []
+
+    async def _get_interaction_stats(self) -> Dict[str, Any]:
+        """获取互动统计数据"""
+        try:
+            posts_collection = self.mongodb.get_collection("social_posts")
+            comments_collection = self.mongodb.get_collection("social_comments")
+            
+            total_likes = 0
+            total_views = 0
+            total_comments = 0
+            
+            posts = await posts_collection.find(
+                {"moderation_status": "approved"},
+                {"like_count": 1, "view_count": 1}
+            ).to_list(length=1000)
+            
+            for post in posts:
+                total_likes += post.get("like_count", 0)
+                total_views += post.get("view_count", 0)
+            
+            comments_count = await comments_collection.count_documents({})
+            total_comments = comments_count
+            
+            return {
+                "total_likes": total_likes,
+                "total_views": total_views,
+                "total_comments": total_comments,
+                "avg_likes_per_post": round(total_likes / len(posts), 1) if posts else 0,
+                "avg_views_per_post": round(total_views / len(posts), 1) if posts else 0
+            }
+        except Exception as e:
+            logger.error(f"获取互动统计失败: {str(e)}")
+            return {
+                "total_likes": 0,
+                "total_views": 0,
+                "total_comments": 0,
+                "avg_likes_per_post": 0,
+                "avg_views_per_post": 0
+            }
+
     def get_audit_logs(
         self,
+        resource_id: Optional[str] = None,
         user_id: Optional[int] = None,
         action: Optional[str] = None,
+        resource: Optional[str] = None,
+        method: Optional[str] = None,
+        path_keyword: Optional[str] = None,
+        status_code: Optional[int] = None,
+        response_status: Optional[str] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         limit: int = 100,
@@ -272,8 +652,14 @@ class AdminService:
         获取审计日志
 
         Args:
+            resource_id: 资源ID搜索
             user_id: 用户ID筛选
             action: 操作类型筛选
+            resource: 资源类型筛选
+            method: HTTP方法筛选 (GET/POST/PUT/DELETE)
+            path_keyword: 请求路径模糊匹配
+            status_code: 响应状态码筛选（传入 2/4/5 匹配对应 2xx/4xx/5xx）
+            response_status: 响应结果筛选 (success/error)
             start_date: 开始日期
             end_date: 结束日期
             limit: 返回数量
@@ -283,12 +669,64 @@ class AdminService:
             Dict: {total: int, logs: List[Dict]}
         """
         try:
-            # 注意：需要在MySQL中创建audit_logs表
-            # 这里返回模拟数据，实际应该查询数据库
-            return {
-                "total": 0,
-                "logs": []
-            }
+            from ..database.models import AuditLog
+
+            with self.mysql_db.get_session() as session:
+                query = session.query(AuditLog)
+
+                if resource_id:
+                    query = query.filter(AuditLog.resource_id.ilike(f"%{resource_id}%"))
+                if user_id is not None:
+                    query = query.filter(AuditLog.user_id == user_id)
+                if action:
+                    query = query.filter(AuditLog.action == action)
+                if resource:
+                    query = query.filter(AuditLog.resource == resource)
+                if method:
+                    query = query.filter(AuditLog.method == method.upper())
+                if path_keyword:
+                    query = query.filter(AuditLog.path.ilike(f"%{path_keyword}%"))
+                if status_code is not None:
+                    if status_code < 10:
+                        lower = status_code * 100
+                        query = query.filter(AuditLog.status_code.between(lower, lower + 99))
+                    else:
+                        query = query.filter(AuditLog.status_code == status_code)
+                if response_status:
+                    query = query.filter(AuditLog.response_status == response_status)
+                if start_date:
+                    query = query.filter(AuditLog.created_at >= start_date)
+                if end_date:
+                    query = query.filter(AuditLog.created_at <= end_date)
+
+                total = query.count()
+
+                logs = query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()
+
+                log_list = []
+                for log in logs:
+                    log_list.append({
+                        "id": log.id,
+                        "user_id": log.user_id,
+                        "username": log.username,
+                        "action": log.action,
+                        "resource": log.resource,
+                        "resource_id": log.resource_id,
+                        "details": log.details,
+                        "ip_address": log.ip_address,
+                        "user_agent": log.user_agent,
+                        "method": log.method,
+                        "path": log.path,
+                        "status_code": log.status_code,
+                        "duration_ms": log.duration_ms,
+                        "response_status": log.response_status,
+                        "created_at": log.created_at.isoformat() if log.created_at else None
+                    })
+
+                return {
+                    "total": total,
+                    "logs": log_list
+                }
 
         except Exception as e:
             logger.error(f"获取审计日志失败: {str(e)}")

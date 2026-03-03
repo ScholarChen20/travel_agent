@@ -140,10 +140,11 @@ class AuthService:
                 "expires_at": str (ISO格式)
             }
         """
+        now = datetime.utcnow()
         if expires_delta:
-            expire = datetime.now() + expires_delta
+            expire = now + expires_delta
         else:
-            expire = datetime.now() + timedelta(days=self.settings.jwt_access_token_expire_days)
+            expire = now + timedelta(days=self.settings.jwt_access_token_expire_days)
 
         # 生成唯一的JWT ID（用于黑名单）
         jti = secrets.token_urlsafe(32)
@@ -156,8 +157,8 @@ class AuthService:
             "device_id": device_id,
             "jti": jti,  # JWT ID
             "exp": expire,  # Expiration time
-            "iat": datetime.now(),  # Issued at
-            "nbf": datetime.now()  # Not before
+            "iat": now,  # Issued at
+            "nbf": now  # Not before
         }
 
         # 生成Token
@@ -168,7 +169,7 @@ class AuthService:
         )
 
         # 计算过期时间（秒）
-        expires_in = int((expire - datetime.now()).total_seconds())
+        expires_in = int((expire - datetime.utcnow()).total_seconds())
 
         return {
             "access_token": token,
@@ -192,7 +193,8 @@ class AuthService:
             payload = jwt.decode(
                 token,
                 self.settings.jwt_secret_key,
-                algorithms=[self.settings.jwt_algorithm]
+                algorithms=[self.settings.jwt_algorithm],
+                leeway=timedelta(seconds=10)
             )
             return payload
         except jwt.ExpiredSignatureError:
@@ -272,14 +274,14 @@ class AuthService:
         Returns:
             str: 重置Token（15分钟有效期）
         """
-        expire = datetime.now() + timedelta(minutes=15)
+        expire = datetime.utcnow() + timedelta(minutes=15)
 
         payload = {
             "sub": user_id,
             "email": email,
             "type": "password_reset",
             "exp": expire,
-            "iat": datetime.now()
+            "iat": datetime.utcnow()
         }
 
         token = jwt.encode(

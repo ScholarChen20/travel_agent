@@ -6,7 +6,7 @@
 from datetime import datetime
 from typing import List
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Text, Boolean, DateTime,
+    Column, Integer, BigInteger, SmallInteger, String, Text, Boolean, DateTime,
     Date, Enum, ForeignKey, Index, UniqueConstraint, JSON
 )
 from sqlalchemy.orm import relationship
@@ -323,18 +323,26 @@ class AuditLog(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True, comment='操作用户ID，NULL表示系统操作')
+    username = Column(String(100), nullable=True, comment='用户名（冗余，避免JOIN）')
     action = Column(String(100), nullable=False, comment='操作类型')
     resource = Column(String(100), nullable=False, comment='操作资源')
     resource_id = Column(String(100), nullable=True, comment='资源ID')
     details = Column(JSON, nullable=True, comment='操作详情')
     ip_address = Column(String(45), nullable=True, comment='IP地址')
     user_agent = Column(Text, nullable=True, comment='User-Agent')
+    method = Column(String(10), nullable=True, comment='HTTP方法 (GET/POST/PUT/DELETE)')
+    path = Column(String(255), nullable=True, comment='请求路径')
+    status_code = Column(SmallInteger, nullable=True, comment='HTTP响应状态码')
+    duration_ms = Column(Integer, nullable=True, comment='请求耗时(ms)')
+    response_status = Column(String(20), nullable=True, comment='响应结果 (success/error)')
     created_at = Column(DateTime, default=datetime.now, nullable=False)
 
     # 索引
     __table_args__ = (
         Index('idx_user_action', 'user_id', 'action'),
         Index('idx_created_at', 'created_at'),
+        Index('idx_method_path', 'method', 'path'),
+        Index('idx_status_code', 'status_code'),
     )
 
     def __repr__(self):

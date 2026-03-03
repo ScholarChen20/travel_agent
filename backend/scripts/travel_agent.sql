@@ -13,7 +13,7 @@
 
  Date: 28/02/2026 11:42:47
 */
-CREATE DATABASE IF NOT EXISTS travel_agent DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE now travel_agent DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE travel_agent;
 
@@ -27,16 +27,24 @@ DROP TABLE IF EXISTS `audit_logs`;
 CREATE TABLE `audit_logs`  (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `user_id` bigint NULL DEFAULT NULL COMMENT '操作用户ID，NULL表示系统操作',
+  `username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '用户名（冗余，避免JOIN）',
   `action` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '操作类型',
   `resource` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '操作资源',
   `resource_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '资源ID',
   `details` json NULL COMMENT '操作详情',
   `ip_address` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'IP地址',
   `user_agent` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT 'User-Agent',
+  `method` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'HTTP方法 (GET/POST/PUT/DELETE)',
+  `path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '请求路径',
+  `status_code` smallint NULL DEFAULT NULL COMMENT 'HTTP响应状态码',
+  `duration_ms` int NULL DEFAULT NULL COMMENT '请求耗时(ms)',
+  `response_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '响应结果 (success/error)',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_action`(`user_id` ASC, `action` ASC) USING BTREE,
-  INDEX `idx_created_at`(`created_at` ASC) USING BTREE
+  INDEX `idx_created_at`(`created_at` ASC) USING BTREE,
+  INDEX `idx_method_path`(`method` ASC, `path` ASC) USING BTREE,
+  INDEX `idx_status_code`(`status_code` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '审计日志表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
@@ -14747,3 +14755,19 @@ CREATE TABLE `users`  (
 -- ----------------------------
 INSERT INTO `users` VALUES (1, 'admin', 'admin@123.com', '$2a$10$OKU4EkkNZMbV/vo5XQ3I4.yKdCgwgvu3u6thPvpLZ7UAliXT56Cpi', '13800138000', 'https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg', '我是管理员', 'admin', 1, 0, '2026-02-03 10:55:19', '2026-02-26 09:56:28', '2026-02-26 02:29:14');
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ----------------------------
+-- Migration: audit_logs 新增字段 (v2.0 日志切面重构)
+-- 执行时机：仅在现有数据库升级时运行，新建库无需执行（DDL 已包含在上方 CREATE TABLE 中）
+-- ----------------------------
+ALTER TABLE `audit_logs`
+  ADD COLUMN  `username`        VARCHAR(100) NULL DEFAULT NULL COMMENT '用户名（冗余，避免JOIN）' AFTER `user_id`,
+  ADD COLUMN  `method`          VARCHAR(10)  NULL DEFAULT NULL COMMENT 'HTTP方法 (GET/POST/PUT/DELETE)' AFTER `user_agent`,
+  ADD COLUMN  `path`            VARCHAR(255) NULL DEFAULT NULL COMMENT '请求路径 (/api/user/123)' AFTER `method`,
+  ADD COLUMN  `status_code`     SMALLINT     NULL DEFAULT NULL COMMENT 'HTTP响应状态码' AFTER `path`,
+  ADD COLUMN  `duration_ms`     INT          NULL DEFAULT NULL COMMENT '请求耗时(ms)' AFTER `status_code`,
+  ADD COLUMN  `response_status` VARCHAR(20)  NULL DEFAULT NULL COMMENT '响应结果 (success/error)' AFTER `duration_ms`;
+
+-- 新增索引（忽略已存在错误）
+CREATE INDEX  `idx_method_path` ON `audit_logs` (`method`, `path`);
+CREATE INDEX  `idx_status_code`  ON `audit_logs` (`status_code`);
