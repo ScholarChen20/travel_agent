@@ -4,11 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from ...services.dashboard_service import (
     DashboardService,
-    UserStatsResponse,
-    ContentStatsResponse,
-    BusinessStatsResponse,
-    DashboardOverviewResponse,
-    BusinessTrendResponse,
     DateRangeRequest
 )
 from ...utils.response import ApiResponse, ResponseCode
@@ -22,7 +17,7 @@ def get_dashboard_service() -> DashboardService:
     return get_dashboard_service()
 
 
-@router.get("/overview", summary="获取首页综合指标", response_model=DashboardOverviewResponse)
+@router.get("/overview", summary="获取首页综合指标")
 async def get_dashboard_overview(
     dashboard_service: DashboardService = Depends(get_dashboard_service)
 ):
@@ -39,7 +34,7 @@ async def get_dashboard_overview(
         )
 
 
-@router.get("/user-stats", summary="获取用户统计数据", response_model=UserStatsResponse)
+@router.get("/user-stats", summary="获取用户统计数据")
 async def get_user_stats(
     dashboard_service: DashboardService = Depends(get_dashboard_service)
 ):
@@ -56,7 +51,7 @@ async def get_user_stats(
         )
 
 
-@router.get("/content-stats", summary="获取内容统计数据", response_model=ContentStatsResponse)
+@router.get("/content-stats", summary="获取内容统计数据")
 async def get_content_stats(
     dashboard_service: DashboardService = Depends(get_dashboard_service)
 ):
@@ -73,7 +68,7 @@ async def get_content_stats(
         )
 
 
-@router.get("/business-stats", summary="获取业务指标数据", response_model=BusinessStatsResponse)
+@router.get("/business-stats", summary="获取业务指标数据")
 async def get_business_stats(
     dashboard_service: DashboardService = Depends(get_dashboard_service)
 ):
@@ -90,7 +85,7 @@ async def get_business_stats(
         )
 
 
-@router.get("/business-trend", summary="获取业务趋势数据", response_model=BusinessTrendResponse)
+@router.get("/business-trend", summary="获取业务趋势数据")
 async def get_business_trend(
     start_date: Optional[str] = Query(None, description="开始日期，格式: YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="结束日期，格式: YYYY-MM-DD"),

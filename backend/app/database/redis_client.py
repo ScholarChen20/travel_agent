@@ -2,10 +2,20 @@
 
 from typing import Optional, Any, Union
 import json
+from datetime import datetime
 import redis.asyncio as redis
 from redis.asyncio import Redis
 from redis.exceptions import RedisError, ConnectionError
 from loguru import logger
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """自定义JSON编码器，支持datetime对象"""
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 class RedisClient:
@@ -62,7 +72,7 @@ class RedisClient:
         """
         try:
             if isinstance(value, (dict, list)):
-                value = json.dumps(value, ensure_ascii=False)
+                value = json.dumps(value, ensure_ascii=False, cls=DateTimeEncoder)
 
             await self.client.set(key, value, ex=ex)
             return True

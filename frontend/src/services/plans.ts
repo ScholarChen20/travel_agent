@@ -23,15 +23,14 @@ export const plansService = {
     const response = await axios.get('/plans', {
       params: { limit, skip: offset }
     })
-    // 后端返回 {total, plans}，我们需要提取 plans 数组并转换字段名
-    const data = response.data
-    const plans = data.plans || []
+    const data = response.data.data
+    const plans = data?.plans || data || []
     return plans.map((plan: any) => ({
       id: plan.plan_id,
-      title: plan.city, // 使用城市名作为标题
+      title: plan.city,
       destination: plan.city,
       start_date: plan.start_date,
-      end_date: plan.end_date || plan.start_date, // 使用 end_date，如果没有则使用 start_date
+      end_date: plan.end_date || plan.start_date,
       budget: plan.budget,
       plan_data: plan.days,
       is_favorite: plan.is_favorite,
@@ -42,7 +41,7 @@ export const plansService = {
 
   async getPlan(planId: string): Promise<TravelPlan> {
     const response = await axios.get(`/plans/${planId}`)
-    const plan = response.data
+    const plan = response.data.data
     return {
       id: plan.plan_id,
       title: plan.city,
@@ -59,7 +58,7 @@ export const plansService = {
 
   async updatePlan(planId: string, data: UpdatePlanRequest): Promise<TravelPlan> {
     const response = await axios.put(`/plans/${planId}`, data)
-    const plan = response.data
+    const plan = response.data.data
     return {
       id: plan.plan_id,
       title: plan.city,

@@ -223,7 +223,7 @@ class DouyinService:
                 data = await self.process_hotboard_data()
                 if not data.get('success'):
                     logger.info("处理抖音热点数据失败，请稍后再试")
-                    return []
+                    await self.process_hotboard_data()
 
                 # 再从redis中取数据
                 result = await self.redis_client.client.zrange(

@@ -80,6 +80,9 @@ class DashboardService:
         """初始化服务"""
         self.mysql_db = get_mysql_db()
         self.mongodb_client = get_mongodb_client()
+        self.plans_collection = "travel_plans"
+        self.posts_collection = "social_posts"
+        self.comments_collection = "social_comments"
         # 延迟初始化Redis客户端
         self.redis = None
         self._init_redis()
@@ -202,24 +205,26 @@ class DashboardService:
                     except Exception as e:
                         logger.warning(f"解析Redis缓存失败: {str(e)}")
 
-            # 从MySQL数据库查询帖子和评论
-            with self.mysql_db.get_session() as session:
-                # 总帖子数
-                total_posts = session.query(Post).count()
+            logger.info("开始从MongoDB获取内容统计数据")
+            post_collection = self.mongodb_client.get_collection(self.posts_collection)
+            total_posts = await post_collection.count_documents({})
 
-                # 总评论数
-                total_comments = session.query(Comment).count()
+            comment_collection = self.mongodb_client.get_collection(self.comments_collection)
+            total_comments = await comment_collection.count_documents({})
 
-                # 今日创建的帖子数
-                today = datetime.utcnow().date()
-                posts_created_today = session.query(Post).filter(
-                    func.date(Post.created_at) == today
-                ).count()
+            today = datetime.utcnow().date()
+            posts_created_today = await post_collection.count_documents({
+                "created_at": {
+                    "$gte": datetime(today.year, today.month, today.day),
+                    "$lt": datetime(today.year, today.month, today.day) + timedelta(days=1)
+                }
+            })
 
             # 从MongoDB查询旅行计划
-            travel_plans = self.mongodb_client.travel_plans
-            total_plans = await travel_plans.count_documents({})
-            plans_created_today = await travel_plans.count_documents({
+            logger.info("开始从MongoDB获取旅行计划统计数据")
+            collection = self.mongodb_client.get_collection(self.plans_collection)
+            total_plans = await collection.count_documents({})
+            plans_created_today = await collection.count_documents({
                 "created_at": {
                     "$gte": datetime(today.year, today.month, today.day),
                     "$lt": datetime(today.year, today.month, today.day) + timedelta(days=1)
@@ -227,8 +232,10 @@ class DashboardService:
             })
 
             # 统计景点数（假设从旅行计划中统计）
-            pois = await travel_plans.distinct("poi_id")
-            total_pois = len(pois)
+            pois = await collection.distinct("days")
+            total_pois = 0
+            for poi in pois:
+                total_pois += len((poi.get("attractions", [])))
 
             # 构建响应
             response = ContentStatsResponse(
@@ -277,7 +284,7 @@ class DashboardService:
                         logger.warning(f"解析Redis缓存失败: {str(e)}")
 
             # 从MongoDB查询旅行计划
-            travel_plans = self.mongodb_client.travel_plans
+            travel_plans = self.mongodb_client.get_collection(self.plans_collection)
             today = datetime.utcnow().date()
 
             # 每日旅行计划创建量
@@ -323,27 +330,9 @@ class DashboardService:
                     user_retention_rate = 0.0
 
             # 平均旅行计划长度（天）
-            # 从MongoDB查询旅行计划的平均长度
-            pipeline = [
-                {
-                    "$project": {
-                        "duration": {
-                            "$divide": [
-                                {"$subtract": ["$end_date", "$start_date"]},
-                                1000 * 60 * 60 * 24
-                            ]
-                        }
-                    }
-                },
-                {
-                    "$group": {
-                        "_id": None,
-                        "avg_duration": {"$avg": "$duration"}
-                    }
-                }
-            ]
-            result = await travel_plans.aggregate(pipeline).to_list(length=1)
-            avg_plan_length = result[0]["avg_duration"] if result else 0.0
+            total_days = await travel_plans.distinct("days")
+            total_plans = await travel_plans.count_documents({})
+            avg_plan_length = float(len(total_days) / total_plans) if total_plans > 0 else 0.0
 
             # 构建响应
             response = BusinessStatsResponse(
@@ -441,7 +430,7 @@ class DashboardService:
                 current_date += timedelta(days=1)
 
             # 查询每日数据
-            travel_plans = self.mongodb_client.travel_plans
+            travel_plans = self.mongodb_client.get_collection(self.plans_collection)
             plan_creation_trend = []
 
             for date_str in date_range:

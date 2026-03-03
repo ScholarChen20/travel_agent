@@ -131,13 +131,113 @@
         </a-card>
       </div>
     </section>
+
+    <!-- Dashboard Section -->
+    <section id="dashboard-section" class="dashboard-section" v-if="authStore.isAuthenticated">
+      <div class="section-container">
+        <a-card class="dashboard-card" :bordered="false">
+          <template #title>
+            <div class="card-header">
+              <span class="header-icon">📊</span>
+              <span class="header-title">平台数据统计</span>
+            </div>
+          </template>
+          
+          <a-spin :spinning="dashboardLoading" tip="加载数据中...">
+            <!-- Dashboard Stats Grid -->
+            <div class="dashboard-stats-grid" v-if="dashboardData && dashboardData.user_stats">
+              <div class="dashboard-stat-item">
+                <div class="stat-icon">👥</div>
+                <div class="stat-info">
+                  <div class="stat-value">{{ dashboardData?.user_stats?.total_users ?? 0 }}</div>
+                  <div class="stat-label">总用户数</div>
+                </div>
+                <div class="stat-trend" :class="(dashboardData?.user_stats?.user_growth_rate ?? 0) >= 0 ? 'up' : 'down'">
+                  {{ (dashboardData?.user_stats?.user_growth_rate ?? 0) >= 0 ? '↑' : '↓' }} {{ Math.abs(dashboardData?.user_stats?.user_growth_rate ?? 0).toFixed(1) }}%
+                </div>
+              </div>
+              <div class="dashboard-stat-item">
+                <div class="stat-icon">📋</div>
+                <div class="stat-info">
+                  <div class="stat-value">{{ dashboardData?.content_stats?.total_plans ?? 0 }}</div>
+                  <div class="stat-label">总计划数</div>
+                </div>
+                <div class="stat-trend up">
+                  +{{ dashboardData?.content_stats?.plans_created_today ?? 0 }} 今日
+                </div>
+              </div>
+              <div class="dashboard-stat-item">
+                <div class="stat-icon">🏷️</div>
+                <div class="stat-info">
+                  <div class="stat-value">{{ dashboardData?.content_stats?.total_pois ?? 0 }}</div>
+                  <div class="stat-label">景点数</div>
+                </div>
+              </div>
+              <div class="dashboard-stat-item">
+                <div class="stat-icon">💬</div>
+                <div class="stat-info">
+                  <div class="stat-value">{{ dashboardData?.content_stats?.total_posts ?? 0 }}</div>
+                  <div class="stat-label">帖子数</div>
+                </div>
+                <div class="stat-trend up">
+                  +{{ dashboardData?.content_stats?.posts_created_today ?? 0 }} 今日
+                </div>
+              </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="charts-grid" v-if="dashboardData && dashboardData.user_stats">
+              <!-- User Growth Chart -->
+              <a-card class="chart-card" :bordered="false">
+                <template #title>
+                  <div class="chart-card-header">
+                    <span>用户增长趋势</span>
+                  </div>
+                </template>
+                <div ref="userChartRef" class="chart-container"></div>
+              </a-card>
+
+              <!-- Content Stats Chart -->
+              <a-card class="chart-card" :bordered="false">
+                <template #title>
+                  <div class="chart-card-header">
+                    <span>内容统计分布</span>
+                  </div>
+                </template>
+                <div ref="contentChartRef" class="chart-container"></div>
+              </a-card>
+
+              <!-- Business Trend Chart -->
+              <a-card class="chart-card" :bordered="false" style="grid-column: span 2;">
+                <template #title>
+                  <div class="chart-card-header">
+                    <span>业务趋势</span>
+                    <a-range-picker
+                      v-model:value="dateRange"
+                      @change="handleDateRangeChange"
+                      style="width: 300px;"
+                    />
+                  </div>
+                </template>
+                <div ref="businessChartRef" class="chart-container"></div>
+              </a-card>
+            </div>
+
+            <!-- Last Update -->
+            <div class="last-update" v-if="dashboardData">
+              数据更新时间: {{ formatDate(dashboardData?.updated_at) }}
+            </div>
+          </a-spin>
+        </a-card>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { message, Empty } from 'ant-design-vue'
+import { message, Empty, RangePickerProps } from 'ant-design-vue'
 import { 
   UserOutlined, 
   SettingOutlined, 
@@ -150,6 +250,12 @@ import { userService } from '@/services/user'
 import * as echarts from 'echarts'
 import chinaJson from '@/assets/china.json'
 import { findProvinceByCity } from '@/data/cities'
+import { 
+  getDashboardOverview, 
+  getBusinessTrend,
+  type DashboardOverviewResponse,
+  type BusinessTrendResponse
+} from '@/services/dashboard'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -159,6 +265,17 @@ const visitedCities = ref<string[]>([])
 const mapRef = ref<HTMLElement>()
 const mapLoading = ref(false)
 let chartInstance: echarts.ECharts | null = null
+
+const dashboardLoading = ref(false)
+const dashboardData = ref<DashboardOverviewResponse | null>(null)
+const businessTrendData = ref<BusinessTrendResponse | null>(null)
+const dateRange = ref<RangePickerProps['value']>(null)
+const userChartRef = ref<HTMLElement>()
+const contentChartRef = ref<HTMLElement>()
+const businessChartRef = ref<HTMLElement>()
+let userChartInstance: echarts.ECharts | null = null
+let contentChartInstance: echarts.ECharts | null = null
+let businessChartInstance: echarts.ECharts | null = null
 
 const TOTAL_PROVINCES = 34
 
@@ -290,6 +407,249 @@ async function initMap() {
   }
 }
 
+// 获取仪表盘数据
+async function fetchDashboardData() {
+  dashboardLoading.value = true
+  try {
+    const overview = await getDashboardOverview()
+    dashboardData.value = overview
+    
+    await nextTick()
+    initUserChart()
+    initContentChart()
+    initBusinessChart()
+  } catch (error) {
+    console.error('获取仪表盘数据失败:', error)
+    message.error('获取仪表盘数据失败')
+  } finally {
+    dashboardLoading.value = false
+  }
+}
+
+// 初始化用户增长图表
+function initUserChart() {
+  if (!userChartRef.value || !dashboardData.value) return
+  if (userChartInstance) userChartInstance.dispose()
+  
+  userChartInstance = echarts.init(userChartRef.value)
+  
+  const stats = dashboardData.value.user_stats
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(50, 50, 50, 0.9)',
+      textStyle: { color: '#fff' },
+      formatter: '{b}: {c} 人'
+    },
+    xAxis: {
+      type: 'category',
+      data: ['今日新增', '本周新增', '本月新增'],
+      axisLabel: { color: '#666' },
+      axisLine: { lineStyle: { color: '#e0e0e0' } }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#666' },
+      splitLine: { lineStyle: { color: '#f0f0f0' } }
+    },
+    series: [{
+      data: [stats.new_users_today ?? 0, stats.new_users_week ?? 0, stats.new_users_month ?? 0],
+      type: 'bar',
+      barWidth: '40%',
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: '#4facfe' },
+          { offset: 1, color: '#00f2fe' }
+        ]),
+        borderRadius: [8, 8, 0, 0]
+      },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowColor: 'rgba(79, 172, 254, 0.5)'
+        }
+      },
+      label: {
+        show: true,
+        position: 'top',
+        color: '#4facfe',
+        fontSize: 14,
+        fontWeight: 'bold',
+        formatter: '{c}'
+      }
+    }],
+    grid: {
+      left: '10%',
+      right: '10%',
+      bottom: '10%',
+      top: '20%'
+    }
+  }
+  
+  userChartInstance.setOption(option)
+  window.addEventListener('resize', () => userChartInstance?.resize())
+}
+
+// 初始化内容统计图表
+function initContentChart() {
+  if (!contentChartRef.value || !dashboardData.value) return
+  if (contentChartInstance) contentChartInstance.dispose()
+  
+  contentChartInstance = echarts.init(contentChartRef.value)
+  
+  const stats = dashboardData.value.content_stats
+  const option = {
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'rgba(50, 50, 50, 0.9)',
+      textStyle: { color: '#fff' }
+    },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 10,
+        borderColor: '#fff',
+        borderWidth: 2
+      },
+      label: {
+        show: true,
+        formatter: '{b}: {c}'
+      },
+      data: [
+        { value: stats.total_plans, name: '旅行计划', itemStyle: { color: '#667eea' } },
+        { value: stats.total_pois, name: '景点', itemStyle: { color: '#764ba2' } },
+        { value: stats.total_posts, name: '帖子', itemStyle: { color: '#f093fb' } },
+        { value: stats.total_comments, name: '评论', itemStyle: { color: '#f5576c' } }
+      ]
+    }]
+  }
+  
+  contentChartInstance.setOption(option)
+  window.addEventListener('resize', () => contentChartInstance?.resize())
+}
+
+// 初始化业务趋势图表
+async function initBusinessChart() {
+  if (!businessChartRef.value) return
+  if (businessChartInstance) businessChartInstance.dispose()
+  
+  businessChartInstance = echarts.init(businessChartRef.value)
+  
+  let data = businessTrendData.value
+  if (!data) {
+    try {
+      data = await getBusinessTrend()
+      businessTrendData.value = data
+    } catch (error) {
+      console.error('获取业务趋势失败:', error)
+      return
+    }
+  }
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(50, 50, 50, 0.9)',
+      textStyle: { color: '#fff' }
+    },
+    legend: {
+      data: ['旅行计划', '用户注册', '用户活跃'],
+      textStyle: { color: '#666' },
+      top: 10
+    },
+    xAxis: {
+      type: 'category',
+      data: data.date_range,
+      axisLabel: { color: '#666' }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#666' }
+    },
+    series: [
+      {
+        name: '旅行计划',
+        type: 'line',
+        data: data.plan_creation_trend,
+        smooth: true,
+        itemStyle: { color: '#667eea' },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(102, 126, 234, 0.3)' },
+            { offset: 1, color: 'rgba(102, 126, 234, 0.05)' }
+          ])
+        }
+      },
+      {
+        name: '用户注册',
+        type: 'line',
+        data: data.user_registration_trend,
+        smooth: true,
+        itemStyle: { color: '#764ba2' },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(118, 75, 162, 0.3)' },
+            { offset: 1, color: 'rgba(118, 75, 162, 0.05)' }
+          ])
+        }
+      },
+      {
+        name: '用户活跃',
+        type: 'line',
+        data: data.user_activity_trend,
+        smooth: true,
+        itemStyle: { color: '#f093fb' },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(240, 147, 251, 0.3)' },
+            { offset: 1, color: 'rgba(240, 147, 251, 0.05)' }
+          ])
+        }
+      }
+    ],
+    grid: {
+      left: '5%',
+      right: '5%',
+      bottom: '10%',
+      top: '15%'
+    }
+  }
+  
+  businessChartInstance.setOption(option)
+  window.addEventListener('resize', () => businessChartInstance?.resize())
+}
+
+// 处理日期范围变化
+async function handleDateRangeChange(dates: any) {
+  if (dates && dates.length === 2) {
+    try {
+      businessTrendData.value = await getBusinessTrend({
+        start_date: dates[0].format('YYYY-MM-DD'),
+        end_date: dates[1].format('YYYY-MM-DD')
+      })
+      initBusinessChart()
+    } catch (error) {
+      console.error('获取业务趋势失败:', error)
+      message.error('获取业务趋势失败')
+    }
+  }
+}
+
+// 格式化日期
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
 function handleLogout() {
   authStore.logout()
   message.success('已退出登录')
@@ -304,6 +664,7 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     await fetchUserAvatar()
     await fetchVisitedCities()
+    await fetchDashboardData()
   }
 })
 
@@ -311,6 +672,18 @@ onUnmounted(() => {
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null
+  }
+  if (userChartInstance) {
+    userChartInstance.dispose()
+    userChartInstance = null
+  }
+  if (contentChartInstance) {
+    contentChartInstance.dispose()
+    contentChartInstance = null
+  }
+  if (businessChartInstance) {
+    businessChartInstance.dispose()
+    businessChartInstance = null
   }
 })
 </script>
@@ -487,12 +860,18 @@ onUnmounted(() => {
   background: var(--bg-secondary);
 }
 
+.dashboard-section {
+  padding: 80px 24px;
+  background: #fff;
+}
+
 .section-container {
   max-width: 1200px;
   margin: 0 auto;
 }
 
-.map-card {
+.map-card,
+.dashboard-card {
   border-radius: var(--border-radius-xl);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
@@ -562,6 +941,104 @@ onUnmounted(() => {
 .login-placeholder {
   padding: 80px 0;
   text-align: center;
+}
+
+/* Dashboard Styles */
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.dashboard-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg-light-gradient);
+  border-radius: var(--border-radius-lg);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.dashboard-stat-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+  font-size: 36px;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 16px;
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-info .stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.stat-info .stat-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.stat-trend {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.stat-trend.up {
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.1);
+}
+
+.stat-trend.down {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.1);
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.chart-card {
+  border-radius: var(--border-radius-lg);
+}
+
+.chart-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.chart-container {
+  height: 350px;
+}
+
+.last-update {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
 }
 
 /* Animations */

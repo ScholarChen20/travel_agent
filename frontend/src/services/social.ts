@@ -118,6 +118,6 @@ export const socialService = {
     const response = await axios.get('/social/hot-topics', {
       params: { limit }
     })
-    return response.data.topics || []
+    return response.data.data?.topics || []
   }
 }

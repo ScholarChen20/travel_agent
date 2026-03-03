@@ -35,7 +35,7 @@ interface Message {
 export const dialogService = {
   async createSession(): Promise<CreateSessionResponse> {
     const response = await axios.post('/dialog/sessions', { initial_context: {} })
-    return response.data
+    return response.data.data
   },
 
   async chat(sessionId: string, data: ChatRequest): Promise<ChatResponse> {
@@ -43,12 +43,12 @@ export const dialogService = {
       session_id: sessionId,
       message: data.message
     })
-    return response.data
+    return response.data.data
   },
 
   async getSessions(): Promise<Session[]> {
     const response = await axios.get('/dialog/sessions')
-    const raw: any[] = response.data.sessions || []
+    const raw: any[] = response.data.data?.sessions || []
     return raw.map(s => ({
       ...s,
       id: s.id ?? s.session_id,
@@ -57,7 +57,7 @@ export const dialogService = {
 
   async getSession(sessionId: string): Promise<{ messages: Message[] }> {
     const response = await axios.get(`/dialog/sessions/${sessionId}`)
-    return response.data
+    return response.data.data
   },
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -70,7 +70,7 @@ export const dialogService = {
 
   async getMessages(sessionId: string): Promise<Message[]> {
     const response = await axios.get(`/dialog/sessions/${sessionId}`)
-    return response.data.messages || []
+    return response.data.data?.messages || []
   },
 
   /**

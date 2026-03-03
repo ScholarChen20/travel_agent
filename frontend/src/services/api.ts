@@ -16,6 +16,10 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     console.log('发送请求:', config.method?.toUpperCase(), config.url)
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => {

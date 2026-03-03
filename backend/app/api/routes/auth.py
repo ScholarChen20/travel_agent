@@ -731,6 +731,8 @@ async def feishu_callback(request: FeishuCallbackRequest):
     feishu_name = feishu_user.get("name") or feishu_user.get("en_name") or "飞书用户"
     feishu_email = feishu_user.get("email") or feishu_user.get("enterprise_email") or ""
     feishu_avatar = feishu_user.get("avatar_url") or feishu_user.get("avatar_big") or ""
+    phone= feishu_user.get("mobile").split("+86")[1] or ""
+
 
     if not open_id:
         logger.error("飞书用户信息缺少 open_id")
@@ -776,6 +778,7 @@ async def feishu_callback(request: FeishuCallbackRequest):
                 email=email,
                 password_hash=None,       # 飞书用户无密码
                 avatar_url=feishu_avatar,
+                phone=phone,
                 role="user",
                 is_active=True,
                 is_verified=True,         # 飞书已做身份验证
@@ -801,7 +804,7 @@ async def feishu_callback(request: FeishuCallbackRequest):
                 detail="账户已被禁用，请联系管理员"
             )
 
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = datetime.now()
 
         user_id = user.id
         username = user.username

@@ -44,7 +44,7 @@ interface ChangePasswordRequest {
 export const userService = {
   async getProfile(): Promise<UserProfile> {
     const response = await axios.get('/user/profile')
-    return response.data
+    return response.data.data
   },
 
   async updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
@@ -57,7 +57,7 @@ export const userService = {
       ].filter(Boolean)
     }
     const response = await axios.put('/user/profile', backendData)
-    return response.data
+    return response.data.data
   },
 
   async uploadAvatar(file: File): Promise<{ avatar_url: string }> {
@@ -66,22 +66,24 @@ export const userService = {
     const response = await axios.post('/user/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    return response.data
+    return response.data.data
   },
 
   async getStats(): Promise<UserStats> {
     const response = await axios.get('/user/stats')
-    return response.data
+    return response.data.data
   },
 
   async getVisitedCities(): Promise<string[]> {
     const response = await axios.get('/user/visited-cities')
-    return response.data.cities || response.data
+    const data = response.data.data
+    return data?.cities || data || []
   },
 
   async updateVisitedCities(cities: string[]): Promise<string[]> {
     const response = await axios.put('/user/visited-cities', { cities })
-    return response.data.cities || response.data
+    const data = response.data.data
+    return data?.cities || data || []
   },
 
   async changePassword(data: ChangePasswordRequest): Promise<void> {

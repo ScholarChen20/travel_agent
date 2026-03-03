@@ -33,15 +33,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:3000,http://43.138.139.21"
 
     # 高德地图API配置
-    amap_api_key: str = "8aa3f70ef5cb613094d14ea0fe797dd7dk29"
+    amap_api_key: str = os.getenv("AMAP_MAPS_API_KEY")
     # amap_api_key: str = "5d6e7a8e7ef5fb9ddeed9f7324bb012d"
 
     # Unsplash API配置
     unsplash_access_key: str = "QuvNEksG7496IMigS5BhLkbiZg5MrFkszr35xutStEEX23dgh"
-    unsplash_secret_key: str = "AHo9Knd1T89YlVwHebQXpP1JOXc_rRFMT8_NlKEOrk823123123"
+    unsplash_secret_key: str = os.getenv("UNSPLASH_SECRET_KEY")
 
     # LLM配置 (从环境变量读取,由HelloAgents管理)
-    openai_api_key: str = "ms-7df9fd49-9a59-495d-bf50-f2922001f367f12d"
+    openai_api_key: str = os.getenv("MODELSCOPE_API_KEY")
     openai_base_url: str = "https://api-inference.modelscope.cn/v1/"
     openai_model: str = "Qwen/Qwen2.5-72B-Instruct"
 
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # 阿里云OSS配置
     oss_enabled: bool = True  # 是否启用OSS（False则使用本地存储）
     oss_access_key_id: str = "LTAI5tChzi1g1csczkKBbec91"  # 从.env读取
-    oss_access_key_secret: str = "b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX134"  # 从.env读取
+    oss_access_key_secret: str = os.getenv("OSS_ACCESS_KEY_SECRET")  # 从.env读取
     region: str = "cn-beijing"  # 从.env读取
     oss_endpoint: str = "oss-cn-beijing.aliyuncs.com"  # OSS地域节点
     oss_bucket_name: str = "java-webai-1"  # Bucket名称
@@ -273,6 +273,13 @@ def print_config():
         print(f"  OSS Endpoint: {settings.oss_endpoint}")
         print(f"  OSS Bucket: {settings.oss_bucket_name}")
         print(f"  OSS URL前缀: {settings.oss_url_prefix or '使用默认OSS域名'}")
+
+    # ============ 飞书配置 ============
+    print("\n飞书配置:")
+    print(f"  飞书开放平台APP ID: {settings.feishu_app_id}")
+    print(f"  飞书开放平台APP Secret: {settings.feishu_app_secret}")
+    print(f"  飞书开放平台回调地址: {settings.feishu_redirect_uri}")
+
 
     print(f"\n日志级别: {settings.log_level}")
 

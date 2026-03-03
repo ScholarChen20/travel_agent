@@ -74,8 +74,8 @@ class TravelPlanService:
                 "preferences": preferences or {},
                 "is_favorite": False,
                 "is_completed": False,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             }
 
             # 保存到MongoDB

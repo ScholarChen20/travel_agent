@@ -49,8 +49,8 @@ class DialogService:
                 "title": "",
                 "context": initial_context or {},
                 "message_count": 0,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
+                "created_at": datetime.now(),
+                "updated_at": datetime.now(),
                 "is_active": True
             }
 
@@ -106,7 +106,7 @@ class DialogService:
                 "role": role,
                 "content": content,
                 "metadata": metadata or {},
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now()
             }
 
             # 保存到MongoDB
@@ -119,7 +119,7 @@ class DialogService:
                 {"session_id": session_id},
                 {
                     "$inc": {"message_count": 1},
-                    "$set": {"updated_at": datetime.utcnow()}
+                    "$set": {"updated_at": datetime.now()}
                 }
             )
 
@@ -253,7 +253,7 @@ class DialogService:
                 "output_result": output_result,
                 "execution_time_ms": execution_time_ms,
                 "status": status,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now()
             }
 
             # 保存到MongoDB
@@ -353,7 +353,7 @@ class DialogService:
             sessions_collection = self.mongodb.get_collection(self.sessions_collection)
             result = await sessions_collection.update_one(
                 {"session_id": session_id, "user_id": user_id},
-                {"$set": {"title": title, "updated_at": datetime.utcnow()}}
+                {"$set": {"title": title, "updated_at": datetime.now()}}
             )
 
             if result.matched_count > 0:

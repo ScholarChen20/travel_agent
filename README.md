@@ -1,10 +1,11 @@
 # 智能旅行助手 🌍✈️
 
-基于HelloAgents框架构建的智能旅行规划助手,集成高德地图MCP服务,提供个性化的旅行计划生成。
+基于HelloAgents/AgentScope框架构建的智能旅行规划助手,集成高德地图MCP服务,提供个性化的旅行计划生成。
 
 ## ✨ 功能特点
 
 - 🤖 **AI驱动的旅行规划**: 基于HelloAgents框架的SimpleAgent,智能生成详细的多日旅程
+- 📝 **微服务后端框架**: 基于FastAPI构建的RESTful API服务 
 - 🗺️ **高德地图集成**: 通过MCP协议接入高德地图服务,支持景点搜索、路线规划、天气查询
 - 🧠 **智能工具调用**: Agent自动调用高德地图MCP工具,获取实时POI、路线和天气信息
 - 🎨 **现代化前端**: Vue3 + TypeScript + Vite,响应式设计,流畅的用户体验
@@ -20,6 +21,8 @@
 - **数据库**: MySQL, MongoDB
 - **缓存**: Redis
 - **队列**: Redis Stream
+- **文件存储**： Aliyun OSS
+- **其他**: Docker, Docker Compose
 
 
 ### 前端
@@ -27,6 +30,7 @@
 - **构建工具**: Vite
 - **UI组件库**: Ant Design Vue
 - **地图服务**: 高德地图 JavaScript API
+- **数据可视化**: eCharts.js
 - **HTTP客户端**: Axios
 
 ## 📁 项目结构
@@ -161,6 +165,17 @@ docker-compose ps
 docker-compose logs -f
 ```
 
+# 环境变量设置
+```bash
+echo "export FEISHU_APP_SECRET=YOUR_SECRET" >> ~/.bashrc  # 飞书开发者平台密钥
+echo "export DASHSCOPE_API_KEY=您的API密钥" >> ~/.bashrc  # DashScope API密钥
+echo "export AMAP_API_KEY=您的API密钥" >> ~/.bashrc # 高德地图API密钥
+echo "export UNSPLASH_SECRET_KEY=您的API密钥" >> ~/.bashrc # Unsplash API密钥
+echo "export OSS_ACCESS_KEY_SECRET=您的API密钥" >> ~/.bashrc  # 阿里云OSS密钥
+
+source ~/.bashrc
+```
+
 # 初始化数据库
 ```bash
 # 进入后端容器
@@ -175,9 +190,9 @@ exit
 # 验证服务
 ```bash
 # 检查前端服务
-curl http://localhost
+curl http://服务器地址
 # 检查后端API
-curl http://localhost/api/health
+curl http://服务器地址/api/health
 ```
 ## 📝 使用指南
 
