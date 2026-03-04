@@ -60,13 +60,22 @@
           <div class="header-right">
             <a-dropdown>
               <a class="user-dropdown" @click.prevent>
-                <a-avatar size="small" style="background-color: #1890ff">
-                  <template #icon><UserOutlined /></template>
+                <a-avatar size="small" :src="adminProfile?.avatar_url" style="background-color: #1890ff">
+                  <template v-if="!adminProfile?.avatar_url" #icon><UserOutlined /></template>
                 </a-avatar>
-                <span class="username">管理员</span>
+                <span class="username">{{ adminProfile?.username || '管理员' }}</span>
               </a>
               <template #overlay>
                 <a-menu>
+                  <a-menu-item key="profile" @click="openProfileModal('info')">
+                    <EditOutlined />
+                    个人信息
+                  </a-menu-item>
+                  <a-menu-item key="password" @click="openProfileModal('password')">
+                    <LockOutlined />
+                    修改密码
+                  </a-menu-item>
+                  <a-menu-divider />
                   <a-menu-item key="logout" @click="handleLogout">
                     <LogoutOutlined />
                     退出登录
@@ -206,17 +215,28 @@
                   </a-col>
                 </a-row>
               </a-card>
+
+              <!-- 互动指标雷达图 -->
+              <a-card class="health-card" :bordered="false">
+                <template #title>
+                  <div class="card-title">
+                    <MessageOutlined />
+                    <span>互动指标</span>
+                  </div>
+                </template>
+                <div ref="homeInteractionChartRef" style="height: 300px"></div>
+              </a-card>
             </div>
 
             <!-- 数据可视化 -->
-            <div v-show="selectedKeys[0] === 'analytics'">
+            <div v-show="selectedKeys[0] === 'analytics'" class="analytics-container">
               <div class="page-header">
                 <h2 class="page-title">数据可视化</h2>
                 <p class="page-desc">平台数据统计分析图表</p>
               </div>
               
               <a-row :gutter="[16, 16]" class="charts-row">
-                <a-col :xs="24" :lg="12">
+                <a-col :xs="24" :lg="8">
                   <a-card class="chart-card" :bordered="false">
                     <template #title>
                       <div class="card-title">
@@ -224,10 +244,10 @@
                         <span>用户注册趋势</span>
                       </div>
                     </template>
-                    <div ref="userTrendChartRef" style="height: 320px"></div>
+                    <div ref="userTrendChartRef" style="height: 240px"></div>
                   </a-card>
                 </a-col>
-                <a-col :xs="24" :lg="12">
+                <a-col :xs="24" :lg="8">
                   <a-card class="chart-card" :bordered="false">
                     <template #title>
                       <div class="card-title">
@@ -235,21 +255,21 @@
                         <span>帖子发布趋势</span>
                       </div>
                     </template>
-                    <div ref="postTrendChartRef" style="height: 320px"></div>
+                    <div ref="postTrendChartRef" style="height: 240px"></div>
                   </a-card>
                 </a-col>
-                <a-col :xs="24" :lg="12">
+                <a-col :xs="24" :lg="8">
                   <a-card class="chart-card" :bordered="false">
                     <template #title>
                       <div class="card-title">
                         <CheckCircleOutlined />
-                        <span>内容审核状态分布</span>
+                        <span>内容审核状态</span>
                       </div>
                     </template>
-                    <div ref="moderationChartRef" style="height: 320px"></div>
+                    <div ref="moderationChartRef" style="height: 240px"></div>
                   </a-card>
                 </a-col>
-                <a-col :xs="24" :lg="12">
+                <a-col :xs="24" :lg="8">
                   <a-card class="chart-card" :bordered="false">
                     <template #title>
                       <div class="card-title">
@@ -257,18 +277,29 @@
                         <span>内容类型分布</span>
                       </div>
                     </template>
-                    <div ref="contentTypeChartRef" style="height: 320px"></div>
+                    <div ref="contentTypeChartRef" style="height: 240px"></div>
                   </a-card>
                 </a-col>
-                <a-col :xs="24">
+                <a-col :xs="24" :lg="8">
                   <a-card class="chart-card" :bordered="false">
                     <template #title>
                       <div class="card-title">
-                        <MessageOutlined />
-                        <span>互动数据雷达图</span>
+                        <FireOutlined />
+                        <span>热门内容Top5</span>
                       </div>
                     </template>
-                    <div ref="interactionChartRef" style="height: 350px"></div>
+                    <div ref="topContentChartRef" style="height: 240px"></div>
+                  </a-card>
+                </a-col>
+                <a-col :xs="24" :lg="8">
+                  <a-card class="chart-card" :bordered="false">
+                    <template #title>
+                      <div class="card-title">
+                        <ThunderboltOutlined />
+                        <span>用户活跃度</span>
+                      </div>
+                    </template>
+                    <div ref="userActivityChartRef" style="height: 240px"></div>
                   </a-card>
                 </a-col>
               </a-row>
@@ -654,6 +685,109 @@
         description="暂无请求/响应详情" style="padding: 24px 0;" />
     </div>
   </a-modal>
+
+  <!-- 管理员个人设置弹窗 -->
+  <a-modal
+    v-model:open="profileModalVisible"
+    title="个人设置"
+    :footer="null"
+    width="520px"
+    destroy-on-close
+  >
+    <a-tabs v-model:activeKey="profileActiveTab">
+      <!-- Tab 1: 基本信息 -->
+      <a-tab-pane key="info">
+        <template #tab>
+          <span><EditOutlined /> 基本信息</span>
+        </template>
+
+        <!-- 头像展示 -->
+        <div class="profile-avatar-wrap">
+          <a-avatar :size="72" :src="adminProfile?.avatar_url" style="background-color: #1890ff">
+            <template v-if="!adminProfile?.avatar_url" #icon><UserOutlined /></template>
+          </a-avatar>
+          <div class="profile-avatar-info">
+            <div class="profile-name">{{ adminProfile?.username }}</div>
+            <a-tag color="red" size="small">管理员</a-tag>
+          </div>
+        </div>
+
+        <a-divider style="margin: 16px 0 20px" />
+
+        <a-form layout="vertical" :model="profileForm">
+          <a-form-item label="用户名">
+            <a-input
+              v-model:value="profileForm.username"
+              placeholder="请输入新用户名"
+              :maxlength="50"
+              allow-clear
+            />
+          </a-form-item>
+          <a-form-item label="邮箱">
+            <a-input
+              v-model:value="profileForm.email"
+              placeholder="请输入新邮箱地址"
+              allow-clear
+            />
+          </a-form-item>
+          <a-form-item style="margin-bottom: 0; text-align: right;">
+            <a-space>
+              <a-button @click="profileModalVisible = false">取消</a-button>
+              <a-button type="primary" :loading="savingProfile" @click="updateAdminProfile">
+                保存修改
+              </a-button>
+            </a-space>
+          </a-form-item>
+        </a-form>
+      </a-tab-pane>
+
+      <!-- Tab 2: 修改密码 -->
+      <a-tab-pane key="password">
+        <template #tab>
+          <span><LockOutlined /> 修改密码</span>
+        </template>
+
+        <a-alert
+          message="修改密码后将自动退出登录，请重新登录"
+          type="warning"
+          show-icon
+          style="margin-bottom: 20px;"
+        />
+
+        <a-form layout="vertical" :model="passwordForm">
+          <a-form-item label="当前密码">
+            <a-input-password
+              v-model:value="passwordForm.old_password"
+              placeholder="请输入当前密码"
+              autocomplete="current-password"
+            />
+          </a-form-item>
+          <a-form-item label="新密码">
+            <a-input-password
+              v-model:value="passwordForm.new_password"
+              placeholder="新密码至少8位"
+              autocomplete="new-password"
+            />
+          </a-form-item>
+          <a-form-item label="确认新密码">
+            <a-input-password
+              v-model:value="passwordForm.confirm_password"
+              placeholder="再次输入新密码"
+              autocomplete="new-password"
+            />
+          </a-form-item>
+          <a-form-item style="margin-bottom: 0; text-align: right;">
+            <a-space>
+              <a-button @click="profileModalVisible = false">取消</a-button>
+              <a-button type="primary" danger :loading="savingPassword" @click="changeAdminPassword">
+                <SafetyCertificateOutlined /> 确认修改
+              </a-button>
+            </a-space>
+          </a-form-item>
+        </a-form>
+      </a-tab-pane>
+    </a-tabs>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
@@ -678,7 +812,12 @@ import {
   MessageOutlined,
   FileSearchOutlined,
   DeleteOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  FireOutlined,
+  ThunderboltOutlined,
+  EditOutlined,
+  LockOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons-vue'
 import axios from '@/utils/axios'
 
@@ -697,11 +836,22 @@ const userTrendChartRef = ref<HTMLDivElement>()
 const postTrendChartRef = ref<HTMLDivElement>()
 const moderationChartRef = ref<HTMLDivElement>()
 const contentTypeChartRef = ref<HTMLDivElement>()
-const interactionChartRef = ref<HTMLDivElement>()
+const topContentChartRef = ref<HTMLDivElement>()
+const userActivityChartRef = ref<HTMLDivElement>()
+const homeInteractionChartRef = ref<HTMLDivElement>()
 const loadingUsers = ref(false)
 const loadingPosts = ref(false)
 const loadingComments = ref(false)
 const loadingLogs = ref(false)
+
+// ---- 管理员个人资料 ----
+const adminProfile = ref<any>(null)
+const profileModalVisible = ref(false)
+const profileActiveTab = ref('info')
+const savingProfile = ref(false)
+const savingPassword = ref(false)
+const profileForm = ref({ username: '', email: '' })
+const passwordForm = ref({ old_password: '', new_password: '', confirm_password: '' })
 
 const userSearchKeyword = ref('')
 const userSearchEmail = ref('')
@@ -849,17 +999,100 @@ function handleLogout() {
   router.push('/login')
 }
 
+// ---- 管理员个人资料 ----
+async function loadAdminProfile() {
+  try {
+    const response = await axios.get('/user/profile')
+    adminProfile.value = response.data.data
+    profileForm.value.username = adminProfile.value?.username || ''
+    profileForm.value.email = adminProfile.value?.email || ''
+  } catch {
+    // 静默失败，不影响主页面
+  }
+}
+
+function openProfileModal(tab = 'info') {
+  profileActiveTab.value = tab
+  profileForm.value.username = adminProfile.value?.username || ''
+  profileForm.value.email = adminProfile.value?.email || ''
+  passwordForm.value = { old_password: '', new_password: '', confirm_password: '' }
+  profileModalVisible.value = true
+}
+
+async function updateAdminProfile() {
+  if (!profileForm.value.username && !profileForm.value.email) {
+    message.warning('请至少填写一项要修改的信息')
+    return
+  }
+  savingProfile.value = true
+  try {
+    const payload: any = {}
+    if (profileForm.value.username) payload.username = profileForm.value.username
+    if (profileForm.value.email) payload.email = profileForm.value.email
+    await axios.put('/user/profile', payload)
+    message.success('个人信息已更新')
+    await loadAdminProfile()
+    profileModalVisible.value = false
+  } catch (error: any) {
+    message.error(error?.response?.data?.detail || '更新失败')
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+async function changeAdminPassword() {
+  const { old_password, new_password, confirm_password } = passwordForm.value
+  if (!old_password || !new_password || !confirm_password) {
+    message.warning('请填写所有密码字段')
+    return
+  }
+  if (new_password.length < 8) {
+    message.warning('新密码长度不能少于8位')
+    return
+  }
+  if (new_password !== confirm_password) {
+    message.error('两次输入的新密码不一致')
+    return
+  }
+  savingPassword.value = true
+  try {
+    await axios.post('/user/change-password', { old_password, new_password })
+    message.success('密码修改成功，请重新登录')
+    profileModalVisible.value = false
+    setTimeout(() => {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      router.push('/login')
+    }, 1500)
+  } catch (error: any) {
+    message.error(error?.response?.data?.detail || '密码修改失败')
+  } finally {
+    savingPassword.value = false
+  }
+}
+
 onMounted(async () => {
+  await loadAdminProfile()
   await loadSystemStats()
   await loadHealth()
-  if (selectedKeys.value[0] === 'analytics') {
-    await loadVisualizationData()
-  }
+  const vizRes = await axios.get('/admin/stats/visualization')
+  visualizationData.value = vizRes.data.data
+  await nextTick()
+  setTimeout(() => {
+    initCharts()
+    updateCharts()
+  }, 200)
 })
 
 watch(selectedKeys, async (newKeys) => {
-  if (newKeys[0] === 'analytics' && !visualizationData.value) {
-    await loadVisualizationData()
+  if (newKeys[0] === 'stats' && !visualizationData.value) {
+    const vizRes = await axios.get('/admin/stats/visualization')
+    visualizationData.value = vizRes.data.data
+    await nextTick()
+    setTimeout(() => {
+      initCharts()
+      updateCharts()
+    }, 200)
   }
 })
 
@@ -911,10 +1144,22 @@ function initCharts() {
       echarts.init(contentTypeChartRef.value)
     }
   }
-  if (interactionChartRef.value) {
-    const existingChart = echarts.getInstanceByDom(interactionChartRef.value)
+  if (topContentChartRef.value) {
+    const existingChart = echarts.getInstanceByDom(topContentChartRef.value)
     if (!existingChart) {
-      echarts.init(interactionChartRef.value)
+      echarts.init(topContentChartRef.value)
+    }
+  }
+  if (userActivityChartRef.value) {
+    const existingChart = echarts.getInstanceByDom(userActivityChartRef.value)
+    if (!existingChart) {
+      echarts.init(userActivityChartRef.value)
+    }
+  }
+  if (homeInteractionChartRef.value) {
+    const existingChart = echarts.getInstanceByDom(homeInteractionChartRef.value)
+    if (!existingChart) {
+      echarts.init(homeInteractionChartRef.value)
     }
   }
   window.addEventListener('resize', handleResize)
@@ -933,8 +1178,14 @@ function handleResize() {
   if (contentTypeChartRef.value) {
     echarts.getInstanceByDom(contentTypeChartRef.value)?.resize()
   }
-  if (interactionChartRef.value) {
-    echarts.getInstanceByDom(interactionChartRef.value)?.resize()
+  if (topContentChartRef.value) {
+    echarts.getInstanceByDom(topContentChartRef.value)?.resize()
+  }
+  if (userActivityChartRef.value) {
+    echarts.getInstanceByDom(userActivityChartRef.value)?.resize()
+  }
+  if (homeInteractionChartRef.value) {
+    echarts.getInstanceByDom(homeInteractionChartRef.value)?.resize()
   }
 }
 
@@ -959,9 +1210,9 @@ function updateCharts() {
           data: userTrend.map((i: any) => i.count),
           type: 'line',
           smooth: true,
-          areaStyle: { color: 'rgba(64, 158, 255, 0.2)' },
-          itemStyle: { color: '#40a9ff' },
-          lineStyle: { width: 3 }
+          areaStyle: { color: 'rgba(103, 194, 58, 0.15)' },
+          itemStyle: { color: '#67c23a' },
+          lineStyle: { width: 3, color: '#67c23a' }
         }]
       }, true)
     }
@@ -971,20 +1222,46 @@ function updateCharts() {
     const chart = echarts.getInstanceByDom(postTrendChartRef.value)
     if (chart) {
       chart.setOption({
-        tooltip: { trigger: 'axis' },
+        tooltip: { 
+          trigger: 'axis',
+          formatter: '{b}: {c} 篇'
+        },
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: postTrend.map((i: any) => i.date.slice(5)) },
-        yAxis: { type: 'value' },
+        xAxis: { 
+          type: 'category', 
+          data: postTrend.map((i: any) => i.date.slice(5)),
+          boundaryGap: false
+        },
+        yAxis: { type: 'value', minInterval: 1 },
         series: [{
           data: postTrend.map((i: any) => i.count),
-          type: 'bar',
-          barWidth: '50%',
-          itemStyle: { 
+          type: 'line',
+          smooth: 0.4,
+          symbol: 'circle',
+          symbolSize: 10,
+          showSymbol: true,
+          emphasis: {
+            focus: 'series'
+          },
+          lineStyle: {
+            width: 4,
+            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+              { offset: 0, color: '#36cfc9' },
+              { offset: 1, color: '#13c2c2' }
+            ])
+          },
+          itemStyle: {
+            color: '#13c2c2',
+            borderColor: '#fff',
+            borderWidth: 2,
+            shadowColor: 'rgba(19, 194, 194, 0.5)',
+            shadowBlur: 10
+          },
+          areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#73d13d' },
-              { offset: 1, color: '#52c41a' }
-            ]),
-            borderRadius: [4, 4, 0, 0]
+              { offset: 0, color: 'rgba(19, 194, 194, 0.3)' },
+              { offset: 1, color: 'rgba(19, 194, 194, 0.05)' }
+            ])
           }
         }]
       }, true)
@@ -1017,39 +1294,208 @@ function updateCharts() {
     const chart = echarts.getInstanceByDom(contentTypeChartRef.value)
     if (chart) {
       chart.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'value' },
-        yAxis: { type: 'category', data: contentTypeDist.map((i: any) => i.name).reverse() },
+        tooltip: { 
+          trigger: 'axis', 
+          axisPointer: { type: 'shadow' },
+          formatter: '{b}: {c} 篇'
+        },
+        grid: { left: '3%', right: '15%', bottom: '3%', containLabel: true },
+        xAxis: { 
+          type: 'value',
+          splitLine: { show: false }
+        },
+        yAxis: { 
+          type: 'category', 
+          data: contentTypeDist.map((i: any) => i.name).reverse(),
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: '#666', fontSize: 12 }
+        },
         series: [{
           type: 'bar',
           data: contentTypeDist.map((i: any, idx: number) => ({
             value: i.value,
-            itemStyle: { color: i.color || ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'][idx % 5] }
+            itemStyle: { 
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#5B8FF9' },
+                { offset: 1, color: '#5AD8A6' }
+              ]),
+              borderRadius: [0, 4, 4, 0]
+            }
           })).reverse(),
-          barWidth: '60%',
-          itemStyle: { borderRadius: [0, 4, 4, 0] }
+          barWidth: '50%',
+          label: {
+            show: true,
+            position: 'right',
+            color: '#666',
+            fontSize: 12
+          }
         }]
       }, true)
     }
   }
 
-  if (interactionChartRef.value) {
-    const chart = echarts.getInstanceByDom(interactionChartRef.value)
+  const topContent = visualizationData.value?.top_content || []
+  if (topContentChartRef.value) {
+    const chart = echarts.getInstanceByDom(topContentChartRef.value)
     if (chart) {
       chart.setOption({
-        tooltip: { trigger: 'item' },
-        legend: { top: '5%' },
+        tooltip: { 
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' }
+        },
+        grid: { left: '3%', right: '30%', bottom: '3%', containLabel: true },
+        xAxis: { 
+          type: 'value',
+          splitLine: { show: false }
+        },
+        yAxis: { 
+          type: 'category', 
+          data: topContent.map((i: any) => i.title || '无标题').reverse(),
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { 
+            color: '#666', 
+            fontSize: 11,
+            formatter: (value: string) => value.length > 8 ? value.slice(0, 8) + '...' : value
+          }
+        },
+        series: [{
+          type: 'bar',
+          data: topContent.map((i: any, idx: number) => ({
+            value: i.likes || 0,
+            itemStyle: { 
+              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: '#F6BD16' },
+                { offset: 1, color: '#FF9D4D' }
+              ]),
+              borderRadius: [0, 4, 4, 0]
+            }
+          })).reverse(),
+          barWidth: '50%',
+          label: {
+            show: true,
+            position: 'right',
+            color: '#F6BD16',
+            fontSize: 12,
+            formatter: '❤️ {c}'
+          }
+        }]
+      }, true)
+    }
+  }
+
+  const userActivity = visualizationData.value?.user_activity || {}
+  if (userActivityChartRef.value) {
+    const chart = echarts.getInstanceByDom(userActivityChartRef.value)
+    if (chart) {
+      const postActivity = userActivity.post_activity || []
+      const planActivity = userActivity.plan_activity || []
+      
+      const labels = ['0', '1-2', '3-4', '5-9', '10+']
+      const postData = labels.map((label: string) => {
+        const item = postActivity.find((i: any) => String(i._id) === label || (label === '0' && i._id === 0))
+        return item ? item.count : 0
+      })
+      const planData = labels.map((label: string) => {
+        const item = planActivity.find((i: any) => String(i._id) === label || (label === '0' && i._id === 0))
+        return item ? item.count : 0
+      })
+      
+      chart.setOption({
+        tooltip: { 
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' }
+        },
+        legend: {
+          data: ['发帖数', '计划数'],
+          top: 5,
+          textStyle: { color: '#666', fontSize: 11 }
+        },
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { 
+          type: 'category', 
+          data: labels,
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: '#666', fontSize: 11 }
+        },
+        yAxis: { 
+          type: 'value',
+          splitLine: { show: false },
+          axisLabel: { color: '#666', fontSize: 11 }
+        },
+        series: [
+          {
+            name: '发帖数',
+            type: 'bar',
+            data: postData,
+            itemStyle: { color: '#5B8FF9', borderRadius: [4, 4, 0, 0] },
+            barWidth: '35%'
+          },
+          {
+            name: '计划数',
+            type: 'bar',
+            data: planData,
+            itemStyle: { color: '#5AD8A6', borderRadius: [4, 4, 0, 0] },
+            barWidth: '35%'
+          }
+        ]
+      }, true)
+    }
+  }
+
+  if (homeInteractionChartRef.value) {
+    const chart = echarts.getInstanceByDom(homeInteractionChartRef.value)
+    if (chart) {
+      const radarMax = Math.max(
+         interactionStats.total_likes || 1,
+         interactionStats.total_views || 1,
+         interactionStats.total_comments || 1,
+         (interactionStats.avg_likes_per_post || 1) * 10,
+         (interactionStats.avg_views_per_post || 1) * 10,
+         10
+       )
+       
+      chart.setOption({
+        tooltip: { 
+          trigger: 'item',
+          formatter: '{b}: {c}'
+        },
+        legend: { 
+          data: ['互动数据'],
+          top: '5%',
+          textStyle: { color: '#666' }
+        },
+        radar: {
+          indicator: [
+            { name: '总点赞数', max: radarMax },
+            { name: '总浏览量', max: radarMax },
+            { name: '总评论数', max: radarMax },
+            { name: '平均点赞', max: radarMax },
+            { name: '平均浏览', max: radarMax }
+          ],
+          radius: '60%',
+          shape: 'circle',
+          splitNumber: 5,
+          axisName: {
+            color: '#1890ff',
+            fontSize: 12
+          },
+          splitArea: {
+            areaStyle: {
+              color: ['rgba(24, 144, 255, 0.1)', 'rgba(24, 144, 255, 0.2)', 'rgba(24, 144, 255, 0.3)', 'rgba(24, 144, 255, 0.4)', 'rgba(24, 144, 255, 0.5)']
+            }
+          },
+          axisLine: {
+            lineStyle: { color: 'rgba(24, 144, 255, 0.3)' }
+          },
+          splitLine: {
+            lineStyle: { color: 'rgba(24, 144, 255, 0.3)' }
+          }
+        },
         series: [{
           type: 'radar',
-          radius: '65%',
-          indicator: [
-            { name: '总点赞', max: Math.max(interactionStats.total_likes || 10, 10) },
-            { name: '总浏览', max: Math.max(interactionStats.total_views || 10, 10) },
-            { name: '总评论', max: Math.max(interactionStats.total_comments || 10, 10) },
-            { name: '平均点赞', max: Math.max((interactionStats.avg_likes_per_post || 1) * 10, 10) },
-            { name: '平均浏览', max: Math.max((interactionStats.avg_views_per_post || 1) * 10, 10) }
-          ],
           data: [{
             value: [
               interactionStats.total_likes || 0,
@@ -1059,10 +1505,26 @@ function updateCharts() {
               (interactionStats.avg_views_per_post || 0) * 10
             ],
             name: '互动数据',
-            itemStyle: { color: '#722ed1' },
-            areaStyle: { color: 'rgba(114, 46, 209, 0.3)' }
-          }],
-          axisName: { color: '#666' }
+            itemStyle: {
+              color: '#1890ff'
+            },
+            areaStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(24, 144, 255, 0.7)' },
+                { offset: 1, color: 'rgba(24, 144, 255, 0.3)' }
+              ])
+            },
+            lineStyle: {
+              width: 2,
+              color: '#1890ff'
+            },
+            label: {
+              show: true,
+              formatter: '{c}',
+              color: '#1890ff',
+              fontSize: 11
+            }
+          }]
         }]
       }, true)
     }
@@ -1426,7 +1888,13 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
   margin-bottom: 16px;
 }
 
-.charts-row {
+.analytics-container {
+  height: calc(100vh - 64px - 60px);
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.analytics-container .charts-row {
   margin-top: 16px;
 }
 
@@ -1523,5 +1991,24 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
   overflow-y: auto;
   margin: 0;
   border-left: 3px solid #d9d9d9;
+}
+
+.profile-avatar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.profile-avatar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
 }
 </style>

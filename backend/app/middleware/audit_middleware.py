@@ -25,6 +25,12 @@ from starlette.types import ASGIApp
 
 # 不记录日志的路径集合
 EXCLUDE_PATHS = {
+    # 管理员段部分接口
+    "/api/admin/health",
+    "/api/admin/metrics",
+    "/api/admin/stats/visualization",
+    "/api/admin/stats",
+
     "/api/auth/captcha",
     "/api/health",
     "/api/docs",

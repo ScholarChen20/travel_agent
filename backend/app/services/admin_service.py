@@ -416,64 +416,88 @@ class AdminService:
             return []
 
     async def _get_post_trend(self, days: int) -> List[Dict[str, Any]]:
-        """获取帖子发布趋势"""
+        """获取帖子发布趋势（从MongoDB获取）"""
         try:
             from datetime import datetime, timedelta
-            from ..database.models import Post
+            
+            posts_collection = self.mongodb.get_collection("social_posts")
             
             trend = []
+            now = datetime.now()
+            today = now.date()
             
+            logger.info(f"开始查询最近{days}天的帖子趋势, 当前日期: {today}")
+            
+            # 先查看数据库中帖子的创建时间
+            sample_posts = await posts_collection.find(
+                {"created_at": {"$exists": True}},
+                {"created_at": 1}
+            ).limit(5).to_list(5)
+            logger.info(f"MongoDB帖子创建时间示例: {[p.get('created_at') for p in sample_posts]}")
+
+            
+            # 使用完整的日期时间范围查询
             for i in range(days - 1, -1, -1):
-                date = datetime.now() - timedelta(days=i)
-                date_str = date.strftime("%Y-%m-%d")
-                next_date = date + timedelta(days=1)
+                target_date = today - timedelta(days=i)
+                # 当天开始 00:00:00
+                start_datetime = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0)
+                # 次天开始 00:00:00
+                end_datetime = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59)
                 
-                with self.mysql_db.get_session() as session:
-                    count = session.query(Post).filter(
-                        Post.created_at >= date,
-                        Post.created_at < next_date
-                    ).count()
+                count = await posts_collection.count_documents({
+                    "created_at": {
+                        "$gte": start_datetime,
+                        "$lte": end_datetime
+                    }
+                })
                 
                 trend.append({
-                    "date": date_str,
+                    "date": target_date.strftime("%Y-%m-%d"),
                     "count": count
                 })
+                # logger.info(f"日期 {target_date}, 范围 {start_datetime} - {end_datetime}, 帖子数量: {count}")
             
             return trend
         except Exception as e:
             logger.error(f"获取帖子发布趋势失败: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     async def _get_moderation_distribution(self) -> List[Dict[str, Any]]:
-        """获取内容审核状态分布"""
+        """获取内容审核状态分布（从MongoDB获取）"""
         try:
-            from ..database.models import Post
-            from sqlalchemy import func
+            posts_collection = self.mongodb.get_collection("social_posts")
             
-            with self.mysql_db.get_session() as session:
-                results = session.query(
-                    Post.moderation_status,
-                    func.count(Post.id).label('count')
-                ).group_by(Post.moderation_status).all()
+            pipeline = [
+                {"$group": {"_id": "$moderation_status", "count": {"$sum": 1}}}
+            ]
+            
+            results = await posts_collection.aggregate(pipeline).to_list(length=100)
             
             distribution = []
             status_map = {
                 "approved": {"name": "已通过", "color": "#52c41a"},
                 "pending": {"name": "待审核", "color": "#faad14"},
-                "rejected": {"name": "已拒绝", "color": "#ff4d4f"}
+                "rejected": {"name": "已拒绝", "color": "#ff4d4f"},
+                None: {"name": "未审核", "color": "#d9d9d9"}
             }
             
-            for status, count in results:
+            for item in results:
+                status = item["_id"] if item["_id"] else None
                 info = status_map.get(status, {"name": str(status), "color": "#1890ff"})
                 distribution.append({
                     "name": info["name"],
-                    "value": count,
+                    "value": item["count"],
                     "color": info["color"]
                 })
             
+            logger.info(f"审核状态分布: {distribution}")
             return distribution
         except Exception as e:
             logger.error(f"获取审核状态分布失败: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     async def _get_user_activity_distribution(self) -> Dict[str, Any]:
@@ -507,51 +531,54 @@ class AdminService:
             plan_activity = await plans_collection.aggregate(pipeline).to_list(length=100)
             
             return {
-                "post_activity": [
-                    {"name": "0篇", "value": 0, "color": "#d9d9d9"},
-                    {"name": "1-2篇", "value": 0, "color": "#91caff"},
-                    {"name": "3-4篇", "value": 0, "color": "#69c0ff"},
-                    {"name": "5-9篇", "value": 0, "color": "#40a9ff"},
-                    {"name": "10+篇", "value": 0, "color": "#1890ff"}
-                ],
-                "plan_activity": [
-                    {"name": "0个", "value": 0, "color": "#d9d9d9"},
-                    {"name": "1-2个", "value": 0, "color": "#95de64"},
-                    {"name": "3-4个", "value": 0, "color": "#73d13d"},
-                    {"name": "5-9个", "value": 0, "color": "#52c41a"},
-                    {"name": "10+个", "value": 0, "color": "#389e0d"}
-                ]
+                "post_activity": post_activity,
+                "plan_activity": plan_activity
             }
         except Exception as e:
             logger.error(f"获取用户活跃度分布失败: {str(e)}")
             return {"post_activity": [], "plan_activity": []}
 
     async def _get_content_type_distribution(self) -> List[Dict[str, Any]]:
-        """获取内容类型分布"""
+        """获取内容类型分布（从MongoDB帖子标签中统计）"""
         try:
+            from collections import Counter
+            
             posts_collection = self.mongodb.get_collection("social_posts")
             
             pipeline = [
-                {"$group": {"_id": "$type", "count": {"$sum": 1}}},
-                {"$sort": {"count": -1}},
-                {"$limit": 10}
+                {"$match": {"tags": {"$exists": True, "$ne": []}}},
+                {"$project": {"tags": 1}}
             ]
             
-            results = await posts_collection.aggregate(pipeline).to_list(length=100)
+            results = await posts_collection.aggregate(pipeline).to_list(length=1000)
             
-            colors = ["#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de", "#3ba272", "#fc8452", "#9a60b4", "#ea7ccc", "#ff4d4f"]
+            tag_counts = Counter()
+            for item in results:
+                tags = item.get("tags", [])
+                for tag in tags:
+                    if isinstance(tag, str):
+                        tag_counts[tag] += 1
+                    elif isinstance(tag, dict) and "name" in tag:
+                        tag_counts[tag["name"]] += 1
+            
+            top_tags = tag_counts.most_common(10)
+            
+            colors = ["#5B8FF9", "#5AD8A6", "#5D7092", "#F6BD16", "#E8684A", "#6DC8EC", "#9270CA", "#FF9D4D", "#269A99", "#FF99C3"]
             distribution = []
             
-            for i, item in enumerate(results):
+            for i, (name, count) in enumerate(top_tags):
                 distribution.append({
-                    "name": item["_id"] or "未知",
-                    "value": item["count"],
+                    "name": name,
+                    "value": count,
                     "color": colors[i % len(colors)]
                 })
             
+            logger.info(f"标签分布统计: {distribution}")
             return distribution
         except Exception as e:
             logger.error(f"获取内容类型分布失败: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     async def _get_top_content(self, limit: int) -> List[Dict[str, Any]]:

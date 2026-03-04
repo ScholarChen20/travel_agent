@@ -285,7 +285,7 @@ def print_config():
     print("\n飞书配置:")
     print(f"  飞书开放平台APP ID: {settings.feishu_app_id}")
     print(f"  飞书开放平台APP Secret: {settings.feishu_app_secret}")
-    print(f"  飞书开放平台回调地址: {settings.feishu_redirect_uri}")
+    print(f"  飞书开放平台回调地址: {'✅ 已配置' if settings.feishu_redirect_uri else '❌ 未配置'}")
 
 
     print(f"\n日志级别: {settings.log_level}")
