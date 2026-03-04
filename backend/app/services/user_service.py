@@ -83,6 +83,10 @@ class UserService:
 
                     # 档案信息
                     "profile": {
+                        "full_name": profile.full_name if profile else None,
+                        "gender": profile.gender if profile else None,
+                        "birth_date": profile.birth_date.isoformat() if profile and profile.birth_date else None,
+                        "location": profile.location if profile else None,
                         "travel_preferences": profile.travel_preferences if profile else [],
                         "visited_cities": profile.visited_cities if profile else [],
                         "travel_stats": profile.travel_stats if profile else {}
@@ -106,7 +110,11 @@ class UserService:
         username: Optional[str] = None,
         email: Optional[str] = None,
         avatar_url: Optional[str] = None,
-        travel_preferences: Optional[List[str]] = None
+        travel_preferences: Optional[List[str]] = None,
+        full_name: Optional[str] = None,
+        gender: Optional[str] = None,
+        birth_date: Optional[str] = None,
+        location: Optional[str] = None
     ) -> bool:
         """
         更新用户资料
@@ -117,6 +125,10 @@ class UserService:
             email: 邮箱（可选）
             avatar_url: 头像URL（可选）
             travel_preferences: 旅行偏好（可选）
+            full_name: 昵称/全名（可选）
+            gender: 性别 male/female/other（可选）
+            birth_date: 出生日期 YYYY-MM-DD 字符串（可选）
+            location: 所在城市（可选）
 
         Returns:
             bool: 是否成功
@@ -163,22 +175,45 @@ class UserService:
                     user.avatar_url = avatar_url
 
                 # 更新UserProfile表字段
-                if travel_preferences is not None:
-                    profile = session.query(UserProfile).filter(
+                has_profile_updates = any([
+                    travel_preferences is not None,
+                    full_name is not None,
+                    gender is not None,
+                    birth_date is not None,
+                    location is not None,
+                ])
+
+                if has_profile_updates:
+                    user_profile = session.query(UserProfile).filter(
                         UserProfile.user_id == user_id
                     ).first()
 
-                    if profile:
-                        profile.travel_preferences = travel_preferences
-                    else:
-                        # 如果档案不存在，创建
-                        profile = UserProfile(
+                    if not user_profile:
+                        user_profile = UserProfile(
                             user_id=user_id,
-                            travel_preferences=travel_preferences,
+                            travel_preferences=[],
                             visited_cities=[],
                             travel_stats={}
                         )
-                        session.add(profile)
+                        session.add(user_profile)
+
+                    if travel_preferences is not None:
+                        user_profile.travel_preferences = travel_preferences
+                    if full_name is not None:
+                        user_profile.full_name = full_name
+                    if gender is not None:
+                        user_profile.gender = gender
+                    if location is not None:
+                        user_profile.location = location
+                    if birth_date is not None:
+                        from datetime import date as date_type
+                        if birth_date:
+                            try:
+                                user_profile.birth_date = date_type.fromisoformat(birth_date)
+                            except ValueError:
+                                logger.warning(f"无效的出生日期格式: {birth_date}")
+                        else:
+                            user_profile.birth_date = None
 
                 logger.info(f"用户资料已更新: {user_id}")
 

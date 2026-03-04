@@ -216,15 +216,30 @@
                 </a-row>
               </a-card>
 
-              <!-- 互动指标雷达图 -->
-              <a-card class="health-card" :bordered="false">
+              <!-- 用户增长趋势图 -->
+              <a-card class="chart-card" :bordered="false" style="margin-top: 12px">
                 <template #title>
                   <div class="card-title">
-                    <MessageOutlined />
-                    <span>互动指标</span>
+                    <UserOutlined />
+                    <span>用户增长趋势</span>
                   </div>
                 </template>
-                <div ref="homeInteractionChartRef" style="height: 300px"></div>
+                <div class="chart-filter">
+                  <a-radio-group v-model:value="userTrendPeriod" button-style="solid" size="small" @change="loadUserTrendData">
+                    <a-radio-button value="week">最近一周</a-radio-button>
+                    <a-radio-button value="month">最近一月</a-radio-button>
+                    <a-radio-button value="year">最近一年</a-radio-button>
+                  </a-radio-group>
+                  <a-range-picker 
+                    v-model:value="userTrendDateRange" 
+                    :placeholder="['开始日期', '结束日期']"
+                    format="YYYY-MM-DD"
+                    size="small"
+                    style="margin-left: 12px; width: 240px"
+                    @change="onUserTrendDateChange"
+                  />
+                </div>
+                <div ref="userTrendHomeChartRef" style="height: 280px"></div>
               </a-card>
             </div>
 
@@ -244,7 +259,7 @@
                         <span>用户注册趋势</span>
                       </div>
                     </template>
-                    <div ref="userTrendChartRef" style="height: 240px"></div>
+                    <div ref="userTrendChartRef" style="height: 200px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -255,7 +270,7 @@
                         <span>帖子发布趋势</span>
                       </div>
                     </template>
-                    <div ref="postTrendChartRef" style="height: 240px"></div>
+                    <div ref="postTrendChartRef" style="height: 200px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -266,7 +281,7 @@
                         <span>内容审核状态</span>
                       </div>
                     </template>
-                    <div ref="moderationChartRef" style="height: 240px"></div>
+                    <div ref="moderationChartRef" style="height: 200px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -277,7 +292,7 @@
                         <span>内容类型分布</span>
                       </div>
                     </template>
-                    <div ref="contentTypeChartRef" style="height: 240px"></div>
+                    <div ref="contentTypeChartRef" style="height: 200px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -288,7 +303,7 @@
                         <span>热门内容Top5</span>
                       </div>
                     </template>
-                    <div ref="topContentChartRef" style="height: 240px"></div>
+                    <div ref="topContentChartRef" style="height: 200px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -299,7 +314,7 @@
                         <span>用户活跃度</span>
                       </div>
                     </template>
-                    <div ref="userActivityChartRef" style="height: 240px"></div>
+                    <div ref="userActivityChartRef" style="height: 200px"></div>
                   </a-card>
                 </a-col>
               </a-row>
@@ -367,6 +382,7 @@
                   :loading="loadingUsers"
                   :pagination="{ pageSize: 10, showTotal: (total: number) => `共 ${total} 条` }"
                   row-key="id"
+                  :scroll="{ x: 'max-content' }"
                 >
                   <template #bodyCell="{ column, record }">
                     <template v-if="column.key === 'is_active'">
@@ -417,6 +433,7 @@
                   :loading="loadingPosts"
                   :pagination="{ pageSize: 10, showTotal: (total: number) => `共 ${total} 条` }"
                   row-key="post_id"
+                  :scroll="{ x: 'max-content' }"
                 >
                   <template #bodyCell="{ column, record }">
                     <template v-if="column.key === 'title'">
@@ -492,6 +509,7 @@
                   :loading="loadingComments"
                   :pagination="{ pageSize: 10, showTotal: (total: number) => `共 ${total} 条` }"
                   row-key="comment_id"
+                  :scroll="{ x: 'max-content' }"
                 >
                   <template #bodyCell="{ column, record }">
                     <template v-if="column.key === 'content'">
@@ -584,6 +602,7 @@
                   :loading="loadingLogs"
                   :pagination="{ pageSize: 10, showTotal: (total: number) => `共 ${total} 条` }"
                   row-key="id"
+                  :scroll="{ x: 'max-content' }"
                 >
                   <template #bodyCell="{ column, record }">
                     <template v-if="column.key === 'method'">
@@ -817,7 +836,8 @@ import {
   ThunderboltOutlined,
   EditOutlined,
   LockOutlined,
-  SafetyCertificateOutlined
+  SafetyCertificateOutlined,
+  PieChartOutlined
 } from '@ant-design/icons-vue'
 import axios from '@/utils/axios'
 
@@ -827,18 +847,24 @@ const selectedKeys = ref<string[]>(['stats'])
 const systemStats = ref<any>(null)
 const health = ref<any>(null)
 const visualizationData = ref<any>(null)
+const userTrendData = ref<any>(null)
+const userTrendPeriod = ref<string>('week')
+const userTrendDateRange = ref<any>(null)
 const users = ref<any[]>([])
 const pendingPosts = ref<any[]>([])
 const comments = ref<any[]>([])
 const auditLogs = ref<any[]>([])
 
 const userTrendChartRef = ref<HTMLDivElement>()
+const userTrendHomeChartRef = ref<HTMLDivElement>()
 const postTrendChartRef = ref<HTMLDivElement>()
 const moderationChartRef = ref<HTMLDivElement>()
 const contentTypeChartRef = ref<HTMLDivElement>()
 const topContentChartRef = ref<HTMLDivElement>()
 const userActivityChartRef = ref<HTMLDivElement>()
-const homeInteractionChartRef = ref<HTMLDivElement>()
+const homeUserTrendChartRef = ref<HTMLDivElement>()
+const homePostTrendChartRef = ref<HTMLDivElement>()
+const homeContentStatusChartRef = ref<HTMLDivElement>()
 const loadingUsers = ref(false)
 const loadingPosts = ref(false)
 const loadingComments = ref(false)
@@ -880,50 +906,50 @@ const actionOptions = [
 ]
 
 const userColumns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 70 },
-  { title: '用户名', dataIndex: 'username', key: 'username', width: 100 },
-  { title: '邮箱', dataIndex: 'email', key: 'email', width: 180 },
-  { title: '角色', dataIndex: 'role', key: 'role', width: 80 },
-  { title: '状态', dataIndex: 'is_active', key: 'is_active', width: 70 },
-  { title: '认证', dataIndex: 'is_verified', key: 'is_verified', width: 70 },
-  { title: '飞书OpenID', dataIndex: 'feishu_open_id', key: 'feishu_open_id', width: 150, ellipsis: true },
-  { title: '飞书UnionID', dataIndex: 'feishu_union_id', key: 'feishu_union_id', width: 150, ellipsis: true },
-  { title: '最后登录', dataIndex: 'last_login_at', key: 'last_login_at', width: 150 },
-  { title: '注册时间', dataIndex: 'created_at', key: 'created_at', width: 150 }
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+  { title: '用户名', dataIndex: 'username', key: 'username', width: 90 },
+  { title: '邮箱', dataIndex: 'email', key: 'email', width: 160 },
+  { title: '角色', dataIndex: 'role', key: 'role', width: 70 },
+  { title: '状态', dataIndex: 'is_active', key: 'is_active', width: 60 },
+  { title: '认证', dataIndex: 'is_verified', key: 'is_verified', width: 60 },
+  { title: '飞书OpenID', dataIndex: 'feishu_open_id', key: 'feishu_open_id', width: 130, ellipsis: true },
+  { title: '飞书UnionID', dataIndex: 'feishu_union_id', key: 'feishu_union_id', width: 130, ellipsis: true },
+  { title: '最后登录', dataIndex: 'last_login_at', key: 'last_login_at', width: 130 },
+  { title: '注册时间', dataIndex: 'created_at', key: 'created_at', width: 130 }
 ]
 
 const postColumns = [
-  { title: 'ID', dataIndex: 'post_id', key: 'post_id', width: 180 },
-  { title: '用户ID', dataIndex: 'user_id', key: 'user_id', width: 70 },
-  { title: '标题', dataIndex: 'title', key: 'title', width: 180, ellipsis: true },
-  { title: '内容', dataIndex: 'content', key: 'content', width: 200, ellipsis: true },
-  { title: '位置', dataIndex: 'location', key: 'location', width: 100 },
-  { title: '发布时间', dataIndex: 'created_at', key: 'created_at', width: 150 },
-  { title: '操作', key: 'action', width: 140 }
+  { title: 'ID', dataIndex: 'post_id', key: 'post_id', width: 160 },
+  { title: '用户ID', dataIndex: 'user_id', key: 'user_id', width: 60 },
+  { title: '标题', dataIndex: 'title', key: 'title', width: 160, ellipsis: true },
+  { title: '内容', dataIndex: 'content', key: 'content', width: 180, ellipsis: true },
+  { title: '位置', dataIndex: 'location', key: 'location', width: 90 },
+  { title: '发布时间', dataIndex: 'created_at', key: 'created_at', width: 130 },
+  { title: '操作', key: 'action', width: 120 }
 ]
 
 const commentColumns = [
-  { title: 'ID', dataIndex: 'comment_id', key: 'comment_id', width: 180 },
-  { title: '帖子ID', dataIndex: 'post_id', key: 'post_id', width: 140 },
-  { title: '用户ID', dataIndex: 'user_id', key: 'user_id', width: 70 },
-  { title: '评论内容', dataIndex: 'content', key: 'content', width: 250, ellipsis: true },
-  { title: '点赞', dataIndex: 'like_count', key: 'like_count', width: 60 },
-  { title: '发布时间', dataIndex: 'created_at', key: 'created_at', width: 150 },
-  { title: '操作', key: 'action', width: 80 }
+  { title: 'ID', dataIndex: 'comment_id', key: 'comment_id', width: 160 },
+  { title: '帖子ID', dataIndex: 'post_id', key: 'post_id', width: 120 },
+  { title: '用户ID', dataIndex: 'user_id', key: 'user_id', width: 60 },
+  { title: '评论内容', dataIndex: 'content', key: 'content', width: 200, ellipsis: true },
+  { title: '点赞', dataIndex: 'like_count', key: 'like_count', width: 50 },
+  { title: '发布时间', dataIndex: 'created_at', key: 'created_at', width: 130 },
+  { title: '操作', key: 'action', width: 70 }
 ]
 
 const logColumns = [
-  { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-  { title: '用户名', dataIndex: 'username', key: 'username', width: 90 },
-  { title: '用户ID', dataIndex: 'user_id', key: 'user_id', width: 60 },
-  { title: 'HTTP方法', dataIndex: 'method', key: 'method', width: 85 },
-  { title: '接口路径', dataIndex: 'path', key: 'path', width: 200, ellipsis: true },
-  { title: '状态码', dataIndex: 'status_code', key: 'status_code', width: 70 },
-  { title: '耗时(ms)', dataIndex: 'duration_ms', key: 'duration_ms', width: 80 },
-  { title: '操作类型', dataIndex: 'action', key: 'action', width: 80 },
-  { title: 'IP地址', dataIndex: 'ip_address', key: 'ip_address', width: 110 },
-  { title: '操作时间', dataIndex: 'created_at', key: 'created_at', width: 140 },
-  { title: '详情', key: 'details', width: 60 }
+  { title: 'ID', dataIndex: 'id', key: 'id', width: 50 },
+  { title: '用户名', dataIndex: 'username', key: 'username', width: 80 },
+  { title: '用户ID', dataIndex: 'user_id', key: 'user_id', width: 50 },
+  { title: 'HTTP方法', dataIndex: 'method', key: 'method', width: 70 },
+  { title: '接口路径', dataIndex: 'path', key: 'path', width: 180, ellipsis: true },
+  { title: '状态码', dataIndex: 'status_code', key: 'status_code', width: 60 },
+  { title: '耗时(ms)', dataIndex: 'duration_ms', key: 'duration_ms', width: 70 },
+  { title: '操作类型', dataIndex: 'action', key: 'action', width: 70 },
+  { title: 'IP地址', dataIndex: 'ip_address', key: 'ip_address', width: 100 },
+  { title: '操作时间', dataIndex: 'created_at', key: 'created_at', width: 120 },
+  { title: '详情', key: 'details', width: 50 }
 ]
 
 function formatDate(dateStr: string) {
@@ -1075,12 +1101,15 @@ onMounted(async () => {
   await loadAdminProfile()
   await loadSystemStats()
   await loadHealth()
+  await loadUserTrendData()
   const vizRes = await axios.get('/admin/stats/visualization')
   visualizationData.value = vizRes.data.data
   await nextTick()
   setTimeout(() => {
     initCharts()
+    initUserTrendChart()
     updateCharts()
+    updateUserTrendChart()
   }, 200)
 })
 
@@ -1103,6 +1132,78 @@ async function loadSystemStats() {
   } catch (error) {
     message.error('加载统计数据失败')
   }
+}
+
+async function loadUserTrendData() {
+  try {
+    const params: any = { period: userTrendPeriod.value }
+    if (userTrendDateRange.value && userTrendDateRange.value.length === 2) {
+      params.start_date = userTrendDateRange.value[0].format('YYYY-MM-DD')
+      params.end_date = userTrendDateRange.value[1].format('YYYY-MM-DD')
+    }
+    const response = await axios.get('/admin/stats/user-trend', { params })
+    userTrendData.value = response.data.data
+    await nextTick()
+    setTimeout(() => {
+      initUserTrendChart()
+      updateUserTrendChart()
+    }, 200)
+  } catch (error) {
+    console.error('加载用户趋势失败', error)
+  }
+}
+
+function onUserTrendDateChange() {
+  if (userTrendDateRange.value && userTrendDateRange.value.length === 2) {
+    loadUserTrendData()
+  }
+}
+
+function initUserTrendChart() {
+  if (userTrendHomeChartRef.value) {
+    const existingChart = echarts.getInstanceByDom(userTrendHomeChartRef.value)
+    if (!existingChart) {
+      echarts.init(userTrendHomeChartRef.value)
+    }
+  }
+}
+
+function updateUserTrendChart() {
+  if (!userTrendData.value || !userTrendHomeChartRef.value) return
+  
+  const trend = userTrendData.value.trend || []
+  const periodType = userTrendData.value.period_type || 'day'
+  
+  const chart = echarts.getInstanceByDom(userTrendHomeChartRef.value)
+  if (!chart) return
+  
+  const dateLabels = periodType === 'month' 
+    ? trend.map((i: any) => i.date)
+    : trend.map((i: any) => i.date.slice(5))
+  
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { 
+      type: 'category', 
+      data: dateLabels,
+      axisLine: { lineStyle: { color: '#e8e8e8' } }, 
+      axisLabel: { color: '#666' } 
+    },
+    yAxis: { 
+      type: 'value', 
+      splitLine: { lineStyle: { type: 'dashed', color: '#e8e8e8' } }, 
+      axisLabel: { color: '#666' } 
+    },
+    series: [{
+      data: trend.map((i: any) => i.count),
+      type: 'line',
+      smooth: true,
+      areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(103, 194, 58, 0.3)' }, { offset: 1, color: 'rgba(103, 194, 58, 0.05)' }]) },
+      itemStyle: { color: '#67c23a' },
+      lineStyle: { width: 3, color: '#67c23a' }
+    }]
+  }, true)
 }
 
 async function loadVisualizationData() {
@@ -1156,10 +1257,22 @@ function initCharts() {
       echarts.init(userActivityChartRef.value)
     }
   }
-  if (homeInteractionChartRef.value) {
-    const existingChart = echarts.getInstanceByDom(homeInteractionChartRef.value)
+  if (homeUserTrendChartRef.value) {
+    const existingChart = echarts.getInstanceByDom(homeUserTrendChartRef.value)
     if (!existingChart) {
-      echarts.init(homeInteractionChartRef.value)
+      echarts.init(homeUserTrendChartRef.value)
+    }
+  }
+  if (homePostTrendChartRef.value) {
+    const existingChart = echarts.getInstanceByDom(homePostTrendChartRef.value)
+    if (!existingChart) {
+      echarts.init(homePostTrendChartRef.value)
+    }
+  }
+  if (homeContentStatusChartRef.value) {
+    const existingChart = echarts.getInstanceByDom(homeContentStatusChartRef.value)
+    if (!existingChart) {
+      echarts.init(homeContentStatusChartRef.value)
     }
   }
   window.addEventListener('resize', handleResize)
@@ -1184,8 +1297,17 @@ function handleResize() {
   if (userActivityChartRef.value) {
     echarts.getInstanceByDom(userActivityChartRef.value)?.resize()
   }
-  if (homeInteractionChartRef.value) {
-    echarts.getInstanceByDom(homeInteractionChartRef.value)?.resize()
+  if (homeUserTrendChartRef.value) {
+    echarts.getInstanceByDom(homeUserTrendChartRef.value)?.resize()
+  }
+  if (homePostTrendChartRef.value) {
+    echarts.getInstanceByDom(homePostTrendChartRef.value)?.resize()
+  }
+  if (homeContentStatusChartRef.value) {
+    echarts.getInstanceByDom(homeContentStatusChartRef.value)?.resize()
+  }
+  if (userTrendHomeChartRef.value) {
+    echarts.getInstanceByDom(userTrendHomeChartRef.value)?.resize()
   }
 }
 
@@ -1393,12 +1515,15 @@ function updateCharts() {
       const planActivity = userActivity.plan_activity || []
       
       const labels = ['0', '1-2', '3-4', '5-9', '10+']
+      const bucketMap: Record<number, string> = { 0: '0', 1: '1-2', 3: '3-4', 5: '5-9', 10: '10+' }
       const postData = labels.map((label: string) => {
-        const item = postActivity.find((i: any) => String(i._id) === label || (label === '0' && i._id === 0))
+        const bucketId = parseInt(label === '10+' ? '10' : label.split('-')[0])
+        const item = postActivity.find((i: any) => i._id === bucketId)
         return item ? item.count : 0
       })
       const planData = labels.map((label: string) => {
-        const item = planActivity.find((i: any) => String(i._id) === label || (label === '0' && i._id === 0))
+        const bucketId = parseInt(label === '10+' ? '10' : label.split('-')[0])
+        const item = planActivity.find((i: any) => i._id === bucketId)
         return item ? item.count : 0
       })
       
@@ -1445,86 +1570,66 @@ function updateCharts() {
     }
   }
 
-  if (homeInteractionChartRef.value) {
-    const chart = echarts.getInstanceByDom(homeInteractionChartRef.value)
+  if (homeUserTrendChartRef.value && userTrend.length > 0) {
+    const chart = echarts.getInstanceByDom(homeUserTrendChartRef.value)
     if (chart) {
-      const radarMax = Math.max(
-         interactionStats.total_likes || 1,
-         interactionStats.total_views || 1,
-         interactionStats.total_comments || 1,
-         (interactionStats.avg_likes_per_post || 1) * 10,
-         (interactionStats.avg_views_per_post || 1) * 10,
-         10
-       )
-       
       chart.setOption({
-        tooltip: { 
-          trigger: 'item',
-          formatter: '{b}: {c}'
-        },
-        legend: { 
-          data: ['互动数据'],
-          top: '5%',
-          textStyle: { color: '#666' }
-        },
-        radar: {
-          indicator: [
-            { name: '总点赞数', max: radarMax },
-            { name: '总浏览量', max: radarMax },
-            { name: '总评论数', max: radarMax },
-            { name: '平均点赞', max: radarMax },
-            { name: '平均浏览', max: radarMax }
-          ],
-          radius: '60%',
-          shape: 'circle',
-          splitNumber: 5,
-          axisName: {
-            color: '#1890ff',
-            fontSize: 12
-          },
-          splitArea: {
-            areaStyle: {
-              color: ['rgba(24, 144, 255, 0.1)', 'rgba(24, 144, 255, 0.2)', 'rgba(24, 144, 255, 0.3)', 'rgba(24, 144, 255, 0.4)', 'rgba(24, 144, 255, 0.5)']
-            }
-          },
-          axisLine: {
-            lineStyle: { color: 'rgba(24, 144, 255, 0.3)' }
-          },
-          splitLine: {
-            lineStyle: { color: 'rgba(24, 144, 255, 0.3)' }
-          }
-        },
+        tooltip: { trigger: 'axis' },
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'category', data: userTrend.map((i: any) => i.date.slice(5)), axisLine: { lineStyle: { color: '#e8e8e8' } }, axisLabel: { color: '#666' } },
+        yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#e8e8e8' } }, axisLabel: { color: '#666' } },
         series: [{
-          type: 'radar',
-          data: [{
-            value: [
-              interactionStats.total_likes || 0,
-              interactionStats.total_views || 0,
-              interactionStats.total_comments || 0,
-              (interactionStats.avg_likes_per_post || 0) * 10,
-              (interactionStats.avg_views_per_post || 0) * 10
-            ],
-            name: '互动数据',
-            itemStyle: {
-              color: '#1890ff'
-            },
-            areaStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: 'rgba(24, 144, 255, 0.7)' },
-                { offset: 1, color: 'rgba(24, 144, 255, 0.3)' }
-              ])
-            },
-            lineStyle: {
-              width: 2,
-              color: '#1890ff'
-            },
-            label: {
-              show: true,
-              formatter: '{c}',
-              color: '#1890ff',
-              fontSize: 11
-            }
-          }]
+          data: userTrend.map((i: any) => i.count),
+          type: 'line',
+          smooth: true,
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(103, 194, 58, 0.3)' }, { offset: 1, color: 'rgba(103, 194, 58, 0.05)' }]) },
+          itemStyle: { color: '#67c23a' },
+          lineStyle: { width: 3, color: '#67c23a' }
+        }]
+      }, true)
+    }
+  }
+
+  if (homePostTrendChartRef.value && postTrend.length > 0) {
+    const chart = echarts.getInstanceByDom(homePostTrendChartRef.value)
+    if (chart) {
+      chart.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        xAxis: { type: 'category', data: postTrend.map((i: any) => i.date.slice(5)), axisLine: { lineStyle: { color: '#e8e8e8' } }, axisLabel: { color: '#666' } },
+        yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#e8e8e8' } }, axisLabel: { color: '#666' } },
+        series: [{
+          data: postTrend.map((i: any) => i.count),
+          type: 'line',
+          smooth: true,
+          areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(91, 143, 249, 0.3)' }, { offset: 1, color: 'rgba(91, 143, 249, 0.05)' }]) },
+          itemStyle: { color: '#5b8ff9' },
+          lineStyle: { width: 3, color: '#5b8ff9' }
+        }]
+      }, true)
+    }
+  }
+
+  if (homeContentStatusChartRef.value && moderationDist.length > 0) {
+    const chart = echarts.getInstanceByDom(homeContentStatusChartRef.value)
+    if (chart) {
+      const statusMap: Record<string, string> = { pending: '待审核', approved: '已通过', rejected: '已拒绝' }
+      const colorMap: Record<string, string> = { pending: '#faad14', approved: '#67c23a', rejected: '#f5222d' }
+      chart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { orient: 'vertical', right: '5%', top: 'center', textStyle: { color: '#666' } },
+        series: [{
+          type: 'pie',
+          radius: ['45%', '70%'],
+          center: ['35%', '50%'],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          labelLine: { show: false },
+          data: moderationDist.map((item: any) => ({
+            name: statusMap[item.status] || item.status,
+            value: item.count,
+            itemStyle: { color: colorMap[item.status] || '#999' }
+          }))
         }]
       }, true)
     }
@@ -1718,7 +1823,8 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
 }
 
 .admin-main {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .logo {
@@ -1774,17 +1880,21 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
 
 .admin-content {
   margin: 16px;
-  min-height: calc(100vh - 64px - 32px);
+  height: calc(100vh - 32px);
+  overflow: hidden;
 }
 
 .page-container {
   background: transparent;
-  height: calc(100vh - 64px - 80px);
-  overflow-y: auto;
+  height: 100%;
+  overflow: hidden;
 }
 
 .page-header {
-  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
 .page-title {
@@ -1797,7 +1907,7 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
 .page-desc {
   font-size: 14px;
   color: rgba(0, 0, 0, 0.45);
-  margin: 8px 0 0;
+  margin: 0;
 }
 
 .search-bar {
@@ -1812,7 +1922,7 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
 }
 
 .stats-row {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .stat-card {
@@ -1885,17 +1995,20 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
 .chart-card {
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .analytics-container {
-  height: calc(100vh - 64px - 60px);
-  overflow-y: auto;
-  padding-bottom: 16px;
+  height: 100%;
+  padding: 0 0 16px 0;
 }
 
 .analytics-container .charts-row {
-  margin-top: 16px;
+  margin-top: 8px;
+}
+
+.home-charts-row {
+  margin-top: 8px;
 }
 
 .card-title {
@@ -1903,6 +2016,12 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
   align-items: center;
   gap: 8px;
   font-weight: 500;
+}
+
+.chart-filter {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .health-item {
@@ -1930,6 +2049,7 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
 .table-card {
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
 }
 
 .post-item {

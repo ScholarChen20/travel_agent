@@ -374,6 +374,47 @@ async def get_visualization_data(
         )
 
 
+@router.get("/stats/user-trend")
+async def get_user_trend(
+    period: str = Query("week", description="预设周期: week=最近一周, month=最近一月, year=最近一年"),
+    start_date: Optional[str] = Query(None, description="自定义开始日期 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="自定义结束日期 (YYYY-MM-DD)"),
+    admin_user: CurrentUser = Depends(require_admin)
+):
+    """
+    获取用户注册趋势（支持自定义时间范围）
+    
+    支持两种查询方式：
+    1. 预设周期：week(一周)/month(一月)/year(一年)
+    2. 自定义日期范围：传入 start_date 和 end_date
+    
+    返回：
+    - start_date: 开始日期
+    - end_date: 结束日期
+    - period_type: 聚合类型 (day=按天, month=按月)
+    - period: 使用的周期预设
+    - total: 总注册用户数
+    - trend: 趋势数据列表
+    """
+    try:
+        admin_service = get_admin_service()
+
+        data = await admin_service.get_user_trend_by_date(
+            start_date=start_date,
+            end_date=end_date,
+            period=period
+        )
+
+        return ApiResponse.success(data=data, msg="获取成功")
+
+    except Exception as e:
+        logger.error(f"获取用户趋势失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取用户趋势失败"
+        )
+
+
 @router.get("/logs/audit")
 async def get_audit_logs(
     resource_id: Optional[str] = Query(None, description="资源ID搜索"),

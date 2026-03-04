@@ -30,6 +30,7 @@ EXCLUDE_PATHS = {
     "/api/admin/metrics",
     "/api/admin/stats/visualization",
     "/api/admin/stats",
+    "/api/admin/logs/audit",
 
     "/api/auth/captcha",
     "/api/health",

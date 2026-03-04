@@ -9,10 +9,12 @@
 5. 关注系统
 6. 标签管理
 """
-
+import random
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+import uuid
 from loguru import logger
 from sqlalchemy import text
 
@@ -70,7 +72,7 @@ class SocialService:
             # 内容审核
             moderation_result = await self.moderate_content(content)
 
-            post_id = f"post_{secrets.token_urlsafe(16)}"
+            post_id = f"post_{uuid.uuid4()}"
 
             post_doc = {
                 "post_id": post_id,

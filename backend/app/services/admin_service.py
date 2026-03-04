@@ -380,12 +380,123 @@ class AdminService:
             data["top_content"] = await self._get_top_content(5)
             
             # 互动统计
-            data["interaction_stats"] = await self._get_interaction_stats()
+            # data["interaction_stats"] = await self._get_interaction_stats()
 
             return data
 
         except Exception as e:
             logger.error(f"获取可视化数据失败: {str(e)}")
+            raise
+
+    async def get_user_trend_by_date(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        period: str = "week"
+    ) -> Dict[str, Any]:
+        """
+        获取用户注册趋势（支持自定义时间范围）
+        
+        Args:
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+            period: 预设周期 (week=最近一周, month=最近一月, year=最近一年)
+        
+        Returns:
+            Dict: 用户趋势数据
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # 根据预设周期计算日期范围
+            if period == "week":
+                days = 7
+            elif period == "month":
+                days = 30
+            elif period == "year":
+                days = 365
+            else:
+                days = 7
+            
+            # 如果没有提供自定义日期范围，使用预设周期
+            if not start_date or not end_date:
+                end_dt = datetime.now()
+                start_dt = end_dt - timedelta(days=days - 1)
+                start_date = start_dt.strftime("%Y-%m-%d")
+                end_date = end_dt.strftime("%Y-%m-%d")
+            
+            # 计算日期范围内的所有日期
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            days_count = (end_dt - start_dt).days + 1
+            
+            # 根据时间范围决定聚合方式
+            # 如果超过60天，按月聚合；否则按天聚合
+            if days_count > 60:
+                # 按月聚合
+                trend = []
+                current_dt = datetime(start_dt.year, start_dt.month, 1)
+                while current_dt <= end_dt:
+                    month_start = current_dt.strftime("%Y-%m-01")
+                    if current_dt.month == 12:
+                        month_end = datetime(current_dt.year + 1, 1, 1).strftime("%Y-%m-%d")
+                    else:
+                        month_end = datetime(current_dt.year, current_dt.month + 1, 1).strftime("%Y-%m-%d")
+                    
+                    with self.mysql_db.get_session() as session:
+                        count = session.query(User).filter(
+                            User.created_at >= month_start,
+                            User.created_at < month_end
+                        ).count()
+                    
+                    trend.append({
+                        "date": current_dt.strftime("%Y-%m"),
+                        "count": count
+                    })
+                    
+                    if current_dt.month == 12:
+                        current_dt = datetime(current_dt.year + 1, 1, 1)
+                    else:
+                        current_dt = datetime(current_dt.year, current_dt.month + 1, 1)
+                
+                period_type = "month"
+            else:
+                # 按天聚合
+                trend = []
+                current_dt = start_dt
+                while current_dt <= end_dt:
+                    date_str = current_dt.strftime("%Y-%m-%d")
+                    next_date = (current_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+                    
+                    with self.mysql_db.get_session() as session:
+                        count = session.query(User).filter(
+                            User.created_at >= date_str,
+                            User.created_at < next_date
+                        ).count()
+                    
+                    trend.append({
+                        "date": date_str,
+                        "count": count
+                    })
+                    
+                    current_dt = current_dt + timedelta(days=1)
+                
+                period_type = "day"
+            
+            # 计算总计
+            total_users = sum(item["count"] for item in trend)
+            
+            return {
+                "start_date": start_date,
+                "end_date": end_date,
+                "period_type": period_type,
+                "period": period,
+                "total": total_users,
+                "trend": trend
+            }
+            
+        except Exception as e:
+            logger.error(f"获取用户趋势失败: {str(e)}")
             raise
 
     async def _get_user_registration_trend(self, days: int) -> List[Dict[str, Any]]:

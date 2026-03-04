@@ -1,5 +1,20 @@
 import axios from '@/utils/axios'
 
+interface ProfileDetail {
+  full_name?: string
+  gender?: string
+  birth_date?: string
+  location?: string
+  travel_preferences: string[]
+  visited_cities: string[]
+  travel_stats: {
+    total_trips?: number
+    total_cities?: number
+    favorite_trips?: number
+    completed_trips?: number
+  }
+}
+
 interface UserProfile {
   id: number
   username: string
@@ -10,30 +25,29 @@ interface UserProfile {
   is_active: boolean
   created_at: string
   last_login_at?: string
-  profile: {
-    travel_preferences: string[]
-    visited_cities: string[]
-    travel_stats: {
-      total_trips: number
-      total_cities: number
-      favorite_trips: number
-      completed_trips: number
-    }
-  }
+  profile: ProfileDetail
 }
 
 interface UpdateProfileRequest {
-  nickname?: string
-  bio?: string
+  username?: string
+  email?: string
+  full_name?: string
+  gender?: string
+  birth_date?: string
   location?: string
+  travel_preferences?: string[]
 }
 
 interface UserStats {
-  plans_count: number
-  posts_count: number
-  followers_count: number
-  following_count: number
-  likes_received: number
+  total_trips?: number
+  completed_trips?: number
+  favorite_trips?: number
+  total_cities?: number
+  plans_count?: number
+  posts_count?: number
+  followers_count?: number
+  following_count?: number
+  likes_received?: number
 }
 
 interface ChangePasswordRequest {
@@ -47,17 +61,8 @@ export const userService = {
     return response.data.data
   },
 
-  async updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
-    // 转换为后端需要的数据结构
-    const backendData = {
-      travel_preferences: [
-        data.nickname ? `nickname:${data.nickname}` : '',
-        data.bio ? `bio:${data.bio}` : '',
-        data.location ? `location:${data.location}` : ''
-      ].filter(Boolean)
-    }
-    const response = await axios.put('/user/profile', backendData)
-    return response.data.data
+  async updateProfile(data: UpdateProfileRequest): Promise<void> {
+    await axios.put('/user/profile', data)
   },
 
   async uploadAvatar(file: File): Promise<{ avatar_url: string }> {

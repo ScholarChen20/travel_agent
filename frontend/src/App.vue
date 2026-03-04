@@ -6,12 +6,9 @@
           🌍 智能旅行助手
         </div>
       </a-layout-header>
-      <a-layout-content style="padding: 24px">
+      <a-layout-content style="padding: 0">
         <router-view />
       </a-layout-content>
-      <a-layout-footer style="text-align: center">
-        智能旅行助手 ©2025 基于HelloAgents框架
-      </a-layout-footer>
     </a-layout>
   </div>
 </template>
