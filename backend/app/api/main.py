@@ -15,7 +15,7 @@ from ..database.redis_client import get_redis_client, init_redis_client
 
 # 尝试导入调度器（可选功能）
 try:
-    from ..scheduler.scheduler import start_scheduler, shutdown_scheduler
+    from ..services.backup_scheduler import start_scheduler, stop_scheduler
     SCHEDULER_AVAILABLE = True
 except ImportError:
     SCHEDULER_AVAILABLE = False
@@ -52,14 +52,6 @@ app = FastAPI(
 # 注册审计日志中间件
 from ..middleware.audit_middleware import audit_middleware_wrapper
 app.middleware("http")(audit_middleware_wrapper())
-
-# 添加测试中间件
-@app.middleware("http")
-async def test_middleware(request: Request, call_next):
-    print(f"[TestMiddleware] 收到请求: {request.method} {request.url.path}")
-    response = await call_next(request)
-    print(f"[TestMiddleware] 响应状态码: {response.status_code}")
-    return response
 
 # 配置CORS
 app.add_middleware(
