@@ -140,7 +140,7 @@ class AuthService:
                 "expires_at": str (ISO格式)
             }
         """
-        now = datetime.utcnow()
+        now = datetime.now()
         if expires_delta:
             expire = now + expires_delta
         else:
@@ -169,7 +169,7 @@ class AuthService:
         )
 
         # 计算过期时间（秒）
-        expires_in = int((expire - datetime.utcnow()).total_seconds())
+        expires_in = int((expire - datetime.now()).total_seconds())
 
         return {
             "access_token": token,

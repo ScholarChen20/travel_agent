@@ -12,7 +12,6 @@ from ..utils.response import ApiResponse
 from ..database.mysql import get_mysql_db, init_mysql_db
 from ..database.mongodb import get_mongodb_client, init_mongodb_client
 from ..database.redis_client import get_redis_client, init_redis_client
-from ..middleware.audit_middleware import AuditMiddleware
 
 # 尝试导入调度器（可选功能）
 try:
@@ -29,11 +28,23 @@ from .routes import recommendations, budget, real_time, offline, translation, vo
 # 获取配置
 settings = get_settings()
 
+# 配置loguru日志（在中间件注册之前配置）
+logger.remove()  # 移除默认处理器
+logger.add(
+    sink=lambda msg: print(msg, end=""),
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    level="INFO",  # 改为 DEBUG 级别，确保所有日志都能输出
+    colorize=True,
+    enqueue=True,  # 添加 enqueue 参数，确保日志线程安全
+    backtrace=True,  # 添加 backtrace 参数，提供更详细的错误信息
+    diagnose=True  # 添加 diagnose 参数，提供更详细的诊断信息
+)
+
 # 创建FastAPI应用
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="基于HelloAgents框架的智能旅行规划助手API",
+    description="基于FastAPI框架的TravelAI智能旅行规划助手API",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -48,8 +59,9 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# 注册审计日志中间件（在 CORS 之后，确保 CORS 头已处理）
-app.add_middleware(AuditMiddleware)
+# 注册审计日志中间件（使用装饰器方式）
+from ..middleware.audit_middleware import audit_middleware
+app.middleware("http")(audit_middleware)
 
 _CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -107,15 +119,6 @@ app.mount("/storage", StaticFiles(directory=str(storage_path)), name="storage")
 @app.on_event("startup")
 async def startup_event():
     """应用启动事件"""
-    # 配置loguru日志
-    logger.remove()  # 移除默认处理器
-    logger.add(
-        sink=lambda msg: print(msg, end=""),
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level=settings.log_level.upper(),
-        colorize=True
-    )
-
     print("\n" + "="*60)
     print(f"[START] {settings.app_name} v{settings.app_version}")
     print("="*60)
@@ -145,8 +148,7 @@ async def startup_event():
         if mysql_db.health_check():
             print(f"   [OK] MySQL连接成功: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
         else:
-            print(f"   [ERROR] MySQL连接失败")
-            raise Exception("MySQL健康检查失败")
+            print(f"   [WARNING] MySQL连接失败，将继续启动但某些功能可能不可用")
 
         # 2. 初始化MongoDB
         print("\n[2] 连接MongoDB...")
@@ -158,8 +160,7 @@ async def startup_event():
             await mongodb_client.create_indexes()
             print(f"   [OK] MongoDB索引创建完成")
         else:
-            print(f"   [ERROR] MongoDB连接失败")
-            raise Exception("MongoDB健康检查失败")
+            print(f"   [WARNING] MongoDB连接失败，将继续启动但某些功能可能不可用")
 
         # 3. 初始化Redis
         print("\n[3] 连接Redis...")
@@ -168,18 +169,19 @@ async def startup_event():
         if await redis_client.ping():
             print(f"   [OK] Redis连接成功")
         else:
-            print(f"   [ERROR] Redis连接失败")
-            raise Exception("Redis健康检查失败")
+            print(f"   [WARNING] Redis连接失败，将继续启动但某些功能可能不可用")
 
         print("\n" + "="*60)
-        print("[OK] 所有数据库连接初始化完成")
+        print("[OK] 数据库连接初始化完成（部分连接可能失败）")
         print("="*60)
 
     except Exception as e:
         logger.error(f"数据库初始化失败: {str(e)}")
-        print(f"\n[ERROR] 数据库初始化失败: {str(e)}")
-        print("\n请检查数据库配置和连接状态")
-        raise
+        print(f"\n[WARNING] 数据库初始化失败: {str(e)}")
+        print("\n将继续启动应用，但某些功能可能不可用")
+        print("="*60)
+        print("[OK] 应用启动完成（部分数据库连接失败）")
+        print("="*60)
 
     # 启动定时任务调度器
     if SCHEDULER_AVAILABLE:

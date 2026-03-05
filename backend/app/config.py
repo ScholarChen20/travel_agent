@@ -107,10 +107,10 @@ class Settings(BaseSettings):
 
     # ============ 飞书登录配置 ============
     feishu_app_id: str = "cli_a92fbd3ee7f99cd9"  # 飞书应用 App ID（从开放平台获取）
-    feishu_app_secret: str = os.getenv("FEISHU_APP_SECRET")  # 飞书应用 App Secret（保密！）
+    feishu_app_secret: str = os.getenv("FEISHU_APP_SECRET", "")  # 飞书应用 App Secret（保密！）
     feishu_redirect_uri: str = "https://leanna-prefamiliar-nonretroactively.ngrok-free.dev/auth/feishu/callback"  # 授权回调地址，如 http://localhost:5173/auth/feishu/callback
 
-    feishu_enabled: bool = True  # 是否启用飞书登录
+    feishu_enabled: bool = False  # 是否启用飞书登录
 
     class Config:
         env_file = ".env"
@@ -186,7 +186,7 @@ def validate_config():
 
     # 验证高德地图API Key
     if not settings.amap_api_key:
-        errors.append("AMAP_API_KEY未配置")
+        warnings.append("AMAP_API_KEY未配置，地图功能可能无法使用")
 
     # HelloAgentsLLM会自动从LLM_API_KEY读取,不强制要求OPENAI_API_KEY
     llm_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -195,7 +195,7 @@ def validate_config():
 
     # ============ 新增：验证JWT密钥 ============
     if not settings.jwt_secret_key:
-        errors.append("JWT_SECRET_KEY未配置，这是必需的安全密钥！请在.env中设置")
+        warnings.append("JWT_SECRET_KEY未配置，这是必需的安全密钥！请在.env中设置")
     elif len(settings.jwt_secret_key) < 32:
         warnings.append("JWT_SECRET_KEY长度过短（建议至少32个字符），安全性较低")
 
@@ -204,11 +204,11 @@ def validate_config():
     if not settings.mysql_password:
         warnings.append("MYSQL_PASSWORD未配置，将尝试无密码连接MySQL")
     if not settings.mysql_database:
-        errors.append("MYSQL_DATABASE未配置")
+        warnings.append("MYSQL_DATABASE未配置，MySQL功能可能无法使用")
 
     # MongoDB配置验证
     if not settings.mongodb_database:
-        errors.append("MONGODB_DATABASE未配置")
+        warnings.append("MONGODB_DATABASE未配置，MongoDB功能可能无法使用")
 
     # Redis配置验证（密码可选）
     if not settings.redis_password:
@@ -217,19 +217,20 @@ def validate_config():
     # ============ 新增：验证OSS配置 ============
     if settings.oss_enabled:
         if not settings.oss_access_key_id:
-            errors.append("OSS_ACCESS_KEY_ID未配置，但OSS已启用")
+            warnings.append("OSS_ACCESS_KEY_ID未配置，但OSS已启用，OSS功能可能无法使用")
         if not settings.oss_access_key_secret:
-            errors.append("OSS_ACCESS_KEY_SECRET未配置，但OSS已启用")
+            warnings.append("OSS_ACCESS_KEY_SECRET未配置，但OSS已启用，OSS功能可能无法使用")
         if not settings.oss_bucket_name:
-            errors.append("OSS_BUCKET_NAME未配置")
+            warnings.append("OSS_BUCKET_NAME未配置，但OSS已启用，OSS功能可能无法使用")
         if not settings.oss_endpoint:
-            errors.append("OSS_ENDPOINT未配置")
+            warnings.append("OSS_ENDPOINT未配置，但OSS已启用，OSS功能可能无法使用")
     else:
         warnings.append("OSS云存储未启用，将使用本地存储")
 
     if errors:
         error_msg = "配置错误:\n" + "\n".join(f"  - {e}" for e in errors)
-        raise ValueError(error_msg)
+        # 只打印错误，不抛出异常
+        print(f"\n[ERROR] {error_msg}")
 
     if warnings:
         print("\n⚠️  配置警告:")

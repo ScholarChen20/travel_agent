@@ -39,6 +39,7 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, description="用户名")
     email: EmailStr = Field(..., description="邮箱")
     password: str = Field(..., min_length=8, description="密码")
+    nickname: str = Field(..., description="昵称")
     captcha_code: str = Field(..., min_length=4, max_length=10, description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
 
@@ -180,15 +181,17 @@ async def register(request: RegisterRequest, http_request: Request):
     redis_client = get_redis_client()
     logger.debug(f"注册请求参数: {request.json()}")
 
+    # 获取客户端信息（需要在防刷检查之前获取）
+    ip = _get_client_ip(http_request)
+    device_id = get_device_id() or "unknown"
+
     try:
         # 0. 防刷检查（在验证码验证之前，避免消耗验证码）
         if settings.anti_spam_enabled:
-            ip = _get_client_ip(http_request)
-            device_id = get_device_id() or "unknown"
             anti_spam = await get_anti_spam_service()
             spam_response = await anti_spam.check_register_allowed(
                 AntiSpamRequest(
-                    user_id="anonymous",
+                    user_name=request.username,
                     device_id=device_id,
                     ip_address=ip,
                     request_type="register"
@@ -264,6 +267,7 @@ async def register(request: RegisterRequest, http_request: Request):
             logger.info(f"创建用户档案: {new_user.id}")
             user_profile = UserProfile(
                 user_id=new_user.id,
+                full_name=request.nickname,
                 travel_preferences=[],
                 visited_cities=[],
                 travel_stats={"total_trips": 0, "total_cities": 0}
@@ -309,12 +313,13 @@ async def register(request: RegisterRequest, http_request: Request):
         cache_invalidator = get_cache_invalidator()
         await cache_invalidator.invalidate_admin_all_stats()
 
-        # 8. 记录设备和IP（注册成功后）
-        # if settings.anti_spam_enabled:
-        #     _ip = _get_client_ip(http_request)
-        #     _anti_spam = get_anti_spam_service()
-        #     await _anti_spam.mark_device_registered(request.device_id)
-        #     await _anti_spam.increment_ip_counter(_ip)
+        # 8. 将设备ID添加到临时黑名单（防止短时间内重复注册）
+        if settings.anti_spam_enabled:
+            anti_spam = await get_anti_spam_service()
+            await anti_spam.add_device_to_temp_blacklist(device_id)
+            # 清除注册失败计数
+            await anti_spam.clear_register_failure(device_id, ip)
+            logger.info(f"设备ID {device_id} 已添加到临时黑名单，并清除失败计数")
 
         return ApiResponse.created(
             data={
@@ -326,10 +331,24 @@ async def register(request: RegisterRequest, http_request: Request):
             },
             msg="注册成功"
         )
-    except HTTPException:
+    except HTTPException as e:
+        # 记录注册失败
+        if settings.anti_spam_enabled:
+            try:
+                anti_spam = await get_anti_spam_service()
+                await anti_spam.record_register_failure(device_id, ip, f"HTTP {e.status_code}: {e.detail}")
+            except Exception as record_error:
+                logger.error(f"记录注册失败时发生异常: {str(record_error)}")
         raise
     except Exception as e:
         logger.error(f"注册失败: {request.username}, error: {str(e)}", exc_info=True)
+        # 记录注册失败
+        if settings.anti_spam_enabled:
+            try:
+                anti_spam = await get_anti_spam_service()
+                await anti_spam.record_register_failure(device_id, ip, f"系统错误: {str(e)}")
+            except Exception as record_error:
+                logger.error(f"记录注册失败时发生异常: {str(record_error)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"注册失败: {str(e)}"
@@ -337,7 +356,7 @@ async def register(request: RegisterRequest, http_request: Request):
 
 
 @router.post("/login")
-async def login(request: LoginRequest):
+async def login(request: LoginRequest, http_request: Request):
     """
     用户登录
 
@@ -354,108 +373,139 @@ async def login(request: LoginRequest):
     mysql_db = get_mysql_db()
     redis_client = get_redis_client()
 
-    # 0. 校验设备id是否在黑名单中
-    if settings.anti_spam_enabled:
-        _anti_spam = get_anti_spam_service()
-        device_id = get_device_id()
-        allowed, error_code, retry_after = await _anti_spam.check_login_allowed(device_id)
-        if not allowed:
-            headers = {"Retry-After": str(retry_after)} if retry_after else {}
+    # 获取客户端信息
+    ip = _get_client_ip(http_request)
+    device_id = get_device_id() or "unknown"
+
+    try:
+        # 0. 校验设备id是否在黑名单中
+        if settings.anti_spam_enabled:
+            _anti_spam = await get_anti_spam_service()
+            allowed, error_code, retry_after = await _anti_spam.check_login_allowed(device_id)
+            if not allowed:
+                headers = {"Retry-After": str(retry_after)} if retry_after else {}
+                raise HTTPException(
+                    status_code=429, detail="该设备注册过于频繁，请5分钟后再试", headers=headers
+                )
+
+
+        # 1. 验证验证码
+        if not await verify_captcha(request.captcha_session_id, request.captcha_code):
             raise HTTPException(
-                status_code=429, detail="该设备注册过于频繁，请5分钟后再试", headers=headers
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="验证码错误或已过期"
             )
 
+        # 2. 检查限流
+        rate_limit_key = f"rate_limit:login:{request.username}"
+        attempts = await redis_client.get(rate_limit_key)
 
-    # 1. 验证验证码
-    if not await verify_captcha(request.captcha_session_id, request.captcha_code):
+        if attempts and int(attempts) >= settings.max_login_attempts:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"登录尝试次数过多，请{settings.max_login_attempts}分钟后再试"
+            )
+
+        # 3. 查询用户
+        with mysql_db.get_session() as session:
+            user = session.query(User).filter(
+                (User.username == request.username) | (User.email == request.username)
+            ).first()
+
+            if not user:
+                # 增加失败计数
+                await redis_client.incr(rate_limit_key)
+                await redis_client.expire(rate_limit_key, 300)  # 5分钟
+
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="用户名错误"
+                )
+
+            # 4. 验证密码
+            if not auth_service.verify_password(request.password, user.password_hash):
+                # 增加失败计数
+                await redis_client.incr(rate_limit_key)
+                await redis_client.expire(rate_limit_key, 300)
+
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="密码错误"
+                )
+
+            # 5. 检查用户状态
+            if not user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="账户已被禁用，请联系管理员"
+                )
+
+            # 6. 生成JWT Token
+            token_data = auth_service.create_access_token(
+                user_id=user.id,
+                username=user.username,
+                role=user.role,
+                device_id=device_id
+            )
+
+            # 7. 存储Token到Redis（支持多设备）
+            await redis_client.hset(
+                f"jwt:user:{user.id}",
+                device_id,
+                token_data["access_token"]
+            )
+            await redis_client.expire(
+                f"jwt:user:{user.id}",
+                settings.jwt_access_token_expire_days * 86400
+            )
+
+            # 8. 更新最后登录时间
+            user.last_login_at = datetime.now()
+
+            # 9. 清除限流计数
+            await redis_client.delete(rate_limit_key)
+
+            # 10. 清除登录失败计数
+            if settings.anti_spam_enabled:
+                _anti_spam = await get_anti_spam_service()
+                await _anti_spam.clear_login_failure(device_id, ip)
+
+            logger.info(f"用户登录成功: {user.username} (ID: {user.id}, 设备id: {device_id})")
+
+            return ApiResponse.success(
+                data={
+                    "access_token": token_data["access_token"],
+                    "token_type": token_data["token_type"],
+                    "expires_in": token_data["expires_in"],
+                    "expires_at": token_data["expires_at"],
+                    "user": serialize_user(user),
+                    "role": user.role
+                },
+                msg="登录成功"
+            )
+
+    except HTTPException as e:
+        # 记录登录失败
+        if settings.anti_spam_enabled:
+            try:
+                _anti_spam = await get_anti_spam_service()
+                await _anti_spam.record_login_failure(device_id, ip, f"HTTP {e.status_code}: {e.detail}")
+            except Exception as record_error:
+                logger.error(f"记录登录失败时发生异常: {str(record_error)}")
+        raise
+    except Exception as e:
+        logger.error(f"登录失败: {request.username}, error: {str(e)}", exc_info=True)
+        # 记录登录失败
+        if settings.anti_spam_enabled:
+            try:
+                _anti_spam = await get_anti_spam_service()
+                await _anti_spam.record_login_failure(device_id, ip, f"系统错误: {str(e)}")
+            except Exception as record_error:
+                logger.error(f"记录登录失败时发生异常: {str(record_error)}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证码错误或已过期"
-        )
-
-    # 2. 检查限流
-    rate_limit_key = f"rate_limit:login:{request.username}"
-    attempts = await redis_client.get(rate_limit_key)
-
-    if attempts and int(attempts) >= settings.max_login_attempts:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"登录尝试次数过多，请{settings.max_login_attempts}分钟后再试"
-        )
-
-    # 3. 查询用户
-    with mysql_db.get_session() as session:
-        user = session.query(User).filter(
-            (User.username == request.username) | (User.email == request.username)
-        ).first()
-
-        if not user:
-            # 增加失败计数
-            await redis_client.incr(rate_limit_key)
-            await redis_client.expire(rate_limit_key, 300)  # 5分钟
-
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户名错误"
-            )
-
-        # 4. 验证密码
-        if not auth_service.verify_password(request.password, user.password_hash):
-            # 增加失败计数
-            await redis_client.incr(rate_limit_key)
-            await redis_client.expire(rate_limit_key, 300)
-
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="密码错误"
-            )
-
-        # 5. 检查用户状态
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="账户已被禁用，请联系管理员"
-            )
-
-        # 6. 生成JWT Token
-        device_id = get_device_id()
-        token_data = auth_service.create_access_token(
-            user_id=user.id,
-            username=user.username,
-            role=user.role,
-            device_id=device_id
-        )
-
-        # 7. 存储Token到Redis（支持多设备）
-        await redis_client.hset(
-            f"jwt:user:{user.id}",
-            device_id,
-            token_data["access_token"]
-        )
-        await redis_client.expire(
-            f"jwt:user:{user.id}",
-            settings.jwt_access_token_expire_days * 86400
-        )
-
-        # 8. 更新最后登录时间
-        user.last_login_at = datetime.now()
-
-        # 9. 清除限流计数
-        await redis_client.delete(rate_limit_key)
-
-        logger.info(f"用户登录成功: {user.username} (ID: {user.id}, 设备id: {device_id})")
-
-        return ApiResponse.success(
-            data={
-                "access_token": token_data["access_token"],
-                "token_type": token_data["token_type"],
-                "expires_in": token_data["expires_in"],
-                "expires_at": token_data["expires_at"],
-                "user": serialize_user(user),
-                "role": user.role
-            },
-            msg="登录成功"
-        )
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"登录失败: {str(e)}"
+        ) from e
 
 
 @router.post("/logout")

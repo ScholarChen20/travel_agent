@@ -86,18 +86,19 @@ services:
       - ./backend/scripts/init_mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     restart: always
 
-  # Redis缓存
+  # Redis缓存（Redis Stack，内置 RedisBloom / RedisSearch / RedisJSON 模块）
   redis:
-    image: redis:7.0
+    image: redis/redis-stack-server:latest
     # 生产环境不要暴露Redis端口到公网
     ports:
        - "6379:6379"
 #    ports:
 #    - "127.0.0.1:6379:6379"  # 只绑定本地，不暴露公网
-    command: redis-server --requirepass R3d1s#Tr@vel2025!Secure --appendonly yes
+    command: redis-stack-server --requirepass R3d1s#Tr@vel2025!Secure --appendonly yes
     volumes:
       - redis-data:/data
     restart: always
+    # 持久化备份
 
 volumes:
   mysql-data:

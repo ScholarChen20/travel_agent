@@ -211,12 +211,18 @@ CREATE TABLE IF NOT EXISTS captcha_records (
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT COMMENT '操作用户ID，NULL表示系统操作',
+    username VARCHAR(100) COMMENT '用户名（冗余，避免JOIN）',
     action VARCHAR(100) NOT NULL COMMENT '操作类型',
     resource VARCHAR(100) NOT NULL COMMENT '操作资源',
     resource_id VARCHAR(100) COMMENT '资源ID',
     details JSON COMMENT '操作详情',
     ip_address VARCHAR(45) COMMENT 'IP地址',
     user_agent TEXT COMMENT 'User-Agent',
+    method VARCHAR(10) COMMENT 'HTTP方法 (GET/POST/PUT/DELETE)',
+    path VARCHAR(255) COMMENT '请求路径',
+    status_code SMALLINT COMMENT 'HTTP响应状态码',
+    duration_ms INT COMMENT '请求耗时(ms)',
+    response_status VARCHAR(20) COMMENT '响应结果 (success/error)',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL COMMENT '创建时间',
     INDEX idx_user_action (user_id, action),
     INDEX idx_created_at (created_at)

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 from loguru import logger
 import asyncio
+import os
 
 from ..database.mysql import get_mysql_db
 from ..database.models import User, UserProfile
@@ -12,12 +13,20 @@ from ..config import get_settings
 
 settings = get_settings()
 
+# 尝试导入GeoIP2库
+try:
+    import geoip2.database
+    GEOIP2_AVAILABLE = True
+except ImportError:
+    GEOIP2_AVAILABLE = False
+    logger.warning("GeoIP2库未安装，IP地理位置检查功能将被禁用")
+
 
 # ========== 请求模型 ==========
 
 class AntiSpamRequest(BaseModel):
-    """反垃圾邮件请求"""
-    user_id: str = Field(..., description="用户ID")
+    """防暴力注册请求"""
+    user_name: str = Field(..., description="用户名称")
     device_id: str = Field(..., description="设备ID")
     ip_address: str = Field(..., description="IP地址")
     request_type: str = Field(..., description="请求类型")
@@ -26,7 +35,7 @@ class AntiSpamRequest(BaseModel):
 # ========== 响应模型 ==========
 
 class AntiSpamResponse(BaseModel):
-    """反垃圾邮件响应"""
+    """防暴力注册响应"""
     allowed: bool = Field(..., description="是否允许请求")
     reason: Optional[str] = Field(default=None, description="拒绝原因")
     score: float = Field(..., description="垃圾邮件得分")
@@ -35,7 +44,7 @@ class AntiSpamResponse(BaseModel):
 # ========== Redis布隆过滤器 ==========
 
 class RedisBloomFilter:
-    """Redis布隆过滤器实现"""
+    """Redis布隆过滤器实现（依赖 RedisBloom 模块 / Redis Stack）"""
 
     def __init__(self, redis_client, key: str, max_elements: int = 100000, error_rate: float = 0.01):
         """初始化Redis布隆过滤器"""
@@ -102,7 +111,7 @@ class BlacklistManager:
             await self.redis.hset(key, mapping={
                 "device_id": device_id,
                 "reason": reason or "",
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
             
             # 设置TTL
@@ -142,7 +151,7 @@ class BlacklistManager:
             await self.redis.hset(key, mapping={
                 "ip_address": ip_address,
                 "reason": reason or "",
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
             
             # 设置TTL
@@ -367,7 +376,7 @@ class BlacklistManager:
 # ========== 服务类 ==========
 
 class AntiSpamService:
-    """反垃圾邮件服务类"""
+    """防暴力刷新服务类"""
 
     def __init__(self):
         """初始化服务"""
@@ -439,70 +448,74 @@ class AntiSpamService:
             await self.rebuild_bloom_filter()
             logger.info("布隆过滤器定时重建完成")
 
-    async def check_register_allowed(self, request: AntiSpamRequest) -> AntiSpamResponse:
-        """检查是否允许注册"""
-        try:
-            logger.info(f"检查用户{request.user_id}的注册请求")
 
-            # 步骤3.1: 设备ID黑名单层
-            # 检查设备ID是否在黑名单中
-            if self.blacklist_manager and await self.blacklist_manager.is_device_blacklisted(request.device_id):
-                blacklist_info = await self.blacklist_manager.get_device_blacklist_info(request.device_id)
-                reason = blacklist_info.get("reason", "设备ID在黑名单中") if blacklist_info else "设备ID在黑名单中"
-                logger.warning(f"设备ID{request.device_id}在黑名单中，原因: {reason}")
+    async def check_register_allowed(self, request : AntiSpamRequest) -> AntiSpamResponse:
+        """
+        检查是否允许注册（四层防护机制）
+        
+        防护层级：
+        1. IP限制层 - 检查IP地理位置，非本国IP直接拒绝
+        2. IP频率限制层 - Redis计数器统计IP注册次数，每小时最多10次
+        3. 设备ID布隆过滤器层 - 快速检查设备ID是否可能在已注册集合中
+        4. Redis黑名单精确检查层 - 精确查询Redis确认设备ID是否已注册
+        """
+        try:
+            logger.info(f"检查用户{request.user_name}的注册请求，IP: {request.ip_address}，设备ID: {request.device_id}")
+
+            # ========== 第1层：IP限制层 ==========
+            # 检查IP地理位置，非本国IP直接拒绝
+            if not await self._check_ip_geolocation(request.ip_address):
+                logger.warning(f"IP地址{request.ip_address}地理位置不在允许范围内")
                 return AntiSpamResponse(
                     allowed=False,
-                    reason=f"设备ID在黑名单中: {reason}",
+                    reason="IP地址不在允许的地理范围内(非本国）",
                     score=1.0
                 )
 
-            # 步骤3.2: IP地址黑名单层
-            # 检查IP地址是否在黑名单中
-            if self.blacklist_manager and await self.blacklist_manager.is_ip_blacklisted(request.ip_address):
-                blacklist_info = await self.blacklist_manager.get_ip_blacklist_info(request.ip_address)
-                reason = blacklist_info.get("reason", "IP地址在黑名单中") if blacklist_info else "IP地址在黑名单中"
-                logger.warning(f"IP地址{request.ip_address}在黑名单中，原因: {reason}")
+            # ========== 第2层：IP频率限制层 ==========
+            # Redis计数器统计IP注册次数，每小时最多10次
+            if not await self._check_ip_rate_limit(request.ip_address):
+                logger.warning(f"IP地址{request.ip_address}注册频率过高")
                 return AntiSpamResponse(
                     allowed=False,
-                    reason=f"IP地址在黑名单中: {reason}",
+                    reason="IP地址注册频率过高，请稍后再试",
                     score=0.9
                 )
 
-            # 步骤3.3: IP请求频率限制层
-            # IP检查请求频率
-            if self.redis:
-                cache_key = f"anti_spam:{request.ip_address}:{request.request_type}"
-                request_count = await self.redis.incr(cache_key)
-                if request_count == 1:
-                    await self.redis.expire(cache_key, 60)
-                if request_count > 20:
-                    logger.warning(f"IP地址{request.ip_address}请求频率过高")
-                    await self.blacklist_manager.add_ip_to_blacklist(request.ip_address, "请求频率过高")
-                    return AntiSpamResponse(
-                        allowed=False,
-                        reason="请求频率过高",
-                        score=0.8
-                    )
+            # ========== 第3层：设备ID布隆过滤器层 ==========
+            # 检查设备ID是否可能在已注册集合中
+            # 不存在则通过（快速放行），存在则进入Redis精确检查
+            device_might_exist = False
+            if self.device_bloom_filter:
+                try:
+                    device_might_exist = await self.device_bloom_filter.contains(request.device_id)
+                    if not device_might_exist:
+                        # 设备ID不在布隆过滤器中，快速放行
+                        logger.info(f"设备ID{request.device_id}不在设备布隆过滤器中，快速放行")
+                        return AntiSpamResponse(
+                            allowed=True,
+                            score=0.0
+                        )
+                    else:
+                        # 设备ID可能在布隆过滤器中，需要精确检查
+                        logger.debug(f"设备ID{request.device_id}可能在布隆过滤器中，进入精确检查")
+                except Exception as e:
+                    logger.warning(f"布隆过滤器检查失败: {str(e)}，跳过此层检查")
 
-            # 步骤3.4: 设备请求频率限制层
-            if self.redis:
-                cache_key = f"anti_spam:{request.device_id}:{request.request_type}"
-                request_count = await self.redis.incr(cache_key)
-                if request_count == 1:
-                    await self.redis.expire(cache_key, 60)
-                if request_count > 20:
-                    logger.warning(f"设备ID{request.device_id}请求频率过高")
-                    await self.blacklist_manager.add_device_to_blacklist(request.device_id, "请求频率过高")
-                    return AntiSpamResponse(
-                        allowed=False,
-                        reason="请求频率过高",
-                        score=0.7
-                    )
+            # ========== 第4层：Redis黑名单精确检查层 ==========
+            # 查询Redis确认设备ID是否已注册
+            # 已注册且未过期（5分钟）→ 拒绝
+            # 未注册或已过期 → 允许注册
+            if not await self._check_device_registration_status(request.device_id):
+                logger.warning(f"设备ID{request.device_id}已在短时间内注册过")
+                return AntiSpamResponse(
+                    allowed=False,
+                    reason="该设备已在短时间内注册过，请稍后再试",
+                    score=0.8
+                )
 
-            # 步骤3.5: 机器学习模型层
-
-            # 允许注册
-            logger.info(f"用户{request.user_id}的注册请求被允许")
+            # 所有检查通过，允许注册
+            logger.info(f"用户{request.user_name}的注册请求被允许")
             return AntiSpamResponse(
                 allowed=True,
                 score=0.0
@@ -516,10 +529,168 @@ class AntiSpamService:
                 score=0.5
             )
 
+    async def _check_ip_geolocation(self, ip_address: str) -> bool:
+        """
+        检查IP地理位置（第1层防护）
+        
+        Args:
+            ip_address: IP地址
+            
+        Returns:
+            bool: True表示IP在允许范围内，False表示不在
+        """
+        try:
+            # 如果GeoIP2不可用，直接返回True（跳过此层检查）
+            if not GEOIP2_AVAILABLE:
+                logger.debug("GeoIP2库不可用，跳过IP地理位置检查")
+                return True
+
+            # 检查GeoIP2数据库文件是否存在
+            geoip_db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'GeoLite2-Country.mmdb')
+            if not os.path.exists(geoip_db_path):
+                logger.warning(f"GeoIP2数据库文件不存在: {geoip_db_path}，跳过IP地理位置检查")
+                return True
+
+            # 查询IP地理位置
+            with geoip2.database.Reader(geoip_db_path) as reader:
+                response = reader.country(ip_address)
+                country_code = response.country.iso_code
+                
+                # 检查是否为中国IP
+                if country_code and country_code != 'CN':
+                    logger.warning(f"IP地址{ip_address}来自国家{country_code}，不在允许范围内")
+                    return False
+                
+                logger.debug(f"IP地址{ip_address}来自国家{country_code}，在允许范围内")
+                return True
+
+        except Exception as e:
+            logger.error(f"检查IP地理位置失败: {str(e)}")
+            # 出错时保守处理，允许请求通过
+            return True
+
+    async def _check_ip_rate_limit(self, ip_address: str) -> bool:
+        """
+        检查IP注册频率（第2层防护）
+        
+        Args:
+            ip_address: IP地址
+            
+        Returns:
+            bool: True表示频率正常，False表示频率过高
+        """
+        try:
+            if not self.redis:
+                logger.warning("Redis客户端不可用，跳过IP频率限制检查")
+                return True
+
+            # 使用Redis计数器统计IP注册次数
+            # Key格式: register_rate_limit:{ip_address}
+            # 过期时间: 1小时（3600秒）
+            cache_key = f"register_rate_limit:{ip_address}"
+            request_count = await self.redis.incr(cache_key)
+            
+            if request_count == 1:
+                # 第一次请求，设置过期时间为1小时
+                await self.redis.expire(cache_key, 3600)
+            
+            # 检查是否超过限制（每小时最多10次）
+            if request_count > 10:
+                logger.warning(f"IP地址{ip_address}在过去1小时内已注册{request_count}次，超过限制")
+                return False
+            
+            logger.debug(f"IP地址{ip_address}在过去1小时内已注册{request_count}次，频率正常")
+            return True
+
+        except Exception as e:
+            logger.error(f"检查IP频率限制失败: {str(e)}")
+            # 出错时保守处理，允许请求通过
+            return True
+
+    async def _check_device_registration_status(self, device_id: str) -> bool:
+        """
+        检查设备注册状态（第4层防护）
+        
+        Args:
+            device_id: 设备ID
+            
+        Returns:
+            bool: True表示允许注册，False表示不允许
+        """
+        try:
+            if not self.redis:
+                logger.warning("Redis客户端不可用，跳过设备注册状态检查")
+                return True
+
+            # 检查设备ID是否在临时注册黑名单中
+            # Key格式: register_device_blacklist:{device_id}
+            # 过期时间: 5分钟（300秒）
+            cache_key = f"register_device_blacklist:{device_id}"
+            exists = await self.redis.exists(cache_key)
+            
+            if exists:
+                # 设备ID在临时黑名单中，不允许注册
+                ttl = await self.redis.ttl(cache_key)
+                logger.warning(f"设备ID{device_id}在临时黑名单中，剩余时间: {ttl}秒")
+                return False
+            
+            # 设备ID不在临时黑名单中，允许注册
+            logger.debug(f"设备ID{device_id}不在临时黑名单中，允许注册")
+            return True
+
+        except Exception as e:
+            logger.error(f"检查设备注册状态失败: {str(e)}")
+            # 出错时保守处理，允许请求通过
+            return True
+
+    async def add_device_to_temp_blacklist(self, device_id: str):
+        """
+        将设备ID添加到临时黑名单（注册成功后调用）
+        
+        Args:
+            device_id: 设备ID
+        """
+        try:
+            if not self.redis:
+                logger.warning("Redis客户端不可用，无法添加设备到临时黑名单")
+                return
+
+            # 将设备ID添加到临时黑名单
+            # Key格式: register_device_blacklist:{device_id}
+            # 过期时间: 5分钟（300秒）
+            cache_key = f"register_device_blacklist:{device_id}"
+            await self.redis.set(cache_key, "1", ex=300)
+            
+            # 如果布隆过滤器可用，也添加到布隆过滤器
+            if self.device_bloom_filter:
+                try:
+                    await self.device_bloom_filter.add(device_id)
+                    logger.debug(f"设备ID{device_id}已添加到布隆过滤器")
+                except Exception as e:
+                    logger.warning(f"添加设备ID到布隆过滤器失败: {str(e)}")
+            
+            logger.info(f"设备ID{device_id}已添加到临时黑名单，有效期5分钟")
+
+        except Exception as e:
+            logger.error(f"添加设备ID到临时黑名单失败: {str(e)}")
+
     async def check_login_allowed(self, device_id: str) -> AntiSpamResponse:
         """检查是否允许登录"""
         try:
-            # 检查设备ID是否在黑名单中
+            # 1. 检查设备ID是否在布隆过滤器中
+            device_might_exist = await self.device_bloom_filter.contains(device_id)
+            if not device_might_exist:
+                # 设备ID不在布隆过滤器中，快速放行
+                logger.info(f"设备ID{device_id}不在设备布隆过滤器中，快速放行")
+                return AntiSpamResponse(
+                    allowed=True,
+                    score=0.0
+                )
+            else:
+                # 设备ID可能在布隆过滤器中，需要精确检查
+                logger.debug(f"设备ID{device_id}可能在设备布隆过滤器中，进入精确检查")
+
+            # 2. 检查设备ID是否在实际黑名单中
             if self.blacklist_manager and await self.blacklist_manager.is_device_blacklisted(device_id):
                 blacklist_info = await self.blacklist_manager.get_device_blacklist_info(device_id)
                 reason = blacklist_info.get("reason", "设备ID在黑名单中") if blacklist_info else "设备ID在黑名单中"
@@ -698,6 +869,149 @@ class AntiSpamService:
             
         except Exception as e:
             logger.error(f"重建布隆过滤器失败: {str(e)}")
+
+    async def record_register_failure(self, device_id: str, ip_address: str, reason: str = "注册失败"):
+        """
+        记录注册失败
+        
+        Args:
+            device_id: 设备ID
+            ip_address: IP地址
+            reason: 失败原因
+        """
+        try:
+            if not self.redis:
+                logger.warning("Redis客户端不可用，无法记录注册失败")
+                return
+
+            # 记录设备ID失败次数
+            device_fail_key = f"register_fail:device:{device_id}"
+            device_fail_count = await self.redis.incr(device_fail_key)
+            await self.redis.expire(device_fail_key, 3600)  # 1小时过期
+
+            # 记录IP地址失败次数
+            ip_fail_key = f"register_fail:ip:{ip_address}"
+            ip_fail_count = await self.redis.incr(ip_fail_key)
+            await self.redis.expire(ip_fail_key, 3600)  # 1小时过期
+
+            logger.info(f"记录注册失败: 设备ID={device_id}, 失败次数={device_fail_count}, IP={ip_address}, 失败次数={ip_fail_count}, 原因={reason}")
+
+            # 检查是否需要添加到黑名单
+            # 设备ID失败超过5次，添加到黑名单1小时
+            if device_fail_count >= 5:
+                await self.add_device_to_blacklist(
+                    device_id=device_id,
+                    reason=f"注册失败次数过多（{device_fail_count}次）: {reason}",
+                    ttl_seconds=3600
+                )
+                logger.warning(f"设备ID {device_id} 因注册失败次数过多被添加到黑名单")
+
+            # IP地址失败超过10次，添加到黑名单1小时
+            if ip_fail_count >= 10:
+                await self.add_ip_to_blacklist(
+                    ip_address=ip_address,
+                    reason=f"注册失败次数过多（{ip_fail_count}次）: {reason}",
+                    ttl_seconds=3600
+                )
+                logger.warning(f"IP地址 {ip_address} 因注册失败次数过多被添加到黑名单")
+
+        except Exception as e:
+            logger.error(f"记录注册失败时发生异常: {str(e)}")
+
+    async def record_login_failure(self, device_id: str, ip_address: str, reason: str = "登录失败"):
+        """
+        记录登录失败
+        
+        Args:
+            device_id: 设备ID
+            ip_address: IP地址
+            reason: 失败原因
+        """
+        try:
+            if not self.redis:
+                logger.warning("Redis客户端不可用，无法记录登录失败")
+                return
+
+            # 记录设备ID失败次数
+            device_fail_key = f"login_fail:device:{device_id}"
+            device_fail_count = await self.redis.incr(device_fail_key)
+            await self.redis.expire(device_fail_key, 3600)  # 1小时过期
+
+            # 记录IP地址失败次数
+            ip_fail_key = f"login_fail:ip:{ip_address}"
+            ip_fail_count = await self.redis.incr(ip_fail_key)
+            await self.redis.expire(ip_fail_key, 3600)  # 1小时过期
+
+            logger.info(f"记录登录失败: 设备ID={device_id}, 失败次数={device_fail_count}, IP={ip_address}, 失败次数={ip_fail_count}, 原因={reason}")
+
+            # 检查是否需要添加到黑名单
+            # 设备ID失败超过5次，添加到黑名单1小时
+            if device_fail_count >= 5:
+                await self.add_device_to_blacklist(
+                    device_id=device_id,
+                    reason=f"登录失败次数过多（{device_fail_count}次）: {reason}",
+                    ttl_seconds=3600
+                )
+                logger.warning(f"设备ID {device_id} 因登录失败次数过多被添加到黑名单")
+
+            # IP地址失败超过10次，添加到黑名单1小时
+            if ip_fail_count >= 10:
+                await self.add_ip_to_blacklist(
+                    ip_address=ip_address,
+                    reason=f"登录失败次数过多（{ip_fail_count}次）: {reason}",
+                    ttl_seconds=3600
+                )
+                logger.warning(f"IP地址 {ip_address} 因登录失败次数过多被添加到黑名单")
+
+        except Exception as e:
+            logger.error(f"记录登录失败时发生异常: {str(e)}")
+
+    async def clear_register_failure(self, device_id: str, ip_address: str):
+        """
+        清除注册失败计数（注册成功后调用）
+        
+        Args:
+            device_id: 设备ID
+            ip_address: IP地址
+        """
+        try:
+            if not self.redis:
+                return
+
+            # 清除设备ID失败计数
+            await self.redis.delete(f"register_fail:device:{device_id}")
+
+            # 清除IP地址失败计数
+            await self.redis.delete(f"register_fail:ip:{ip_address}")
+
+            logger.debug(f"清除注册失败计数: 设备ID={device_id}, IP={ip_address}")
+
+        except Exception as e:
+            logger.error(f"清除注册失败计数时发生异常: {str(e)}")
+
+    async def clear_login_failure(self, device_id: str, ip_address: str):
+        """
+        清除登录失败计数（登录成功后调用）
+        
+        Args:
+            device_id: 设备ID
+            ip_address: IP地址
+        """
+        try:
+            if not self.redis:
+                return
+
+            # 清除设备ID失败计数
+            await self.redis.delete(f"login_fail:device:{device_id}")
+
+            # 清除IP地址失败计数
+            await self.redis.delete(f"login_fail:ip:{ip_address}")
+
+            logger.debug(f"清除登录失败计数: 设备ID={device_id}, IP={ip_address}")
+
+        except Exception as e:
+            logger.error(f"清除登录失败计数时发生异常: {str(e)}")
+
 
 # ========== 全局实例（单例模式） ==========
 

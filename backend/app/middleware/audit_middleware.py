@@ -32,7 +32,6 @@ EXCLUDE_PATHS = {
     "/api/admin/stats",
     "/api/admin/logs/audit",
 
-    "/api/auth/captcha",
     "/api/health",
     "/api/docs",
     "/api/openapi.json",
@@ -193,28 +192,31 @@ async def _save_log_async(
         logger.warning(f"[AuditMiddleware] 写入审计日志失败: {e}")
 
 
-class AuditMiddleware(BaseHTTPMiddleware):
-    """全量 API 审计日志中间件"""
+async def audit_middleware(request: Request, call_next):
+    """全量 API 审计日志中间件函数"""
+    path = request.url.path
+    method = request.method
 
-    def __init__(self, app: ASGIApp):
-        super().__init__(app)
+    # 排除噪音路径
+    if path in EXCLUDE_PATHS:
+        print(f"[AuditMiddleware] 路径被排除: {method} {path}")
+        return await call_next(request)
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        path = request.url.path
+    # 只记录 /api/ 开头的请求
+    # if not path.startswith("/api/"):
+    #     print(f"[AuditMiddleware] 路径不是 /api/ 开头: {method} {path}")
+    #     return await call_next(request)
 
-        # 排除噪音路径
-        if path in EXCLUDE_PATHS or not path.startswith("/api/"):
-            return await call_next(request)
+    # logger.info(f"[AuditMiddleware] 开始处理请求: {method} {path}")
+    start_ts = time.time()
 
-        logger.debug(f"[AuditMiddleware] 开始处理请求: {path}")
-        start_ts = time.time()
-
+    try:
         # ---- 读取并重放请求体（body 只能消费一次）----
         body_bytes = b""
         try:
             body_bytes = await request.body()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[AuditMiddleware] 读取请求体失败: {e}")
 
         # 用缓存的 body_bytes 重建 receive callable，让后续中间件/路由仍能读取 body
         async def receive():
@@ -238,10 +240,18 @@ class AuditMiddleware(BaseHTTPMiddleware):
             logger.warning(f"[AuditMiddleware] 读取响应体失败: {e}")
 
         # 用原始 body 重建响应（保持 status_code / headers / media_type）
+        # 必须过滤掉 transfer-encoding 和 content-length：
+        #   - StreamingResponse 会带 transfer-encoding: chunked，但 Response(content=固定字节) 不是 chunked
+        #   - 让 Starlette 根据实际 body 重新计算 content-length，避免协议冲突导致 ECONNRESET
+        _SKIP_HEADERS = {"transfer-encoding", "content-length"}
+        filtered_headers = {
+            k: v for k, v in response.headers.items()
+            if k.lower() not in _SKIP_HEADERS
+        }
         rebuilt_response = Response(
             content=response_body_bytes,
             status_code=response.status_code,
-            headers=dict(response.headers),
+            headers=filtered_headers,
             media_type=response.media_type,
         )
 
@@ -284,3 +294,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
         )
 
         return rebuilt_response
+
+    except Exception as e:
+        logger.error(f"[AuditMiddleware] 处理请求时发生异常: {e}", exc_info=True)
+        # 出现异常时，仍然调用下一个处理器，确保请求能够正常处理
+        return await call_next(request)
