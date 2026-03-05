@@ -9,8 +9,6 @@ services:
     depends_on:
       - backend
     restart: always
-    networks:
-      - travel-network
 
   # 后端服务
   backend:
@@ -47,18 +45,12 @@ services:
       - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET}
       - UNSPLASH_SECRET_KEY=${UNSPLASH_SECRET_KEY}
     restart: always
-    networks:
-      - travel-network
 
   # MySQL数据库
   mysql:
     image: mysql:8.0
-    # 生产环境不要暴露MySQL端口到公网，只让内部容器访问
-    # 如需外部访问，请使用：- "127.0.0.1:3306:3306" 绑定本地
     ports:
        - "3306:3306"
-#    ports:
-#      - "127.0.0.1:3306:3306"  # 只绑定本地，不暴露公网
     environment:
       - MYSQL_ROOT_PASSWORD=Tr@velR00t#2025!Secure
       - MYSQL_DATABASE=travel_agent
@@ -72,17 +64,12 @@ services:
       --default-authentication-plugin=mysql_native_password
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
-    networks:
-      - travel-network
 
   # MongoDB数据库
   mongodb:
     image: mongo:7.0
-    # 生产环境不要暴露MongoDB端口到公网
     ports:
        - "27017:27017"
-#    ports:
-#      - "127.0.0.1:27017:27017"  # 只绑定本地，不暴露公网
     environment:
       - MONGO_INITDB_ROOT_USERNAME=travel_agent_user
       - MONGO_INITDB_ROOT_PASSWORD=M0ng0#Tr@vel2025!Secure
@@ -91,24 +78,16 @@ services:
       - mongo-data:/data/db
       - ./backend/scripts/init_mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     restart: always
-    networks:
-      - travel-network
 
-  # Redis缓存（Redis Stack，内置 RedisBloom / RedisSearch / RedisJSON 模块）
+  # Redis缓存
   redis:
     image: redis/redis-stack-server:latest
-    # 生产环境不要暴露Redis端口到公网
     ports:
        - "6379:6379"
-#    ports:
-#    - "127.0.0.1:6379:6379"  # 只绑定本地，不暴露公网
     command: redis-stack-server --requirepass R3d1s#Tr@vel2025!Secure --appendonly yes
     volumes:
       - redis-data:/data
     restart: always
-    # 持久化备份
-    networks:
-      - travel-network
 
   # Ngrok内网穿透服务
   ngrok:
@@ -118,20 +97,16 @@ services:
       - "4040:4040"  # Ngrok Web UI
     volumes:
       - ./backend/scripts/ngrok.yml:/etc/ngrok/ngrok.yml:ro
+      - ./backend/scripts/.ngrok2:/home/ngrok/.ngrok2:ro  # 挂载认证文件
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     depends_on:
       - backend
       - frontend
     restart: always
-    networks:
-      - travel-network
+    network_mode: host  # 使用host网络模式，可以访问宿主机网络
 
 volumes:
   mysql-data:
   mongo-data:
-  redis-data
-
-networks:
-  travel-network:
-    driver: bridge:
+  redis-data:

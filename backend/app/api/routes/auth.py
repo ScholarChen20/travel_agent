@@ -381,11 +381,11 @@ async def login(request: LoginRequest, http_request: Request):
         # 0. 校验设备id是否在黑名单中
         if settings.anti_spam_enabled:
             _anti_spam = await get_anti_spam_service()
-            allowed, error_code, retry_after = await _anti_spam.check_login_allowed(device_id)
-            if not allowed:
-                headers = {"Retry-After": str(retry_after)} if retry_after else {}
+            response = await _anti_spam.check_login_allowed(device_id)
+            if not response.allowed:
                 raise HTTPException(
-                    status_code=429, detail="该设备注册过于频繁，请5分钟后再试", headers=headers
+                    status_code=429,
+                    detail=response.reason or "设备ID在黑名单中"
                 )
 
 

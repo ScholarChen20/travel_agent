@@ -192,110 +192,116 @@ async def _save_log_async(
         logger.warning(f"[AuditMiddleware] 写入审计日志失败: {e}")
 
 
-async def audit_middleware(request: Request, call_next):
-    """全量 API 审计日志中间件函数"""
-    path = request.url.path
-    method = request.method
+class AuditMiddleware(BaseHTTPMiddleware):
+    """全量 API 审计日志中间件类"""
 
-    # 排除噪音路径
-    if path in EXCLUDE_PATHS:
-        print(f"[AuditMiddleware] 路径被排除: {method} {path}")
-        return await call_next(request)
+    async def dispatch(self, request: Request, call_next):
+        """处理请求并记录审计日志"""
+        # print(f"[AuditMiddleware] 收到请求: {request.method} {request.url.path}")
+        path = request.url.path
+        method = request.method
 
-    # 只记录 /api/ 开头的请求
-    # if not path.startswith("/api/"):
-    #     print(f"[AuditMiddleware] 路径不是 /api/ 开头: {method} {path}")
-    #     return await call_next(request)
+        # 排除噪音路径
+        if path in EXCLUDE_PATHS:
+            logger.debug(f"[AuditMiddleware] 路径被排除: {method} {path}")
+            return await call_next(request)
 
-    # logger.info(f"[AuditMiddleware] 开始处理请求: {method} {path}")
-    start_ts = time.time()
+        # 只记录 /api/ 开头的请求
+        # if not path.startswith("/api/"):
+        #     logger.debug(f"[AuditMiddleware] 路径不是 /api/ 开头: {method} {path}")
+        #     return await call_next(request)
 
-    try:
-        # ---- 读取并重放请求体（body 只能消费一次）----
-        body_bytes = b""
+        start_ts = time.time()
+
         try:
-            body_bytes = await request.body()
-        except Exception as e:
-            logger.warning(f"[AuditMiddleware] 读取请求体失败: {e}")
+            # ---- 读取并重放请求体（body 只能消费一次）----
+            body_bytes = b""
+            try:
+                body_bytes = await request.body()
+            except Exception as e:
+                logger.warning(f"[AuditMiddleware] 读取请求体失败: {e}")
 
-        # 用缓存的 body_bytes 重建 receive callable，让后续中间件/路由仍能读取 body
-        async def receive():
-            return {"type": "http.request", "body": body_bytes, "more_body": False}
+            # 用缓存的 body_bytes 重建 receive callable，让后续中间件/路由仍能读取 body
+            async def receive():
+                return {"type": "http.request", "body": body_bytes, "more_body": False}
 
-        request._receive = receive  # type: ignore[attr-defined]
+            request._receive = receive  # type: ignore[attr-defined]
 
-        # 调用下一个处理器
-        response = await call_next(request)
+            # 调用下一个处理器
+            response = await call_next(request)
 
-        duration_ms = int((time.time() - start_ts) * 1000)
+            duration_ms = int((time.time() - start_ts) * 1000)
 
-        # ---- 消费响应体，并重建可再次读取的 Response ----
-        response_body_bytes = b""
-        try:
-            chunks = []
-            async for chunk in response.body_iterator:
-                chunks.append(chunk)
-            response_body_bytes = b"".join(chunks)
-        except Exception as e:
-            logger.warning(f"[AuditMiddleware] 读取响应体失败: {e}")
+            # ---- 消费响应体，并重建可再次读取的 Response ----
+            response_body_bytes = b""
+            try:
+                chunks = []
+                async for chunk in response.body_iterator:
+                    chunks.append(chunk)
+                response_body_bytes = b"".join(chunks)
+            except Exception as e:
+                logger.warning(f"[AuditMiddleware] 读取响应体失败: {e}")
 
-        # 用原始 body 重建响应（保持 status_code / headers / media_type）
-        # 必须过滤掉 transfer-encoding 和 content-length：
-        #   - StreamingResponse 会带 transfer-encoding: chunked，但 Response(content=固定字节) 不是 chunked
-        #   - 让 Starlette 根据实际 body 重新计算 content-length，避免协议冲突导致 ECONNRESET
-        _SKIP_HEADERS = {"transfer-encoding", "content-length"}
-        filtered_headers = {
-            k: v for k, v in response.headers.items()
-            if k.lower() not in _SKIP_HEADERS
-        }
-        rebuilt_response = Response(
-            content=response_body_bytes,
-            status_code=response.status_code,
-            headers=filtered_headers,
-            media_type=response.media_type,
-        )
-
-        # 提取日志信息
-        authorization = request.headers.get("Authorization")
-        user_id, username = _extract_user_from_token(authorization)
-        ip_address = _get_client_ip(request)
-        user_agent = request.headers.get("user-agent", "")
-
-        # 脱敏请求体
-        req_parsed = _parse_json_bytes(body_bytes)
-        sanitized_request = _sanitize(req_parsed) if req_parsed else None
-
-        # 提取响应摘要
-        response_detail = _extract_response_detail(response_body_bytes, response.status_code)
-
-        # 控制台输出请求日志
-        logger.info(
-            f"[API] {request.method} {path} | "
-            f"Status: {response.status_code} | "
-            f"Duration: {duration_ms}ms | "
-            f"User: {username or 'anonymous'} | "
-            f"IP: {ip_address}"
-        )
-
-        # 异步写日志，不阻塞响应返回
-        asyncio.create_task(
-            _save_log_async(
-                user_id=user_id,
-                username=username,
-                method=request.method,
-                path=path,
+            # 用原始 body 重建响应（保持 status_code / headers / media_type）
+            _SKIP_HEADERS = {"transfer-encoding", "content-length"}
+            filtered_headers = {
+                k: v for k, v in response.headers.items()
+                if k.lower() not in _SKIP_HEADERS
+            }
+            rebuilt_response = Response(
+                content=response_body_bytes,
                 status_code=response.status_code,
-                duration_ms=duration_ms,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                request_body=sanitized_request,
-                response_detail=response_detail,
+                headers=filtered_headers,
+                media_type=response.media_type,
             )
-        )
 
-        return rebuilt_response
+            # 提取日志信息
+            authorization = request.headers.get("Authorization")
+            user_id, username = _extract_user_from_token(authorization)
+            ip_address = _get_client_ip(request)
+            user_agent = request.headers.get("user-agent", "")
 
-    except Exception as e:
-        logger.error(f"[AuditMiddleware] 处理请求时发生异常: {e}", exc_info=True)
-        # 出现异常时，仍然调用下一个处理器，确保请求能够正常处理
-        return await call_next(request)
+            # 脱敏请求体
+            req_parsed = _parse_json_bytes(body_bytes)
+            sanitized_request = _sanitize(req_parsed) if req_parsed else None
+
+            # 提取响应摘要
+            response_detail = _extract_response_detail(response_body_bytes, response.status_code)
+
+            # 控制台输出请求日志
+            logger.info(
+                f"[API] {request.method} {path} | "
+                f"Status: {response.status_code} | "
+                f"Duration: {duration_ms}ms | "
+                f"User: {username or 'anonymous'} | "
+                f"IP: {ip_address}"
+            )
+
+            # 异步写日志，不阻塞响应返回
+            asyncio.create_task(
+                _save_log_async(
+                    user_id=user_id,
+                    username=username,
+                    method=request.method,
+                    path=path,
+                    status_code=response.status_code,
+                    duration_ms=duration_ms,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    request_body=sanitized_request,
+                    response_detail=response_detail,
+                )
+            )
+
+            return rebuilt_response
+
+        except Exception as e:
+            logger.error(f"[AuditMiddleware] 处理请求时发生异常: {e}", exc_info=True)
+            # 出现异常时，仍然调用下一个处理器，确保请求能够正常处理
+            return await call_next(request)
+
+
+def audit_middleware_wrapper():
+    """创建审计中间件实例的包装器"""
+    middleware_instance = AuditMiddleware(app=None)
+    return middleware_instance.dispatch

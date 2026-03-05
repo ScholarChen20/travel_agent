@@ -101,6 +101,19 @@ axiosInstance.interceptors.response.use(
       ) {
         return Promise.reject(error)
       }
+
+      // 首页相关接口（用户资料、访问城市）401 时不跳转，让组件自行处理
+      // 这样可以避免 Token 过期时首页突然跳转到登录页
+      if (
+        url.includes('/user/profile') ||
+        url.includes('/user/visited-cities')
+      ) {
+        // 只清除 token，不跳转，不显示错误提示
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        return Promise.reject(error)
+      }
+
       // 其他接口401 = token过期，清除并跳转登录页
       localStorage.removeItem('token')
       localStorage.removeItem('user')

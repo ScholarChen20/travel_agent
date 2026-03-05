@@ -1,21 +1,18 @@
 /*
  Navicat Premium Dump SQL
 
- Source Server         : local_mysql
+ Source Server         : 43.138.139.21-mysql
  Source Server Type    : MySQL
- Source Server Version : 80044 (8.0.44)
- Source Host           : localhost:3306
+ Source Server Version : 80045 (8.0.45)
+ Source Host           : 43.138.139.21:3306
  Source Schema         : travel_agent
 
  Target Server Type    : MySQL
- Target Server Version : 80044 (8.0.44)
+ Target Server Version : 80045 (8.0.45)
  File Encoding         : 65001
 
- Date: 28/02/2026 11:42:47
+ Date: 04/03/2026 11:25:05
 */
-CREATE DATABASE now travel_agent DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE travel_agent;
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -35,7 +32,7 @@ CREATE TABLE `audit_logs`  (
   `ip_address` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'IP地址',
   `user_agent` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT 'User-Agent',
   `method` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'HTTP方法 (GET/POST/PUT/DELETE)',
-  `path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '请求路径',
+  `path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '请求路径 (/api/user/123)',
   `status_code` smallint NULL DEFAULT NULL COMMENT 'HTTP响应状态码',
   `duration_ms` int NULL DEFAULT NULL COMMENT '请求耗时(ms)',
   `response_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '响应结果 (success/error)',
@@ -45,11 +42,39 @@ CREATE TABLE `audit_logs`  (
   INDEX `idx_created_at`(`created_at` ASC) USING BTREE,
   INDEX `idx_method_path`(`method` ASC, `path` ASC) USING BTREE,
   INDEX `idx_status_code`(`status_code` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '审计日志表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 29 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '审计日志表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of audit_logs
 -- ----------------------------
+INSERT INTO `audit_logs` VALUES (1, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"logs\": [], \"total\": 0}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/logs/audit', 200, 117, 'success', '2026-03-04 10:30:39');
+INSERT INTO `audit_logs` VALUES (2, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 1, \"comments\": [{\"content\": \"11\", \"post_id\": \"post_BuZl1QC4qPM4V1tKBNe7YA\", \"user_id\": 5007, \"parent_id\": null, \"comment_id\": \"comment_OZhAby1aDIjOyY_n\", \"created_at\": \"2026-03-03T06:18:36.408000\", \"like_count\": 0}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/comments', 200, 124, 'success', '2026-03-04 10:30:47');
+INSERT INTO `audit_logs` VALUES (3, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"posts\": [{\"tags\": [\"旅行\", \"长城\"], \"title\": \"北京一日游11\", \"content\": \"今天去了长城，风景真美！\", \"post_id\": \"696eee0b9a79c062f8cccc4e\", \"user_id\": 5007, \"created_at\": \"2026-03-02T10:52:59.309000\", \"like_count\": 11, \"media_urls\": [\"https://img95.699pic.com/photo/50136/6765.jpg_wh860.jpg\"], \"updated_at\": \"2026-03-02T10:52:59.309000\", \"view_count\": 100.0, \"comment_count\": 2, \"moderation_status\": \"pending\"}, {\"tags\": [\"旅行\", \"故宫\"], \"title\": \"故宫旅行\", \"content\": \"在故宫里拍了很多照片，历史感十足！\", \"post_id\": \"696eee0b9a79c062f8cccc4f\", \"user_id\": 7, \"created_at\": \"2026-03-01T22:52:59.309000\", \"like_count\": 16, \"media_urls\": [\"https://bpic.588ku.com/back_origin_min_pic/19/09/23/593eae9555db91d7908839deecd452da.jpg\"], \"updated_at\": \"2026-03-02T22:52:59.309000\", \"view_count\": 89.0, \"comment_count\": 0, \"moderation_status\": \"pending\"}, {\"tags\": [\"旅行\", \"西湖\"], \"title\": \"西湖观赏\", \"content\": \"西湖的美景让人流连忘返！\", \"post_id\": \"696eee0b9a79c062f8cccc50\", \"user_id\": 5007, \"created_at\": \"2026-02-28T04:52:59\", \"like_count\": 9, \"media_urls\": [\"https://youimg1.c-ctrip.com/target/100d14000000vu15e552D_D_10000_1200.jpg?proc=autoorient\"], \"updated_at\": \"2026-03-01T04:52:59\", \"view_count\": 78.0, \"comment_count\": 4, \"moderation_status\": \"pending\"}], \"total\": 3}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/posts/moderation', 200, 53, 'success', '2026-03-04 10:31:31');
+INSERT INTO `audit_logs` VALUES (4, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"logs\": [{\"id\": 3, \"path\": \"/api/admin/posts/moderation\", \"action\": \"查询\", \"method\": \"GET\", \"details\": {\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"posts\": [{\"tags\": [\"旅行\", \"长城\"], \"title\": \"北京一日游11\", \"content\": \"今天去了长城，风景真美！\", \"post_id\": \"696eee0b9a79c062f8cccc4e\", \"user_id\": 5007, \"created_at\": \"2026-03-02T10:52:59.309000\", \"like_count\": 11, \"media_urls\": [\"https://img95.699pic.com/photo/50136/6765.jpg_wh860.jpg\"], \"updated_at\": \"2026-03-02T10:52:59.309000\", \"view_count\": 100.0, \"comment_count\": 2, \"moderation_status\": \"pending\"}, {\"tags\": [\"旅行\", \"故宫\"], \"title\": \"故宫旅行\", \"content\": \"在故宫里拍了很多照片，历史感十足！\", \"post_id\": \"696eee0b9a79c062f8cccc4f\", \"user_id\": 7, \"created_at\": \"2026-03-01T22:52:59.309000\", \"like_count\": 16, \"media_urls\": [\"https://bpic.588ku.com/back_origin_min_pic/19/09/23/593eae9555db91d7908839deecd452da.jpg\"], \"updated_at\": \"2026-03-02T22:52:59.309000\", \"view_count\": 89.0, \"comment_count\": 0, \"moderation_status\": \"pending\"}, {\"tags\": [\"旅行\", \"西湖\"], \"title\": \"西湖观赏\", \"content\": \"西湖的美景让人流连忘返！\", \"post_id\": \"696eee0b9a79c062f8cccc50\", \"user_id\": 5007, \"created_at\": \"2026-02-28T04:52:59\", \"like_count\": 9, \"media_urls\": [\"https://youimg1.c-ctrip.com/target/100d14000000vu15e552D_D_10000_1200.jpg?proc=autoorient\"], \"updated_at\": \"2026-03-01T04:52:59\", \"view_count\": 78.0, \"comment_count\": 4, \"moderation_status\": \"pending\"}], \"total\": 3}}}, \"user_id\": 10000, \"resource\": \"admin\", \"username\": \"admin\", \"created_at\": \"2026-03-04T10:31:31\", \"ip_address\": \"183.17.228.70\", \"user_agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0\", \"duration_ms\": 53, \"resource_id\": null, \"status_code\": 200, \"response_status\": \"success\"}, {\"id\": 2, \"path\": \"/api/admin/comments\", \"action\": \"查询\", \"method\": \"GET\", \"details\": {\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 1, \"comments\": [{\"content\": \"11\", \"post_id\": \"post_BuZl1QC4qPM4V1tKBNe7YA\", \"user_id\": 5007, \"parent_id\": null, \"comment_id\": \"comment_OZhAby1aDIjOyY_n\", \"created_at\": \"2026-03-03T06:18:36.408000\", \"like_count\": 0}]}}}, \"user_id\": 10000, \"resource\": \"admin\", \"username\": \"admin\", \"created_at\": \"2026-03-04T10:30:47\", \"ip_address\": \"183.17.228.70\", \"user_agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0\", \"duration_ms\": 124, \"resource_id\": null, \"status_code\": 200, \"response_status\": \"success\"}, {\"id\": 1, \"path\": \"/api/admin/logs/audit\", \"action\": \"查询\", \"method\": \"GET\", \"details\": {\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"logs\": [], \"total\": 0}}}, \"user_id\": 10000, \"resource\": \"admin\", \"username\": \"admin\", \"created_at\": \"2026-03-04T10:30:39\", \"ip_address\": \"183.17.228.70\", \"user_agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0\", \"duration_ms\": 117, \"resource_id\": null, \"status_code\": 200, \"response_status\": \"success\"}], \"total\": 3}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/logs/audit', 200, 111, 'success', '2026-03-04 10:34:37');
+INSERT INTO `audit_logs` VALUES (5, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 3, \"users\": [{\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\", \"feishu_open_id\": \"\", \"feishu_union_id\": \"\"}, {\"id\": 5007, \"role\": \"user\", \"email\": \"ccc@tencent.com\", \"username\": \"周新杰\", \"is_active\": true, \"avatar_url\": \"https://s1-imfile.feishucdn.com/static-resource/v1/v3_00uk_1701c4db-67ae-456a-8fa8-2d23061f117g~?image_size=72x72&cut_type=&quality=&format=image&sticker_format=.webp\", \"created_at\": \"2026-03-03T02:21:36\", \"is_verified\": true, \"last_login_at\": \"2026-03-03T17:48:43\", \"feishu_open_id\": \"ou_74311939bd55a1d9934bd014005b4496\", \"feishu_union_id\": \"on_6896fcd6e46719f349771480d6f7460d\"}, {\"id\": 7, \"role\": \"user\", \"email\": \"test_1@example.com\", \"username\": \"user1\", \"is_active\": true, \"avatar_url\": null, \"created_at\": \"2026-02-27T14:48:27\", \"is_verified\": false, \"last_login_at\": \"2026-03-02T09:59:30\", \"feishu_open_id\": null, \"feishu_union_id\": null}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/users', 200, 113, 'success', '2026-03-04 10:36:43');
+INSERT INTO `audit_logs` VALUES (6, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"posts\": [{\"tags\": [\"旅行\", \"长城\"], \"title\": \"北京一日游11\", \"content\": \"今天去了长城，风景真美！\", \"post_id\": \"696eee0b9a79c062f8cccc4e\", \"user_id\": 5007, \"created_at\": \"2026-03-02T10:52:59.309000\", \"like_count\": 11, \"media_urls\": [\"https://img95.699pic.com/photo/50136/6765.jpg_wh860.jpg\"], \"updated_at\": \"2026-03-02T10:52:59.309000\", \"view_count\": 100.0, \"comment_count\": 2, \"moderation_status\": \"pending\"}, {\"tags\": [\"旅行\", \"故宫\"], \"title\": \"故宫旅行\", \"content\": \"在故宫里拍了很多照片，历史感十足！\", \"post_id\": \"696eee0b9a79c062f8cccc4f\", \"user_id\": 7, \"created_at\": \"2026-03-01T22:52:59.309000\", \"like_count\": 16, \"media_urls\": [\"https://bpic.588ku.com/back_origin_min_pic/19/09/23/593eae9555db91d7908839deecd452da.jpg\"], \"updated_at\": \"2026-03-02T22:52:59.309000\", \"view_count\": 89.0, \"comment_count\": 0, \"moderation_status\": \"pending\"}, {\"tags\": [\"旅行\", \"西湖\"], \"title\": \"西湖观赏\", \"content\": \"西湖的美景让人流连忘返！\", \"post_id\": \"696eee0b9a79c062f8cccc50\", \"user_id\": 5007, \"created_at\": \"2026-02-28T04:52:59\", \"like_count\": 9, \"media_urls\": [\"https://youimg1.c-ctrip.com/target/100d14000000vu15e552D_D_10000_1200.jpg?proc=autoorient\"], \"updated_at\": \"2026-03-01T04:52:59\", \"view_count\": 78.0, \"comment_count\": 4, \"moderation_status\": \"pending\"}], \"total\": 3}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/posts/moderation', 200, 60, 'success', '2026-03-04 10:38:42');
+INSERT INTO `audit_logs` VALUES (7, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 76, 'success', '2026-03-04 10:48:14');
+INSERT INTO `audit_logs` VALUES (8, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 37, 'success', '2026-03-04 10:48:27');
+INSERT INTO `audit_logs` VALUES (9, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 3, \"users\": [{\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\", \"feishu_open_id\": \"\", \"feishu_union_id\": \"\"}, {\"id\": 5007, \"role\": \"user\", \"email\": \"ccc@tencent.com\", \"username\": \"周新杰\", \"is_active\": true, \"avatar_url\": \"https://s1-imfile.feishucdn.com/static-resource/v1/v3_00uk_1701c4db-67ae-456a-8fa8-2d23061f117g~?image_size=72x72&cut_type=&quality=&format=image&sticker_format=.webp\", \"created_at\": \"2026-03-03T02:21:36\", \"is_verified\": true, \"last_login_at\": \"2026-03-03T17:48:43\", \"feishu_open_id\": \"ou_74311939bd55a1d9934bd014005b4496\", \"feishu_union_id\": \"on_6896fcd6e46719f349771480d6f7460d\"}, {\"id\": 7, \"role\": \"user\", \"email\": \"test_1@example.com\", \"username\": \"user1\", \"is_active\": true, \"avatar_url\": null, \"created_at\": \"2026-02-27T14:48:27\", \"is_verified\": false, \"last_login_at\": \"2026-03-02T09:59:30\", \"feishu_open_id\": null, \"feishu_union_id\": null}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/users', 200, 78, 'success', '2026-03-04 10:48:48');
+INSERT INTO `audit_logs` VALUES (10, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 1, \"comments\": [{\"content\": \"11\", \"post_id\": \"post_BuZl1QC4qPM4V1tKBNe7YA\", \"user_id\": 5007, \"parent_id\": null, \"comment_id\": \"comment_OZhAby1aDIjOyY_n\", \"created_at\": \"2026-03-03T06:18:36.408000\", \"like_count\": 0}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/comments', 200, 59, 'success', '2026-03-04 10:48:50');
+INSERT INTO `audit_logs` VALUES (11, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 45, 'success', '2026-03-04 10:48:58');
+INSERT INTO `audit_logs` VALUES (12, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 69, 'success', '2026-03-04 10:50:58');
+INSERT INTO `audit_logs` VALUES (13, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 42, 'success', '2026-03-04 10:52:02');
+INSERT INTO `audit_logs` VALUES (14, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 49, 'success', '2026-03-04 10:52:16');
+INSERT INTO `audit_logs` VALUES (15, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 41, 'success', '2026-03-04 10:52:35');
+INSERT INTO `audit_logs` VALUES (16, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 48, 'success', '2026-03-04 10:54:09');
+INSERT INTO `audit_logs` VALUES (17, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 41, 'success', '2026-03-04 10:54:45');
+INSERT INTO `audit_logs` VALUES (18, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 3, \"users\": [{\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\", \"feishu_open_id\": \"\", \"feishu_union_id\": \"\"}, {\"id\": 5007, \"role\": \"user\", \"email\": \"ccc@tencent.com\", \"username\": \"周新杰\", \"is_active\": true, \"avatar_url\": \"https://s1-imfile.feishucdn.com/static-resource/v1/v3_00uk_1701c4db-67ae-456a-8fa8-2d23061f117g~?image_size=72x72&cut_type=&quality=&format=image&sticker_format=.webp\", \"created_at\": \"2026-03-03T02:21:36\", \"is_verified\": true, \"last_login_at\": \"2026-03-03T17:48:43\", \"feishu_open_id\": \"ou_74311939bd55a1d9934bd014005b4496\", \"feishu_union_id\": \"on_6896fcd6e46719f349771480d6f7460d\"}, {\"id\": 7, \"role\": \"user\", \"email\": \"test_1@example.com\", \"username\": \"user1\", \"is_active\": true, \"avatar_url\": null, \"created_at\": \"2026-02-27T14:48:27\", \"is_verified\": false, \"last_login_at\": \"2026-03-02T09:59:30\", \"feishu_open_id\": null, \"feishu_union_id\": null}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/users', 200, 91, 'success', '2026-03-04 10:54:59');
+INSERT INTO `audit_logs` VALUES (19, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 44, 'success', '2026-03-04 10:55:46');
+INSERT INTO `audit_logs` VALUES (20, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 40, 'success', '2026-03-04 10:56:02');
+INSERT INTO `audit_logs` VALUES (21, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 3, \"users\": [{\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\", \"feishu_open_id\": \"\", \"feishu_union_id\": \"\"}, {\"id\": 5007, \"role\": \"user\", \"email\": \"ccc@tencent.com\", \"username\": \"周新杰\", \"is_active\": true, \"avatar_url\": \"https://s1-imfile.feishucdn.com/static-resource/v1/v3_00uk_1701c4db-67ae-456a-8fa8-2d23061f117g~?image_size=72x72&cut_type=&quality=&format=image&sticker_format=.webp\", \"created_at\": \"2026-03-03T02:21:36\", \"is_verified\": true, \"last_login_at\": \"2026-03-03T17:48:43\", \"feishu_open_id\": \"ou_74311939bd55a1d9934bd014005b4496\", \"feishu_union_id\": \"on_6896fcd6e46719f349771480d6f7460d\"}, {\"id\": 7, \"role\": \"user\", \"email\": \"test_1@example.com\", \"username\": \"user1\", \"is_active\": true, \"avatar_url\": null, \"created_at\": \"2026-02-27T14:48:27\", \"is_verified\": false, \"last_login_at\": \"2026-03-02T09:59:30\", \"feishu_open_id\": null, \"feishu_union_id\": null}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/users', 200, 82, 'success', '2026-03-04 11:00:06');
+INSERT INTO `audit_logs` VALUES (22, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 3, \"users\": [{\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\", \"feishu_open_id\": \"\", \"feishu_union_id\": \"\"}, {\"id\": 5007, \"role\": \"user\", \"email\": \"ccc@tencent.com\", \"username\": \"周新杰\", \"is_active\": true, \"avatar_url\": \"https://s1-imfile.feishucdn.com/static-resource/v1/v3_00uk_1701c4db-67ae-456a-8fa8-2d23061f117g~?image_size=72x72&cut_type=&quality=&format=image&sticker_format=.webp\", \"created_at\": \"2026-03-03T02:21:36\", \"is_verified\": true, \"last_login_at\": \"2026-03-03T17:48:43\", \"feishu_open_id\": \"ou_74311939bd55a1d9934bd014005b4496\", \"feishu_union_id\": \"on_6896fcd6e46719f349771480d6f7460d\"}, {\"id\": 7, \"role\": \"user\", \"email\": \"test_1@example.com\", \"username\": \"user1\", \"is_active\": true, \"avatar_url\": null, \"created_at\": \"2026-02-27T14:48:27\", \"is_verified\": false, \"last_login_at\": \"2026-03-02T09:59:30\", \"feishu_open_id\": null, \"feishu_union_id\": null}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/users', 200, 19379, 'success', '2026-03-04 11:08:47');
+INSERT INTO `audit_logs` VALUES (23, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"total\": 1, \"comments\": [{\"content\": \"11\", \"post_id\": \"post_BuZl1QC4qPM4V1tKBNe7YA\", \"user_id\": 5007, \"parent_id\": null, \"comment_id\": \"comment_OZhAby1aDIjOyY_n\", \"created_at\": \"2026-03-03T06:18:36.408000\", \"like_count\": 0}]}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/comments', 200, 101, 'success', '2026-03-04 11:08:47');
+INSERT INTO `audit_logs` VALUES (24, 10000, 'admin', '查询', 'admin', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": \"[响应数据过大，已截断，原始长度 27517 字节]\"}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/admin/logs/audit', 200, 229, 'success', '2026-03-04 11:08:47');
+INSERT INTO `audit_logs` VALUES (25, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 38515, 'success', '2026-03-04 11:20:32');
+INSERT INTO `audit_logs` VALUES (26, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 41, 'success', '2026-03-04 11:20:32');
+INSERT INTO `audit_logs` VALUES (27, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 48, 'success', '2026-03-04 11:20:47');
+INSERT INTO `audit_logs` VALUES (28, 10000, 'admin', '查询', 'user', NULL, '{\"response\": {\"msg\": \"获取成功\", \"code\": 200, \"data\": {\"id\": 10000, \"role\": \"admin\", \"email\": \"admin@123.com\", \"profile\": {\"travel_stats\": {}, \"visited_cities\": [], \"travel_preferences\": []}, \"username\": \"admin\", \"is_active\": true, \"avatar_url\": \"https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg\", \"created_at\": \"2026-03-03T10:55:19\", \"is_verified\": false, \"last_login_at\": \"2026-03-03T17:50:40\"}}}', '183.17.228.70', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', 'GET', '/api/user/profile', 200, 49, 'success', '2026-03-04 11:21:45');
 
 -- ----------------------------
 -- Table structure for captcha_records
@@ -66,85 +91,11 @@ CREATE TABLE `captcha_records`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_session`(`session_id` ASC) USING BTREE,
   INDEX `idx_expires`(`expires_at` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '验证码记录表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '验证码记录表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of captcha_records
 -- ----------------------------
-
--- ----------------------------
--- Table structure for comments
--- ----------------------------
-DROP TABLE IF EXISTS `comments`;
-CREATE TABLE `comments`  (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `post_id` bigint NOT NULL COMMENT '帖子ID',
-  `user_id` bigint NOT NULL COMMENT '评论用户ID',
-  `parent_id` bigint NULL DEFAULT NULL COMMENT '父评论ID，用于嵌套回复',
-  `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '评论内容',
-  `like_count` int NOT NULL DEFAULT 0 COMMENT '点赞数',
-  `is_deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已删除',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `user_id`(`user_id` ASC) USING BTREE,
-  INDEX `idx_post_created`(`post_id` ASC, `created_at` ASC) USING BTREE,
-  INDEX `idx_parent`(`parent_id` ASC) USING BTREE,
-  CONSTRAINT `comments_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
-  CONSTRAINT `comments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
-  CONSTRAINT `comments_ibfk_3` FOREIGN KEY (`parent_id`) REFERENCES `comments` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '评论表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Records of comments
--- ----------------------------
-INSERT INTO `comments` VALUES (1, 3, 6, NULL, 'esse aliqua aliquip id cillum', 0, 0, '2026-02-07 16:56:31', '2026-02-07 16:56:31');
-INSERT INTO `comments` VALUES (2, 3, 6, 1, '有一起去的吗', 0, 0, '2026-02-07 16:58:22', '2026-02-07 16:58:22');
-INSERT INTO `comments` VALUES (3, 2, 6, NULL, '有一起去的吗', 0, 0, '2026-02-07 16:59:59', '2026-02-07 16:59:59');
-INSERT INTO `comments` VALUES (4, 3, 6, 1, '我想我想', 0, 0, '2026-02-07 18:15:47', '2026-02-07 18:15:47');
-
--- ----------------------------
--- Table structure for follows
--- ----------------------------
-DROP TABLE IF EXISTS `follows`;
-CREATE TABLE `follows`  (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `follower_id` bigint NOT NULL COMMENT '粉丝用户ID',
-  `following_id` bigint NOT NULL COMMENT '被关注用户ID',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `unique_follow`(`follower_id` ASC, `following_id` ASC) USING BTREE,
-  INDEX `idx_follower`(`follower_id` ASC) USING BTREE,
-  INDEX `idx_following`(`following_id` ASC) USING BTREE,
-  CONSTRAINT `follows_ibfk_1` FOREIGN KEY (`follower_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
-  CONSTRAINT `follows_ibfk_2` FOREIGN KEY (`following_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '关注表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Records of follows
--- ----------------------------
-
--- ----------------------------
--- Table structure for likes
--- ----------------------------
-DROP TABLE IF EXISTS `likes`;
-CREATE TABLE `likes`  (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL COMMENT '点赞用户ID',
-  `target_type` enum('post','comment') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '点赞目标类型',
-  `target_id` bigint NOT NULL COMMENT '目标ID',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `unique_like`(`user_id` ASC, `target_type` ASC, `target_id` ASC) USING BTREE,
-  INDEX `idx_target`(`target_type` ASC, `target_id` ASC) USING BTREE,
-  CONSTRAINT `likes_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '点赞表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Records of likes
--- ----------------------------
-INSERT INTO `likes` VALUES (2, 6, 'post', 2, '2026-02-07 16:17:12');
-INSERT INTO `likes` VALUES (3, 6, 'post', 3, '2026-02-07 16:45:11');
 
 -- ----------------------------
 -- Table structure for permissions
@@ -160,7 +111,7 @@ CREATE TABLE `permissions`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `name`(`name` ASC) USING BTREE,
   UNIQUE INDEX `unique_permission`(`resource` ASC, `action` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 25 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '权限表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 25 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '权限表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of permissions
@@ -191,74 +142,6 @@ INSERT INTO `permissions` VALUES (23, '查看系统日志', 'admin_log', 'read',
 INSERT INTO `permissions` VALUES (24, '系统配置', 'admin_config', 'manage', '管理系统配置', '2026-01-15 10:14:30');
 
 -- ----------------------------
--- Table structure for post_tags
--- ----------------------------
-DROP TABLE IF EXISTS `post_tags`;
-CREATE TABLE `post_tags`  (
-  `post_id` bigint NOT NULL COMMENT '帖子ID',
-  `tag_id` int NOT NULL COMMENT '标签ID',
-  `created_at` datetime NULL DEFAULT NULL COMMENT '创建时间',
-  PRIMARY KEY (`post_id`, `tag_id`) USING BTREE,
-  INDEX `tag_id`(`tag_id` ASC) USING BTREE,
-  CONSTRAINT `post_tags_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
-  CONSTRAINT `post_tags_ibfk_2` FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '帖子标签关联表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Records of post_tags
--- ----------------------------
-INSERT INTO `post_tags` VALUES (2, 2, '2026-02-07 15:11:33');
-INSERT INTO `post_tags` VALUES (2, 3, '2026-02-07 15:11:33');
-INSERT INTO `post_tags` VALUES (4, 2, '2026-02-09 11:54:46');
-INSERT INTO `post_tags` VALUES (4, 3, '2026-02-09 11:54:46');
-INSERT INTO `post_tags` VALUES (5, 2, '2026-02-09 13:35:22');
-INSERT INTO `post_tags` VALUES (5, 4, '2026-02-09 13:35:22');
-INSERT INTO `post_tags` VALUES (5, 5, '2026-02-09 13:35:22');
-
--- ----------------------------
--- Table structure for posts
--- ----------------------------
-DROP TABLE IF EXISTS `posts`;
-CREATE TABLE `posts`  (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `user_id` bigint NOT NULL COMMENT '作者用户ID',
-  `title` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '标题',
-  `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '内容',
-  `media_urls` json NULL COMMENT '图片/视频URL数组',
-  `tags` json NULL COMMENT '标签数组',
-  `location` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '位置',
-  `trip_plan_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '关联的MongoDB旅行计划ID',
-  `status` enum('draft','published','hidden','deleted') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'published' COMMENT '状态',
-  `view_count` int NOT NULL DEFAULT 0 COMMENT '浏览次数',
-  `like_count` int NOT NULL DEFAULT 0 COMMENT '点赞数',
-  `comment_count` int NOT NULL DEFAULT 0 COMMENT '评论数',
-  `share_count` int NOT NULL DEFAULT 0 COMMENT '分享数',
-  `is_moderated` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已审核',
-  `moderation_status` enum('pending','approved','rejected') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending' COMMENT '审核状态',
-  `moderation_reason` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '审核原因',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `published_at` timestamp NULL DEFAULT NULL COMMENT '发布时间',
-  `category` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '类别',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_user_status`(`user_id` ASC, `status` ASC) USING BTREE,
-  INDEX `idx_published_at`(`published_at` ASC) USING BTREE,
-  INDEX `idx_moderation_status`(`moderation_status` ASC) USING BTREE,
-  FULLTEXT INDEX `ft_content`(`title`, `content`),
-  CONSTRAINT `posts_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '帖子表' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Records of posts
--- ----------------------------
-INSERT INTO `posts` VALUES (1, 1, '我想去珠海看日出', '日出好看', '[\"https://img95.699pic.com/photo/50769/9985.jpg_wh860.jpg\"]', NULL, '深圳', '696f2b425c4dc4fb68d5cebe', 'published', 0, 0, 0, 0, 0, 'pending', NULL, '2026-02-07 15:10:49', '2026-02-09 14:43:47', NULL, '风景');
-INSERT INTO `posts` VALUES (2, 1, '我想去汕尾看日出', '因为爱情码头看日出很烂漫', '[\"https://img95.699pic.com/photo/50769/9985.jpg_wh860.jpg\"]', NULL, '汕尾', '696f2b425c4dc4fb68d5cebe', 'published', 0, 1, 1, 0, 0, 'pending', NULL, '2026-02-07 15:11:33', '2026-02-09 14:43:44', NULL, '风景');
-INSERT INTO `posts` VALUES (3, 1, '厦门三日游', '看海', '[\"https://tr-osdcp.qunarzz.com/tr-osd-tr-manager/img/7671fd3c5dca3d3d9e3fbab33d07f01f.jpg\"]', '[\"日出\", \"海边\"]', '厦门', '696f2b425c4dc4fb68d5cebe', 'published', 0, 1, 3, 0, 0, 'pending', NULL, '2026-02-07 16:44:15', '2026-02-09 14:04:33', NULL, '日出');
-INSERT INTO `posts` VALUES (4, 6, '好无聊', '11111111111111', '[\"https://www.keaitupian.cn/cjpic/frombd/0/253/2671878049/2123263829.jpg\"]', '[\"风景\", \"日出\"]', NULL, '696f2b425c4dc4fb68d5cebe', 'published', 0, 0, 0, 0, 0, 'pending', NULL, '2026-02-09 11:54:46', '2026-02-09 14:04:30', NULL, '日出');
-INSERT INTO `posts` VALUES (5, 6, '挪威', '挪威的极光', '[\"https://www.2008php.com/2015_Website_appreciate/2015-11-17/20151117002254N4OYAN4OYA.jpg\"]', '[\"风景\", \"极光\", \"自然景象\"]', NULL, '696f2b425c4dc4fb68d5cebe', 'published', 0, 0, 0, 0, 0, 'pending', NULL, '2026-02-09 13:35:22', '2026-02-09 14:04:31', NULL, '极光');
-INSERT INTO `posts` VALUES (6, 6, '西欧', '看看大本钟，看看巴黎铁塔', NULL, '[\"风景\", \"城市景象\"]', '深圳', '696f2b425c4dc4fb68d5cebe', 'published', 0, 0, 0, 0, 0, 'pending', NULL, '2026-02-09 14:42:43', '2026-02-09 14:43:38', NULL, '风景');
-
--- ----------------------------
 -- Table structure for role_permissions
 -- ----------------------------
 DROP TABLE IF EXISTS `role_permissions`;
@@ -269,7 +152,7 @@ CREATE TABLE `role_permissions`  (
   INDEX `permission_id`(`permission_id` ASC) USING BTREE,
   CONSTRAINT `role_permissions_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `role_permissions_ibfk_2` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色权限关联表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色权限关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of role_permissions
@@ -330,7 +213,7 @@ CREATE TABLE `roles`  (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `name`(`name` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of roles
@@ -352,7 +235,7 @@ CREATE TABLE `tags`  (
   UNIQUE INDEX `name`(`name` ASC) USING BTREE,
   INDEX `idx_category`(`category` ASC) USING BTREE,
   INDEX `idx_use_count`(`use_count` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '标签表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '标签表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tags
@@ -383,7 +266,7 @@ CREATE TABLE `tb_order_seat`  (
   INDEX `idx_seat_id`(`seat_id` ASC) USING BTREE,
   INDEX `idx_show_event_id`(`show_event_id` ASC) USING BTREE,
   INDEX `idx_viewer_id_card`(`viewer_id_card` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '订单座位关联表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '订单座位关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_order_seat
@@ -417,7 +300,7 @@ CREATE TABLE `tb_refund_record`  (
   INDEX `idx_order_id`(`order_id` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_refund_status`(`refund_status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '退款记录表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '退款记录表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_refund_record
@@ -450,7 +333,7 @@ CREATE TABLE `tb_seat`  (
   INDEX `idx_order_id`(`order_id` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_show_event_id`(`show_event_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 22521 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '座位信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 22521 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '座位信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_seat
@@ -14490,7 +14373,7 @@ CREATE TABLE `tb_show_event`  (
   INDEX `idx_status`(`status` ASC) USING BTREE,
   INDEX `idx_city_category`(`city` ASC, `category` ASC) USING BTREE,
   INDEX `idx_hot_score`(`hot_score` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '演出活动表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '演出活动表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_show_event
@@ -14515,7 +14398,7 @@ CREATE TABLE `tb_show_remind`  (
   UNIQUE INDEX `uk_user_show`(`user_id` ASC, `show_event_id` ASC) USING BTREE,
   INDEX `idx_show_event_id`(`show_event_id` ASC) USING BTREE,
   INDEX `idx_remind_status`(`remind_status` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '开票提醒表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '开票提醒表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_show_remind
@@ -14545,7 +14428,7 @@ CREATE TABLE `tb_show_review`  (
   INDEX `idx_show_event_id`(`show_event_id` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_rating`(`rating` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '演出评价表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '演出评价表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_show_review
@@ -14563,7 +14446,7 @@ CREATE TABLE `tb_show_wish`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_user_show`(`user_id` ASC, `show_event_id` ASC) USING BTREE,
   INDEX `idx_show_event_id`(`show_event_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '演出想看（心愿单）表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '演出想看（心愿单）表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_show_wish
@@ -14601,7 +14484,7 @@ CREATE TABLE `tb_ticket_order`  (
   INDEX `idx_status`(`status` ASC) USING BTREE,
   INDEX `idx_expire_time`(`expire_time` ASC) USING BTREE,
   INDEX `idx_created_at`(`created_at` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2026852805170143235 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '票务订单表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 2026852805170143235 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '票务订单表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_ticket_order
@@ -14621,7 +14504,7 @@ CREATE TABLE `tb_user_ticket_record`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_user_show`(`user_id` ASC, `show_event_id` ASC) USING BTREE,
   INDEX `idx_show_event_id`(`show_event_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户购票记录表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户购票记录表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_user_ticket_record
@@ -14647,7 +14530,7 @@ CREATE TABLE `tb_venue`  (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_city`(`city` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '场馆信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '场馆信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_venue
@@ -14671,7 +14554,7 @@ CREATE TABLE `tb_viewer`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_user_idcard`(`user_id` ASC, `id_card` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '观演人信息表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '观演人信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of tb_viewer
@@ -14697,13 +14580,12 @@ CREATE TABLE `user_profiles`  (
   UNIQUE INDEX `user_id`(`user_id` ASC) USING BTREE,
   INDEX `full_name`(`full_name` ASC) USING BTREE,
   CONSTRAINT `user_profiles_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户档案表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户档案表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of user_profiles
 -- ----------------------------
-INSERT INTO `user_profiles` VALUES (1, 1, '蹭蹭蹭', 'male', '2026-01-19', '福建省厦门市', '[\"nickname:蹭蹭蹭\", \"bio:我很爱海鲜，很爱玩，到处旅游\", \"location:深圳\"]', '[\"厦门\", \"深圳\", \"广州\", \"北京\", \"上海\", \"福州\", \"长沙\", \"武汉\", \"龙岩\", \"杭州\"]', '{\"total_trips\": 0, \"total_cities\": 0, \"favorite_trips\": 0, \"completed_trips\": 0}', '2026-01-19 10:02:32', '2026-01-20 02:39:24');
-INSERT INTO `user_profiles` VALUES (2, 6, '杰尼龟', 'male', '2002-01-19', '福建省福州市', '[\"nickname:用户123\", \"bio:我很爱海鲜，很爱玩，到处旅游\", \"location:深圳\"]', '[\"厦门\", \"深圳\", \"广州\", \"福州\", \"长沙\", \"武汉\", \"龙岩\", \"杭州\", \"北京\", \"上海\", \"哈尔滨\"]', '{\"total_trips\": 2, \"total_cities\": 2, \"favorite_trips\": 2, \"completed_trips\": 0}', '2026-01-19 10:02:32', '2026-02-26 09:59:34');
+INSERT INTO `user_profiles` VALUES (3, 5007, '周新杰', 'male', '2026-03-04', '深圳', '[\"nickname:杰\", \"bio:很懒\", \"location:深圳\"]', '[\"北京\", \"上海\", \"重庆\", \"广州\", \"深圳\", \"珠海\", \"汕头\", \"汕尾\", \"杭州\", \"南京\", \"厦门\", \"福州\", \"龙岩\", \"兰州\", \"海口\", \"呼和浩特\"]', '{\"total_trips\": 1, \"total_cities\": 1, \"favorite_trips\": 1, \"completed_trips\": 0}', '2026-03-03 02:21:36', '2026-03-04 02:51:56');
 
 -- ----------------------------
 -- Table structure for user_roles
@@ -14716,13 +14598,13 @@ CREATE TABLE `user_roles`  (
   INDEX `role_id`(`role_id` ASC) USING BTREE,
   CONSTRAINT `user_roles_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `user_roles_ibfk_2` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户角色关联表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户角色关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of user_roles
 -- ----------------------------
-INSERT INTO `user_roles` VALUES (1, 1);
-INSERT INTO `user_roles` VALUES (2, 2);
+INSERT INTO `user_roles` VALUES (7, 1);
+INSERT INTO `user_roles` VALUES (5007, 1);
 
 -- ----------------------------
 -- Table structure for users
@@ -14732,7 +14614,7 @@ CREATE TABLE `users`  (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `username` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户名',
   `email` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邮箱',
-  `password_hash` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '密码哈希',
+  `password_hash` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '密码哈希，飞书用户可为空',
   `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '手机号',
   `avatar_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '头像URL',
   `bio` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '个人简介',
@@ -14742,32 +14624,24 @@ CREATE TABLE `users`  (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `last_login_at` timestamp NULL DEFAULT NULL COMMENT '最后登录时间',
+  `feishu_open_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '飞书用户 open_id',
+  `feishu_union_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '飞书用户 union_id',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `username`(`username` ASC) USING BTREE,
   UNIQUE INDEX `email`(`email` ASC) USING BTREE,
+  UNIQUE INDEX `feishu_open_id`(`feishu_open_id` ASC) USING BTREE,
+  UNIQUE INDEX `feishu_union_id`(`feishu_union_id` ASC) USING BTREE,
   INDEX `idx_username`(`username` ASC) USING BTREE,
   INDEX `idx_email`(`email` ASC) USING BTREE,
-  INDEX `idx_created_at`(`created_at` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 5007 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户表' ROW_FORMAT = Dynamic;
+  INDEX `idx_created_at`(`created_at` ASC) USING BTREE,
+  INDEX `idx_feishu_open_id`(`feishu_open_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 10001 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of users
 -- ----------------------------
-INSERT INTO `users` VALUES (1, 'admin', 'admin@123.com', '$2a$10$OKU4EkkNZMbV/vo5XQ3I4.yKdCgwgvu3u6thPvpLZ7UAliXT56Cpi', '13800138000', 'https://java-webai-1.oss-cn-beijing.aliyuncs.com/travel_avatars/avatar_6_vzOwiuvh2eA.jpg', '我是管理员', 'admin', 1, 0, '2026-02-03 10:55:19', '2026-02-26 09:56:28', '2026-02-26 02:29:14');
+INSERT INTO `users` VALUES (7, 'user1', 'test_1@example.com', '$2a$10$OKU4EkkNZMbV/vo5XQ3I4.yKdCgwgvu3u6thPvpLZ7UAliXT56Cpi', '13800000001', NULL, NULL, 'user', 1, 0, '2026-02-27 14:48:27', '2026-03-03 17:19:31', '2026-03-02 09:59:30', NULL, NULL);
+INSERT INTO `users` VALUES (5007, '周新杰', 'ccc@tencent.com', '$2a$10$OKU4EkkNZMbV/vo5XQ3I4.yKdCgwgvu3u6thPvpLZ7UAliXT56Cpi', '13599616147', 'https://s1-imfile.feishucdn.com/static-resource/v1/v3_00uk_1701c4db-67ae-456a-8fa8-2d23061f117g~?image_size=72x72&cut_type=&quality=&format=image&sticker_format=.webp', NULL, 'user', 1, 1, '2026-03-03 02:21:36', '2026-03-04 02:51:40', '2026-03-03 17:48:43', 'ou_74311939bd55a1d9934bd014005b4496', 'on_6896fcd6e46719f349771480d6f7460d');
+INSERT INTO `users` VALUES (10000, 'admin', 'admin@123.com', '$2a$10$OKU4EkkNZMbV/vo5XQ3I4.yKdCgwgvu3u6thPvpLZ7UAliXT56Cpi', '13800138000', 'https://java-webai-1.oss-cn-https://vcg03.cfp.cn/creative/vcg/800/new/VCG211522516989.jpg', '我是管理员', 'admin', 1, 0, '2026-03-03 10:55:19', '2026-03-04 03:14:06', '2026-03-03 17:50:40', '', '');
+
 SET FOREIGN_KEY_CHECKS = 1;
-
--- ----------------------------
--- Migration: audit_logs 新增字段 (v2.0 日志切面重构)
--- 执行时机：仅在现有数据库升级时运行，新建库无需执行（DDL 已包含在上方 CREATE TABLE 中）
--- ----------------------------
-ALTER TABLE `audit_logs`
-  ADD COLUMN  `username`        VARCHAR(100) NULL DEFAULT NULL COMMENT '用户名（冗余，避免JOIN）' AFTER `user_id`,
-  ADD COLUMN  `method`          VARCHAR(10)  NULL DEFAULT NULL COMMENT 'HTTP方法 (GET/POST/PUT/DELETE)' AFTER `user_agent`,
-  ADD COLUMN  `path`            VARCHAR(255) NULL DEFAULT NULL COMMENT '请求路径 (/api/user/123)' AFTER `method`,
-  ADD COLUMN  `status_code`     SMALLINT     NULL DEFAULT NULL COMMENT 'HTTP响应状态码' AFTER `path`,
-  ADD COLUMN  `duration_ms`     INT          NULL DEFAULT NULL COMMENT '请求耗时(ms)' AFTER `status_code`,
-  ADD COLUMN  `response_status` VARCHAR(20)  NULL DEFAULT NULL COMMENT '响应结果 (success/error)' AFTER `duration_ms`;
-
--- 新增索引（忽略已存在错误）
-CREATE INDEX  `idx_method_path` ON `audit_logs` (`method`, `path`);
-CREATE INDEX  `idx_status_code`  ON `audit_logs` (`status_code`);

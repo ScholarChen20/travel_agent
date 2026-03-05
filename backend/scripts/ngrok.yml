@@ -1,0 +1,49 @@
+version: "3"
+
+tunnels:
+  # 后端API隧道 - FastAPI服务
+  backend-api:
+    proto: http
+    addr: backend:8000  # 使用Docker容器名称
+    domain: your-subdomain.ngrok-free.app  # 可选：自定义域名（需要付费）
+    bind_tls: true
+    inspect: false
+    schemes:
+      - https
+      - http
+    basic_auth:  # 可选：添加基础认证
+      - "admin:your_password_here"
+    options:
+      timeout: 30s
+      max_connections: 100
+
+  # 前端隧道 - Nginx服务
+  frontend:
+    proto: http
+    addr: frontend:80  # 使用Docker容器名称
+    bind_tls: true
+    inspect: false
+    schemes:
+      - https
+      - http
+    options:
+      timeout: 30s
+      max_connections: 100
+
+  # MySQL管理界面（可选 - phpMyAdmin）
+  # phpmyadmin:
+  #   proto: http
+  #   addr: phpmyadmin:8080
+  #   bind_tls: true
+  #   inspect: false
+  #   basic_auth:
+  #     - "admin:your_password_here"
+
+  # MongoDB管理界面（可选 - Mongo Express）
+  # mongo-express:
+  #   proto: http
+  #   addr: mongo-express:8081
+  #   bind_tls: true
+  #   inspect: false
+  #   basic_auth:
+  #     - "admin:your_password_here"

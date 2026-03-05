@@ -31,7 +31,7 @@ settings = get_settings()
 # 配置loguru日志（在中间件注册之前配置）
 logger.remove()  # 移除默认处理器
 logger.add(
-    sink=lambda msg: print(msg, end=""),
+    sink=lambda msg: print(msg),  # 移除 end="" 参数，确保正常换行
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     level="INFO",  # 改为 DEBUG 级别，确保所有日志都能输出
     colorize=True,
@@ -49,6 +49,18 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# 注册审计日志中间件
+from ..middleware.audit_middleware import audit_middleware_wrapper
+app.middleware("http")(audit_middleware_wrapper())
+
+# 添加测试中间件
+@app.middleware("http")
+async def test_middleware(request: Request, call_next):
+    print(f"[TestMiddleware] 收到请求: {request.method} {request.url.path}")
+    response = await call_next(request)
+    print(f"[TestMiddleware] 响应状态码: {response.status_code}")
+    return response
+
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
@@ -58,10 +70,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
-
-# 注册审计日志中间件（使用装饰器方式）
-from ..middleware.audit_middleware import audit_middleware
-app.middleware("http")(audit_middleware)
 
 _CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",

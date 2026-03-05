@@ -308,8 +308,15 @@ async function fetchUserAvatar() {
         })
       }
     }
-  } catch (error) {
-    console.error('获取头像URL失败:', error)
+  } catch (error: any) {
+    // 如果是 401 错误（Token 过期），静默处理，不影响首页展示
+    if (error?.response?.status === 401) {
+      console.warn('Token 已过期，请重新登录')
+      // 清除认证状态，但不跳转（让用户自然地点击登录）
+      authStore.logout()
+    } else {
+      console.error('获取头像URL失败:', error)
+    }
   }
 }
 
@@ -318,9 +325,17 @@ async function fetchVisitedCities() {
   try {
     const cities = await userService.getVisitedCities()
     visitedCities.value = Array.isArray(cities) ? cities : []
-  } catch (error) {
-    console.error('获取已访问城市失败:', error)
-    visitedCities.value = []
+  } catch (error: any) {
+    // 如果是 401 错误（Token 过期），静默处理
+    if (error?.response?.status === 401) {
+      console.warn('Token 已过期，无法获取访问城市')
+      visitedCities.value = []
+      // 清除认证状态
+      authStore.logout()
+    } else {
+      console.error('获取已访问城市失败:', error)
+      visitedCities.value = []
+    }
   } finally {
     await nextTick()
     initMap()
