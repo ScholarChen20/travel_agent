@@ -172,6 +172,7 @@ echo "export DASHSCOPE_API_KEY=您的API密钥" >> ~/.bashrc  # DashScope API密
 echo "export AMAP_API_KEY=您的API密钥" >> ~/.bashrc # 高德地图API密钥
 echo "export UNSPLASH_SECRET_KEY=您的API密钥" >> ~/.bashrc # Unsplash API密钥
 echo "export OSS_ACCESS_KEY_SECRET=您的API密钥" >> ~/.bashrc  # 阿里云OSS密钥
+echo "export NGROK_AUTHTOKEN=你的ngrok的授权令牌" >> ~/.bashrc
 
 source ~/.bashrc
 ```

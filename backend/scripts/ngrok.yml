@@ -1,49 +1,48 @@
-version: "3"
+version: "2"
 
 tunnels:
-  # 后端API隧道 - FastAPI服务
-  backend-api:
-    proto: http
-    addr: backend:8000  # 使用Docker容器名称
-    domain: your-subdomain.ngrok-free.app  # 可选：自定义域名（需要付费）
-    bind_tls: true
-    inspect: false
-    schemes:
-      - https
-      - http
-    basic_auth:  # 可选：添加基础认证
-      - "admin:your_password_here"
-    options:
-      timeout: 30s
-      max_connections: 100
-
-  # 前端隧道 - Nginx服务
+  # 前端隧道 - Nginx服务（包含前端和后端代理）
+  # 推荐：只暴露前端，前端会代理后端 API 请求
   frontend:
     proto: http
-    addr: frontend:80  # 使用Docker容器名称
-    bind_tls: true
-    inspect: false
-    schemes:
-      - https
-      - http
-    options:
-      timeout: 30s
-      max_connections: 100
+    addr: frontend:80
 
-  # MySQL管理界面（可选 - phpMyAdmin）
-  # phpmyadmin:
+  # 后端API隧道 - FastAPI服务
+  # 注意：Ngrok 免费版只能同时运行 1 个隧道
+  # 如需同时暴露前后端，请升级到付费计划或注释掉其中一个
+  # backend-api:
   #   proto: http
-  #   addr: phpmyadmin:8080
-  #   bind_tls: true
-  #   inspect: false
-  #   basic_auth:
-  #     - "admin:your_password_here"
+  #   addr: backend:8000
 
-  # MongoDB管理界面（可选 - Mongo Express）
-  # mongo-express:
-  #   proto: http
-  #   addr: mongo-express:8081
-  #   bind_tls: true
-  #   inspect: false
-  #   basic_auth:
-  #     - "admin:your_password_here"
+# 注意事项：
+# 1. Ngrok v3 配置说明：
+#    - authtoken 通过环境变量 NGROK_AUTHTOKEN 传递（在 docker-compose.yml 中配置）
+#    - 不要在配置文件中写 authtoken 字段
+#
+# 2. Ngrok 免费版限制：
+#    - 最多 1 个在线进程
+#    - 每个进程最多 1 个隧道（免费版）
+#    - 随机生成的 URL（每次重启会变化）
+#    - 每分钟 40 个连接
+#
+# 3. 推荐配置：
+#    - 只暴露前端（frontend:80）
+#    - 前端 Nginx 配置反向代理到后端
+#    - 这样只需要一个 Ngrok 隧道
+#
+# 4. 如需同时暴露前后端：
+#    - 升级到 Ngrok 付费计划
+#    - 或使用其他内网穿透工具（frp、cloudflared 等）
+#
+# 5. 自定义域名（需要付费计划）：
+#    frontend:
+#      proto: http
+#      addr: frontend:80
+#      domain: your-subdomain.ngrok-free.app
+#
+# 6. 基础认证（可选）：
+#    frontend:
+#      proto: http
+#      addr: frontend:80
+#      basic_auth:
+#        - "username:password"
