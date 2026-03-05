@@ -18,7 +18,7 @@ from pydantic import BaseModel, EmailStr, Field
 from loguru import logger
 
 from ...services.auth_service import get_auth_service
-from ...services.anti_spam_service import get_anti_spam_service
+from ...services.anti_spam_service import get_anti_spam_service, AntiSpamRequest
 from ...services.feishu_service import get_feishu_service
 from ...database.mysql import get_mysql_db
 from ...database.redis_client import get_redis_client
@@ -26,6 +26,7 @@ from ...database.models import User, UserProfile
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...config import get_settings
 from ...utils.response import ApiResponse
+from ...utils.cache_invalidator import get_cache_invalidator
 
 
 router = APIRouter(prefix="/auth", tags=["认证"])
@@ -40,7 +41,6 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, description="密码")
     captcha_code: str = Field(..., min_length=4, max_length=10, description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
-    device_id: str = Field(..., min_length=10, max_length=128, description="设备唯一标识")
 
 
 class LoginRequest(BaseModel):
@@ -49,7 +49,7 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="密码")
     captcha_code: str = Field(..., description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
-    device_id: str = Field(default="default", description="设备ID")
+    # device_id: str = Field(default="default", description="设备ID")
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -184,21 +184,20 @@ async def register(request: RegisterRequest, http_request: Request):
         # 0. 防刷检查（在验证码验证之前，避免消耗验证码）
         if settings.anti_spam_enabled:
             ip = _get_client_ip(http_request)
-            device_id = get_device_id()
-            anti_spam = get_anti_spam_service()
-            allowed, error_code, retry_after = await anti_spam.check_register_allowed(
-                device_id, ip
+            device_id = get_device_id() or "unknown"
+            anti_spam = await get_anti_spam_service()
+            spam_response = await anti_spam.check_register_allowed(
+                AntiSpamRequest(
+                    user_id="anonymous",
+                    device_id=device_id,
+                    ip_address=ip,
+                    request_type="register"
+                )
             )
-            if not allowed:
-                headers = {"Retry-After": str(retry_after)} if retry_after else {}
-                error_messages = {
-                    "SPAM_IP_COUNTRY": (403, "当前地区暂不支持注册"),
-                    "SPAM_IP_RATE_LIMIT": (429, "注册过于频繁，请稍后再试"),
-                    "SPAM_DEVICE_REGISTERED": (429, "该设备注册过于频繁，请5分钟后再试"),
-                }
-                http_status, detail = error_messages.get(error_code, (429, "请求过于频繁"))
+            if not spam_response.allowed:
                 raise HTTPException(
-                    status_code=http_status, detail=detail, headers=headers
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=spam_response.reason or "请求过于频繁"
                 )
 
         # 1. 验证验证码
@@ -285,7 +284,7 @@ async def register(request: RegisterRequest, http_request: Request):
             user_id=user_id,
             username=username,
             role=role,
-            device_id="default"
+            device_id=device_id
         )
         logger.info(f"JWT Token生成成功: {user_id}")
 
@@ -306,12 +305,16 @@ async def register(request: RegisterRequest, http_request: Request):
 
         logger.info(f"新用户注册成功: {username} (ID: {user_id})")
 
+        # 注册成功后失效管理后台统计缓存
+        cache_invalidator = get_cache_invalidator()
+        await cache_invalidator.invalidate_admin_all_stats()
+
         # 8. 记录设备和IP（注册成功后）
-        if settings.anti_spam_enabled:
-            _ip = _get_client_ip(http_request)
-            _anti_spam = get_anti_spam_service()
-            await _anti_spam.mark_device_registered(request.device_id)
-            await _anti_spam.increment_ip_counter(_ip)
+        # if settings.anti_spam_enabled:
+        #     _ip = _get_client_ip(http_request)
+        #     _anti_spam = get_anti_spam_service()
+        #     await _anti_spam.mark_device_registered(request.device_id)
+        #     await _anti_spam.increment_ip_counter(_ip)
 
         return ApiResponse.created(
             data={
@@ -350,6 +353,18 @@ async def login(request: LoginRequest):
     settings = get_settings()
     mysql_db = get_mysql_db()
     redis_client = get_redis_client()
+
+    # 0. 校验设备id是否在黑名单中
+    if settings.anti_spam_enabled:
+        _anti_spam = get_anti_spam_service()
+        device_id = get_device_id()
+        allowed, error_code, retry_after = await _anti_spam.check_login_allowed(device_id)
+        if not allowed:
+            headers = {"Retry-After": str(retry_after)} if retry_after else {}
+            raise HTTPException(
+                status_code=429, detail="该设备注册过于频繁，请5分钟后再试", headers=headers
+            )
+
 
     # 1. 验证验证码
     if not await verify_captcha(request.captcha_session_id, request.captcha_code):
@@ -403,17 +418,18 @@ async def login(request: LoginRequest):
             )
 
         # 6. 生成JWT Token
+        device_id = get_device_id()
         token_data = auth_service.create_access_token(
             user_id=user.id,
             username=user.username,
             role=user.role,
-            device_id=request.device_id
+            device_id=device_id
         )
 
         # 7. 存储Token到Redis（支持多设备）
         await redis_client.hset(
             f"jwt:user:{user.id}",
-            request.device_id,
+            device_id,
             token_data["access_token"]
         )
         await redis_client.expire(
@@ -427,7 +443,7 @@ async def login(request: LoginRequest):
         # 9. 清除限流计数
         await redis_client.delete(rate_limit_key)
 
-        logger.info(f"用户登录成功: {user.username} (ID: {user.id}, 设备: {request.device_id})")
+        logger.info(f"用户登录成功: {user.username} (ID: {user.id}, 设备id: {device_id})")
 
         return ApiResponse.success(
             data={

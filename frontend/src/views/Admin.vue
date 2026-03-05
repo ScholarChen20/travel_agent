@@ -250,7 +250,7 @@
                 <p class="page-desc">平台数据统计分析图表</p>
               </div>
               
-              <a-row :gutter="[16, 16]" class="charts-row">
+              <a-row :gutter="[16, 24]" class="charts-row">
                 <a-col :xs="24" :lg="8">
                   <a-card class="chart-card" :bordered="false">
                     <template #title>
@@ -259,7 +259,7 @@
                         <span>用户注册趋势</span>
                       </div>
                     </template>
-                    <div ref="userTrendChartRef" style="height: 200px"></div>
+                    <div ref="userTrendChartRef" style="height: 300px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -270,7 +270,7 @@
                         <span>帖子发布趋势</span>
                       </div>
                     </template>
-                    <div ref="postTrendChartRef" style="height: 200px"></div>
+                    <div ref="postTrendChartRef" style="height: 300px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -281,7 +281,7 @@
                         <span>内容审核状态</span>
                       </div>
                     </template>
-                    <div ref="moderationChartRef" style="height: 200px"></div>
+                    <div ref="moderationChartRef" style="height: 300px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -292,7 +292,7 @@
                         <span>内容类型分布</span>
                       </div>
                     </template>
-                    <div ref="contentTypeChartRef" style="height: 200px"></div>
+                    <div ref="contentTypeChartRef" style="height: 300px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -303,7 +303,7 @@
                         <span>热门内容Top5</span>
                       </div>
                     </template>
-                    <div ref="topContentChartRef" style="height: 200px"></div>
+                    <div ref="topContentChartRef" style="height: 300px"></div>
                   </a-card>
                 </a-col>
                 <a-col :xs="24" :lg="8">
@@ -314,7 +314,7 @@
                         <span>用户活跃度</span>
                       </div>
                     </template>
-                    <div ref="userActivityChartRef" style="height: 200px"></div>
+                    <div ref="userActivityChartRef" style="height: 300px"></div>
                   </a-card>
                 </a-col>
               </a-row>
@@ -1187,13 +1187,22 @@ function updateUserTrendChart() {
     xAxis: { 
       type: 'category', 
       data: dateLabels,
+      name: '日期',
+      nameLocation: 'middle',
+      nameGap: 25,
+      nameTextStyle: { color: '#666', fontSize: 12 },
       axisLine: { lineStyle: { color: '#e8e8e8' } }, 
       axisLabel: { color: '#666' } 
     },
     yAxis: { 
       type: 'value', 
+      name: '用户数',
+      nameLocation: 'middle',
+      nameGap: 40,
+      nameTextStyle: { color: '#666', fontSize: 12 },
+      minInterval: 1,
       splitLine: { lineStyle: { type: 'dashed', color: '#e8e8e8' } }, 
-      axisLabel: { color: '#666' } 
+      axisLabel: { color: '#666' }
     },
     series: [{
       data: trend.map((i: any) => i.count),
@@ -1325,9 +1334,23 @@ function updateCharts() {
     if (chart) {
       chart.setOption({
         tooltip: { trigger: 'axis' },
-        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: userTrend.map((i: any) => i.date.slice(5)) },
-        yAxis: { type: 'value' },
+        grid: { left: '3%', right: '4%', bottom: '8%', top: '8%', containLabel: true },
+        xAxis: {
+          type: 'category',
+          data: userTrend.map((i: any) => i.date.slice(5)),
+          name: '日期',
+          nameLocation: 'middle',
+          nameGap: 30,
+          nameTextStyle: { color: '#666', fontSize: 12 }
+        },
+        yAxis: { 
+          type: 'value', 
+          name: '用户数',
+          nameLocation: 'middle',
+          nameGap: 40,
+          nameTextStyle: { color: '#666', fontSize: 12 },
+          minInterval: 1
+        },
         series: [{
           data: userTrend.map((i: any) => i.count),
           type: 'line',
@@ -1348,13 +1371,24 @@ function updateCharts() {
           trigger: 'axis',
           formatter: '{b}: {c} 篇'
         },
-        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { 
-          type: 'category', 
+        grid: { left: '3%', right: '4%', bottom: '8%', top: '8%', containLabel: true },
+        xAxis: {
+          type: 'category',
           data: postTrend.map((i: any) => i.date.slice(5)),
-          boundaryGap: false
+          boundaryGap: false,
+          name: '日期',
+          nameLocation: 'middle',
+          nameGap: 30,
+          nameTextStyle: { color: '#666', fontSize: 12 }
         },
-        yAxis: { type: 'value', minInterval: 1 },
+        yAxis: { 
+          type: 'value', 
+          name: '帖子数',
+          nameLocation: 'middle',
+          nameGap: 40,
+          nameTextStyle: { color: '#666', fontSize: 12 },
+          minInterval: 1 
+        },
         series: [{
           data: postTrend.map((i: any) => i.count),
           type: 'line',
@@ -1395,13 +1429,20 @@ function updateCharts() {
     if (chart) {
       chart.setOption({
         tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-        legend: { orient: 'vertical', right: 10, top: 'center' },
+        legend: {
+          orient: 'vertical',
+          right: '8%',
+          top: 'middle',
+          itemWidth: 10,
+          itemHeight: 10,
+          textStyle: { fontSize: 12, color: '#555' }
+        },
         series: [{
           type: 'pie',
-          radius: ['40%', '70%'],
-          center: ['40%', '50%'],
+          radius: ['42%', '68%'],
+          center: ['38%', '50%'],
           avoidLabelOverlap: false,
-          itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+          itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
           label: { show: false },
           emphasis: {
             label: { show: true, fontSize: 14, fontWeight: 'bold' }
@@ -1421,7 +1462,7 @@ function updateCharts() {
           axisPointer: { type: 'shadow' },
           formatter: '{b}: {c} 篇'
         },
-        grid: { left: '3%', right: '15%', bottom: '3%', containLabel: true },
+        grid: { left: '3%', right: '12%', bottom: '5%', top: '5%', containLabel: true },
         xAxis: { 
           type: 'value',
           splitLine: { show: false }
@@ -1466,7 +1507,7 @@ function updateCharts() {
           trigger: 'axis',
           axisPointer: { type: 'shadow' }
         },
-        grid: { left: '3%', right: '30%', bottom: '3%', containLabel: true },
+        grid: { left: '3%', right: '28%', bottom: '5%', top: '5%', containLabel: true },
         xAxis: { 
           type: 'value',
           splitLine: { show: false }
@@ -1534,19 +1575,28 @@ function updateCharts() {
         },
         legend: {
           data: ['发帖数', '计划数'],
-          top: 5,
-          textStyle: { color: '#666', fontSize: 11 }
+          top: 8,
+          textStyle: { color: '#666', fontSize: 12 }
         },
-        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        grid: { left: '5%', right: '4%', bottom: '10%', top: '18%', containLabel: true },
         xAxis: { 
           type: 'category', 
           data: labels,
+          name: '发帖数量',
+          nameLocation: 'middle',
+          nameGap: 30,
+          nameTextStyle: { color: '#666', fontSize: 12 },
           axisLine: { show: false },
           axisTick: { show: false },
           axisLabel: { color: '#666', fontSize: 11 }
         },
         yAxis: { 
           type: 'value',
+          name: '用户数',
+          nameLocation: 'middle',
+          nameGap: 35,
+          nameTextStyle: { color: '#666', fontSize: 12 },
+          minInterval: 1,
           splitLine: { show: false },
           axisLabel: { color: '#666', fontSize: 11 }
         },
@@ -1596,8 +1646,26 @@ function updateCharts() {
       chart.setOption({
         tooltip: { trigger: 'axis' },
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-        xAxis: { type: 'category', data: postTrend.map((i: any) => i.date.slice(5)), axisLine: { lineStyle: { color: '#e8e8e8' } }, axisLabel: { color: '#666' } },
-        yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#e8e8e8' } }, axisLabel: { color: '#666' } },
+        xAxis: { 
+          type: 'category', 
+          data: postTrend.map((i: any) => i.date.slice(5)), 
+          name: '日期',
+          nameLocation: 'middle',
+          nameGap: 25,
+          nameTextStyle: { color: '#666', fontSize: 12 },
+          axisLine: { lineStyle: { color: '#e8e8e8' } }, 
+          axisLabel: { color: '#666' } 
+        },
+        yAxis: { 
+          type: 'value', 
+          name: '帖子数',
+          nameLocation: 'middle',
+          nameGap: 40,
+          nameTextStyle: { color: '#666', fontSize: 12 },
+          minInterval: 1,
+          splitLine: { lineStyle: { type: 'dashed', color: '#e8e8e8' } }, 
+          axisLabel: { color: '#666' } 
+        },
         series: [{
           data: postTrend.map((i: any) => i.count),
           type: 'line',
@@ -1993,9 +2061,13 @@ async function moderatePost(postId: string, status: 'approved' | 'rejected') {
 }
 
 .chart-card {
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  margin-bottom: 8px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0;
+}
+
+.chart-card :deep(.ant-card-body) {
+  padding: 16px 20px 20px;
 }
 
 .analytics-container {

@@ -9,6 +9,7 @@
 5. 工具调用统计
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from loguru import logger
@@ -16,6 +17,12 @@ from loguru import logger
 from ..database.mongodb import get_mongodb_client
 from ..database.mysql import get_mysql_db
 from ..database.models import User, UserProfile
+
+# 缓存 key 常量
+_CACHE_VISUALIZATION = "admin:visualization"
+_CACHE_SYSTEM_STATS  = "admin:system_stats"
+_CACHE_USER_TREND_PREFIX = "admin:user_trend:"
+_CACHE_TTL = 1800  # 30 分钟
 
 
 class AdminService:
@@ -25,6 +32,8 @@ class AdminService:
         """初始化服务"""
         self.mongodb = get_mongodb_client()
         self.mysql_db = get_mysql_db()
+        from ..database.redis_client import get_redis_client
+        self.redis = get_redis_client()
         logger.info("管理服务已初始化")
 
     def list_users(
@@ -309,6 +318,15 @@ class AdminService:
             Dict: 系统统计
         """
         try:
+            # 优先读 Redis 缓存
+            cached = await self.redis.get(_CACHE_SYSTEM_STATS)
+            if cached:
+                try:
+                    logger.debug("命中 system_stats 缓存")
+                    return json.loads(cached)
+                except Exception:
+                    pass
+
             stats = {}
 
             # MySQL统计
@@ -345,6 +363,13 @@ class AdminService:
                 "active": await sessions_collection.count_documents({"is_active": True})
             }
 
+            # 写入缓存
+            await self.redis.set(
+                _CACHE_SYSTEM_STATS,
+                json.dumps(stats, ensure_ascii=False, default=str),
+                ex=_CACHE_TTL
+            )
+            logger.debug("system_stats 已写入缓存")
             return stats
 
         except Exception as e:
@@ -359,29 +384,45 @@ class AdminService:
             Dict: 可视化数据
         """
         try:
+            # 优先读 Redis 缓存
+            cached = await self.redis.get(_CACHE_VISUALIZATION)
+            if cached:
+                try:
+                    logger.debug("命中 visualization 缓存")
+                    return json.loads(cached)
+                except Exception:
+                    pass
+
             data = {}
-            
+
             # 最近7天用户注册趋势
             data["user_trend"] = await self._get_user_registration_trend(7)
-            
+
             # 最近7天帖子发布趋势
             data["post_trend"] = await self._get_post_trend(7)
-            
+
             # 内容审核状态分布
             data["moderation_distribution"] = await self._get_moderation_distribution()
-            
+
             # 用户活跃度分布
             data["user_activity"] = await self._get_user_activity_distribution()
-            
+
             # 帖子类型分布
             data["content_type_distribution"] = await self._get_content_type_distribution()
-            
+
             # Top热门内容
             data["top_content"] = await self._get_top_content(5)
-            
+
             # 互动统计
             # data["interaction_stats"] = await self._get_interaction_stats()
 
+            # 写入缓存
+            await self.redis.set(
+                _CACHE_VISUALIZATION,
+                json.dumps(data, ensure_ascii=False, default=str),
+                ex=_CACHE_TTL
+            )
+            logger.debug("visualization 已写入缓存")
             return data
 
         except Exception as e:
@@ -396,18 +437,22 @@ class AdminService:
     ) -> Dict[str, Any]:
         """
         获取用户注册趋势（支持自定义时间范围）
-        
-        Args:
-            start_date: 开始日期 (YYYY-MM-DD)
-            end_date: 结束日期 (YYYY-MM-DD)
-            period: 预设周期 (week=最近一周, month=最近一月, year=最近一年)
-        
-        Returns:
-            Dict: 用户趋势数据
         """
         try:
-            from datetime import datetime, timedelta
-            
+            # 构建缓存 key（自定义日期区间用 custom:start:end，预设用 period）
+            if start_date and end_date:
+                cache_key = f"{_CACHE_USER_TREND_PREFIX}custom:{start_date}:{end_date}"
+            else:
+                cache_key = f"{_CACHE_USER_TREND_PREFIX}{period}"
+
+            cached = await self.redis.get(cache_key)
+            if cached:
+                try:
+                    logger.debug(f"命中 user_trend 缓存: {cache_key}")
+                    return json.loads(cached)
+                except Exception:
+                    pass
+
             # 根据预设周期计算日期范围
             if period == "week":
                 days = 7
@@ -417,23 +462,21 @@ class AdminService:
                 days = 365
             else:
                 days = 7
-            
+
             # 如果没有提供自定义日期范围，使用预设周期
             if not start_date or not end_date:
                 end_dt = datetime.now()
                 start_dt = end_dt - timedelta(days=days - 1)
                 start_date = start_dt.strftime("%Y-%m-%d")
                 end_date = end_dt.strftime("%Y-%m-%d")
-            
+
             # 计算日期范围内的所有日期
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
             end_dt = datetime.strptime(end_date, "%Y-%m-%d")
             days_count = (end_dt - start_dt).days + 1
-            
-            # 根据时间范围决定聚合方式
-            # 如果超过60天，按月聚合；否则按天聚合
+
+            # 根据时间范围决定聚合方式：超过60天按月，否则按天
             if days_count > 60:
-                # 按月聚合
                 trend = []
                 current_dt = datetime(start_dt.year, start_dt.month, 1)
                 while current_dt <= end_dt:
@@ -442,59 +485,57 @@ class AdminService:
                         month_end = datetime(current_dt.year + 1, 1, 1).strftime("%Y-%m-%d")
                     else:
                         month_end = datetime(current_dt.year, current_dt.month + 1, 1).strftime("%Y-%m-%d")
-                    
+
                     with self.mysql_db.get_session() as session:
                         count = session.query(User).filter(
                             User.created_at >= month_start,
                             User.created_at < month_end
                         ).count()
-                    
-                    trend.append({
-                        "date": current_dt.strftime("%Y-%m"),
-                        "count": count
-                    })
-                    
+
+                    trend.append({"date": current_dt.strftime("%Y-%m"), "count": count})
+
                     if current_dt.month == 12:
                         current_dt = datetime(current_dt.year + 1, 1, 1)
                     else:
                         current_dt = datetime(current_dt.year, current_dt.month + 1, 1)
-                
+
                 period_type = "month"
             else:
-                # 按天聚合
                 trend = []
                 current_dt = start_dt
                 while current_dt <= end_dt:
                     date_str = current_dt.strftime("%Y-%m-%d")
                     next_date = (current_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-                    
+
                     with self.mysql_db.get_session() as session:
                         count = session.query(User).filter(
                             User.created_at >= date_str,
                             User.created_at < next_date
                         ).count()
-                    
-                    trend.append({
-                        "date": date_str,
-                        "count": count
-                    })
-                    
+
+                    trend.append({"date": date_str, "count": count})
                     current_dt = current_dt + timedelta(days=1)
-                
+
                 period_type = "day"
-            
-            # 计算总计
-            total_users = sum(item["count"] for item in trend)
-            
-            return {
+
+            result = {
                 "start_date": start_date,
                 "end_date": end_date,
                 "period_type": period_type,
                 "period": period,
-                "total": total_users,
+                "total": sum(item["count"] for item in trend),
                 "trend": trend
             }
-            
+
+            # 写入缓存
+            await self.redis.set(
+                cache_key,
+                json.dumps(result, ensure_ascii=False, default=str),
+                ex=_CACHE_TTL
+            )
+            logger.debug(f"user_trend 已写入缓存: {cache_key}")
+            return result
+
         except Exception as e:
             logger.error(f"获取用户趋势失败: {str(e)}")
             raise
@@ -502,8 +543,6 @@ class AdminService:
     async def _get_user_registration_trend(self, days: int) -> List[Dict[str, Any]]:
         """获取用户注册趋势"""
         try:
-            from datetime import datetime, timedelta
-            
             trend = []
             for i in range(days - 1, -1, -1):
                 date = datetime.now() - timedelta(days=i)
@@ -529,8 +568,6 @@ class AdminService:
     async def _get_post_trend(self, days: int) -> List[Dict[str, Any]]:
         """获取帖子发布趋势（从MongoDB获取）"""
         try:
-            from datetime import datetime, timedelta
-            
             posts_collection = self.mongodb.get_collection("social_posts")
             
             trend = []

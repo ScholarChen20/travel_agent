@@ -175,12 +175,26 @@ class RedisClient:
 
     # ========== Hash操作 ==========
 
-    async def hset(self, name: str, key: str, value: str) -> int:
-        """Hash表设置字段"""
+    async def hset(self, name: str, key: str = None, value: str = None, mapping: dict = None) -> int:
+        """
+        Hash表设置字段
+        
+        Args:
+            name: Hash表名
+            key: 字段名（与value一起使用）
+            value: 字段值（与key一起使用）
+            mapping: 字典映射（批量设置，与key/value互斥）
+        
+        Returns:
+            设置的字段数量
+        """
         try:
-            return await self.client.hset(name, key, value)
+            if mapping is not None:
+                return await self.client.hset(name, mapping=mapping)
+            else:
+                return await self.client.hset(name, key, value)
         except Exception as e:
-            logger.error(f"Redis HSET失败 - name: {name}, key: {key}, error: {str(e)}")
+            logger.error(f"Redis HSET失败 - name: {name}, error: {str(e)}")
             return 0
 
     async def hget(self, name: str, key: str) -> Optional[str]:
@@ -337,6 +351,23 @@ class RedisClient:
         """清空当前数据库（危险操作！）"""
         logger.warning("Redis FLUSHDB: 清空当前数据库（危险操作）")
         await self.client.flushdb()
+
+    async def execute_command(self, command: str, *args):
+        """
+        执行Redis命令
+        
+        Args:
+            command: Redis命令（如 BF.ADD, BF.EXISTS 等）
+            *args: 命令参数
+            
+        Returns:
+            命令执行结果
+        """
+        try:
+            return await self.client.execute_command(command, *args)
+        except Exception as e:
+            logger.error(f"Redis命令执行失败 - command: {command}, args: {args}, error: {str(e)}")
+            return None
 
 
 # 全局Redis客户端实例（单例）

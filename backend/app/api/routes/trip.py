@@ -12,6 +12,7 @@ from ...middleware.auth_middleware import get_current_user_optional, CurrentUser
 from ...services.travel_plan_service import get_travel_plan_service
 from ...services.image_service import get_image_service
 from ...utils.response import ApiResponse
+from ...utils.cache_invalidator import get_cache_invalidator
 
 router = APIRouter(prefix="/trip", tags=["旅行规划"])
 
@@ -72,6 +73,12 @@ async def plan_trip(
                 session_id = f"session_{secrets.token_urlsafe(16)}"
 
                 plan_service = get_travel_plan_service()
+                cache_invalidator = get_cache_invalidator()
+
+                # 先失效缓存
+                await cache_invalidator.invalidate_content_stats_cache()
+                await cache_invalidator.invalidate_business_stats_cache()
+
                 plan_id = await plan_service.save_plan(
                     user_id=current_user.id,
                     session_id=session_id,

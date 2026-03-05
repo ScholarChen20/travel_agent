@@ -28,6 +28,7 @@ from ...services.monitoring_service import get_monitoring_service
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...utils.response import ApiResponse
 from ...utils.audit_logger import save_audit_log
+from ...utils.cache_invalidator import get_cache_invalidator
 
 
 router = APIRouter(prefix="/admin", tags=["管理后台"])
@@ -139,6 +140,9 @@ async def update_user_status(
         action = "激活" if request.is_active else "禁用"
         logger.info(f"用户已{action}: {user_id} (操作者: {admin_user.username})")
 
+        cache_invalidator = get_cache_invalidator()
+        await cache_invalidator.invalidate_admin_system_stats()
+
         await save_audit_log(
             user_id=admin_user.id,
             action=action,
@@ -218,6 +222,9 @@ async def delete_comment(
             )
 
         logger.info(f"评论已删除: {comment_id} (操作者: {admin_user.username})")
+
+        cache_invalidator = get_cache_invalidator()
+        await cache_invalidator.invalidate_admin_visualization()
 
         await save_audit_log(
             user_id=admin_user.id,
@@ -305,6 +312,10 @@ async def moderate_post(
             )
 
         logger.info(f"帖子已审核: {post_id} -> {request.status} (操作者: {admin_user.username})")
+
+        cache_invalidator = get_cache_invalidator()
+        await cache_invalidator.invalidate_admin_visualization()
+        await cache_invalidator.invalidate_admin_system_stats()
 
         return ApiResponse.success(data={}, msg=f"帖子已{request.status}")
 

@@ -28,6 +28,8 @@ interface Comment {
   user_avatar?: string
   content: string
   created_at: string
+  replies?: Comment[]
+  reply_count?: number
 }
 
 export const socialService = {
@@ -75,9 +77,10 @@ export const socialService = {
     return response.data.data?.comments || response.data.comments || []
   },
 
-  async addComment(postId: string, content: string): Promise<Comment> {
+  async addComment(postId: string, content: string, parentId?: string | null): Promise<Comment> {
     const response = await axios.post(`/social/posts/${postId}/comments`, {
-      content
+      content,
+      parent_id: parentId
     })
     return response.data.data || response.data
   },

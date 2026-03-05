@@ -347,3 +347,47 @@ class AuditLog(Base):
 
     def __repr__(self):
         return f"<AuditLog(id={self.id}, user_id={self.user_id}, action='{self.action}', resource='{self.resource}')>"
+
+
+# ========== 反垃圾邮件模型 ==========
+
+class DeviceBlacklist(Base):
+    """设备黑名单表"""
+    __tablename__ = "device_blacklist"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    device_id = Column(String(200), unique=True, nullable=False, index=True, comment='设备ID')
+    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, comment='关联用户ID')
+    reason = Column(String(500), nullable=True, comment='拉黑原因')
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    expires_at = Column(DateTime, nullable=True, comment='过期时间，NULL表示永久')
+
+    # 索引
+    __table_args__ = (
+        Index('idx_device_id', 'device_id'),
+        Index('idx_expires', 'expires_at'),
+    )
+
+    def __repr__(self):
+        return f"<DeviceBlacklist(id={self.id}, device_id='{self.device_id}', user_id={self.user_id})>"
+
+
+class IPBlacklist(Base):
+    """IP黑名单表"""
+    __tablename__ = "ip_blacklist"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    ip_address = Column(String(45), unique=True, nullable=False, index=True, comment='IP地址')
+    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, comment='关联用户ID')
+    reason = Column(String(500), nullable=True, comment='拉黑原因')
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    expires_at = Column(DateTime, nullable=True, comment='过期时间，NULL表示永久')
+
+    # 索引
+    __table_args__ = (
+        Index('idx_ip_address', 'ip_address'),
+        Index('idx_expires', 'expires_at'),
+    )
+
+    def __repr__(self):
+        return f"<IPBlacklist(id={self.id}, ip_address='{self.ip_address}', user_id={self.user_id})>"

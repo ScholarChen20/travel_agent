@@ -143,7 +143,7 @@ async function handleLogin() {
       router.push(redirect)
     }
   } catch (error: any) {
-    message.error(error.response?.data?.detail || '登录失败')
+    // axios 拦截器已经显示了错误消息，这里只需要刷新验证码
     loadCaptcha()
   } finally {
     loading.value = false

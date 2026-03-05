@@ -121,8 +121,7 @@ async function handleRegister() {
     message.success('注册成功')
     router.push('/')
   } catch (error: any) {
-    message.error(error.response?.data?.detail || '注册失败')
-    // 注册失败后刷新验证码
+    // axios 拦截器已经显示了错误消息，这里只需要刷新验证码
     loadCaptcha()
   } finally {
     loading.value = false

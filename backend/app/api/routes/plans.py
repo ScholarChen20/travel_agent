@@ -19,6 +19,7 @@ from loguru import logger
 from ...services.travel_plan_service import get_travel_plan_service
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...utils.response import ApiResponse
+from ...utils.cache_invalidator import get_cache_invalidator
 
 
 router = APIRouter(prefix="/plans", tags=["旅行计划"])
@@ -280,6 +281,13 @@ async def delete_plan(
     """
     try:
         plan_service = get_travel_plan_service()
+        cache_invalidator = get_cache_invalidator()
+
+        # 先失效缓存
+        await cache_invalidator.invalidate_content_stats_cache()
+        await cache_invalidator.invalidate_business_stats_cache()
+        await cache_invalidator.invalidate_admin_visualization()
+        await cache_invalidator.invalidate_admin_system_stats()
 
         success = await plan_service.delete_plan(
             plan_id=plan_id,

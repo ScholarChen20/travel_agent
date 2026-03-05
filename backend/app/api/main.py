@@ -23,7 +23,7 @@ except ImportError:
     logger.warning("APScheduler未安装，定时任务功能将被禁用")
 
 from .routes import trip, poi, map as map_routes
-from .routes import auth, plans, user, dialog, social, admin
+from .routes import auth, plans, user, dialog, social, admin, blacklist
 from .routes import recommendations, budget, real_time, offline, translation, voice_enhanced, dashboard
 
 # 获取配置
@@ -86,6 +86,7 @@ app.include_router(plans.router, prefix="/api")  # 计划管理路由
 app.include_router(dialog.router, prefix="/api")  # 对话管理路由
 app.include_router(social.router, prefix="/api")  # 社交功能路由
 app.include_router(admin.router, prefix="/api")  # 管理后台路由
+app.include_router(blacklist.router, prefix="/api")  # 黑名单管理路由
 app.include_router(trip.router, prefix="/api")  # 旅行规划路由
 app.include_router(poi.router, prefix="/api")  # 景点查询路由
 app.include_router(map_routes.router, prefix="/api")  # 地图服务路由

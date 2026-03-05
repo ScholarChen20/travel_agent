@@ -206,6 +206,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if path in EXCLUDE_PATHS or not path.startswith("/api/"):
             return await call_next(request)
 
+        logger.debug(f"[AuditMiddleware] 开始处理请求: {path}")
         start_ts = time.time()
 
         # ---- 读取并重放请求体（body 只能消费一次）----
@@ -256,6 +257,15 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         # 提取响应摘要
         response_detail = _extract_response_detail(response_body_bytes, response.status_code)
+
+        # 控制台输出请求日志
+        logger.info(
+            f"[API] {request.method} {path} | "
+            f"Status: {response.status_code} | "
+            f"Duration: {duration_ms}ms | "
+            f"User: {username or 'anonymous'} | "
+            f"IP: {ip_address}"
+        )
 
         # 异步写日志，不阻塞响应返回
         asyncio.create_task(
