@@ -195,6 +195,24 @@ curl http://服务器地址
 # 检查后端API
 curl http://服务器地址/api/health
 ```
+
+# 内网穿透
+是指通过网络将内网服务暴露给外网，使得外网用户可以访问内网服务。若构建过程中ngrok启动成功，但是地址没映射，可手动执行。
+# 1.手动脚本运行
+```bash
+cd /opt/travel-agent
+./scripts/ngrok.sh
+```
+# 2.手动命令行运行
+```bash
+docker run -it --rm \
+    --network travel-agent_travel-network \
+    -e NGROK_AUTHTOKEN=YOUR_TOKEN \   # 替换为ngrok的授权令牌（需要先注册）
+    -p 4040:4040 \
+    ngrok/ngrok:latest http frontend:80
+```
+
+
 ## 📝 使用指南
 
 1. 在首页填写旅行信息:
