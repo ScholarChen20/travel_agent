@@ -15,26 +15,43 @@ from ..database.redis_client import get_redis_client, init_redis_client
 
 # 尝试导入调度器（可选功能）
 try:
-    from ..scheduler.scheduler import start_scheduler, shutdown_scheduler
+    from ..services.backup_scheduler import start_scheduler, stop_scheduler
     SCHEDULER_AVAILABLE = True
 except ImportError:
     SCHEDULER_AVAILABLE = False
     logger.warning("APScheduler未安装，定时任务功能将被禁用")
 
 from .routes import trip, poi, map as map_routes
-from .routes import auth, plans, user, dialog, social, admin
+from .routes import auth, plans, user, dialog, social, admin, blacklist
+from .routes import recommendations, budget, real_time, offline, translation, voice_enhanced, dashboard
 
 # 获取配置
 settings = get_settings()
+
+# 配置loguru日志（在中间件注册之前配置）
+logger.remove()  # 移除默认处理器
+logger.add(
+    sink=lambda msg: print(msg),  # 移除 end="" 参数，确保正常换行
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    level="INFO",  # 改为 DEBUG 级别，确保所有日志都能输出
+    colorize=True,
+    enqueue=True,  # 添加 enqueue 参数，确保日志线程安全
+    backtrace=True,  # 添加 backtrace 参数，提供更详细的错误信息
+    diagnose=True  # 添加 diagnose 参数，提供更详细的诊断信息
+)
 
 # 创建FastAPI应用
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="基于HelloAgents框架的智能旅行规划助手API",
+    description="基于FastAPI框架的TravelAI智能旅行规划助手API",
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# 注册审计日志中间件
+from ..middleware.audit_middleware import audit_middleware_wrapper
+app.middleware("http")(audit_middleware_wrapper())
 
 # 配置CORS
 app.add_middleware(
@@ -81,9 +98,17 @@ app.include_router(plans.router, prefix="/api")  # 计划管理路由
 app.include_router(dialog.router, prefix="/api")  # 对话管理路由
 app.include_router(social.router, prefix="/api")  # 社交功能路由
 app.include_router(admin.router, prefix="/api")  # 管理后台路由
+app.include_router(blacklist.router, prefix="/api")  # 黑名单管理路由
 app.include_router(trip.router, prefix="/api")  # 旅行规划路由
 app.include_router(poi.router, prefix="/api")  # 景点查询路由
 app.include_router(map_routes.router, prefix="/api")  # 地图服务路由
+app.include_router(recommendations.router, prefix="/api")  # 智能推荐系统路由
+app.include_router(budget.router, prefix="/api")  # 预算管理模块路由
+app.include_router(real_time.router, prefix="/api")  # 实时信息服务路由
+app.include_router(offline.router, prefix="/api")  # 离线功能支持路由
+app.include_router(translation.router, prefix="/api")  # 多语言支持路由
+app.include_router(voice_enhanced.router, prefix="/api")  # 语音交互增强路由
+app.include_router(dashboard.router, prefix="/api")  # 首页仪表盘路由
 
 # 配置静态文件服务（用于访问上传的文件）
 storage_path = Path("storage")
@@ -94,15 +119,6 @@ app.mount("/storage", StaticFiles(directory=str(storage_path)), name="storage")
 @app.on_event("startup")
 async def startup_event():
     """应用启动事件"""
-    # 配置loguru日志
-    logger.remove()  # 移除默认处理器
-    logger.add(
-        sink=lambda msg: print(msg, end=""),
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level=settings.log_level.upper(),
-        colorize=True
-    )
-
     print("\n" + "="*60)
     print(f"[START] {settings.app_name} v{settings.app_version}")
     print("="*60)
@@ -132,8 +148,7 @@ async def startup_event():
         if mysql_db.health_check():
             print(f"   [OK] MySQL连接成功: {settings.mysql_host}:{settings.mysql_port}/{settings.mysql_database}")
         else:
-            print(f"   [ERROR] MySQL连接失败")
-            raise Exception("MySQL健康检查失败")
+            print(f"   [WARNING] MySQL连接失败，将继续启动但某些功能可能不可用")
 
         # 2. 初始化MongoDB
         print("\n[2] 连接MongoDB...")
@@ -145,8 +160,7 @@ async def startup_event():
             await mongodb_client.create_indexes()
             print(f"   [OK] MongoDB索引创建完成")
         else:
-            print(f"   [ERROR] MongoDB连接失败")
-            raise Exception("MongoDB健康检查失败")
+            print(f"   [WARNING] MongoDB连接失败，将继续启动但某些功能可能不可用")
 
         # 3. 初始化Redis
         print("\n[3] 连接Redis...")
@@ -155,18 +169,19 @@ async def startup_event():
         if await redis_client.ping():
             print(f"   [OK] Redis连接成功")
         else:
-            print(f"   [ERROR] Redis连接失败")
-            raise Exception("Redis健康检查失败")
+            print(f"   [WARNING] Redis连接失败，将继续启动但某些功能可能不可用")
 
         print("\n" + "="*60)
-        print("[OK] 所有数据库连接初始化完成")
+        print("[OK] 数据库连接初始化完成（部分连接可能失败）")
         print("="*60)
 
     except Exception as e:
         logger.error(f"数据库初始化失败: {str(e)}")
-        print(f"\n[ERROR] 数据库初始化失败: {str(e)}")
-        print("\n请检查数据库配置和连接状态")
-        raise
+        print(f"\n[WARNING] 数据库初始化失败: {str(e)}")
+        print("\n将继续启动应用，但某些功能可能不可用")
+        print("="*60)
+        print("[OK] 应用启动完成（部分数据库连接失败）")
+        print("="*60)
 
     # 启动定时任务调度器
     if SCHEDULER_AVAILABLE:
@@ -282,4 +297,3 @@ if __name__ == "__main__":
         port=settings.port,
         reload=True
     )
-

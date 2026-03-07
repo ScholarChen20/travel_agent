@@ -31,6 +31,10 @@ class UpdateProfileRequest(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=50, description="用户名")
     email: Optional[EmailStr] = Field(None, description="邮箱")
     travel_preferences: Optional[List[str]] = Field(None, description="旅行偏好")
+    full_name: Optional[str] = Field(None, max_length=100, description="昵称/全名")
+    gender: Optional[str] = Field(None, description="性别 (male/female/other)")
+    birth_date: Optional[str] = Field(None, description="出生日期 (YYYY-MM-DD)")
+    location: Optional[str] = Field(None, max_length=200, description="所在城市")
 
 
 class UpdateVisitedCitiesRequest(BaseModel):
@@ -89,7 +93,8 @@ async def update_profile(
     try:
         user_service = get_user_service()
 
-        if not any([request.username, request.email, request.travel_preferences]):
+        if not any([request.username, request.email, request.travel_preferences,
+                    request.full_name, request.gender, request.birth_date, request.location]):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="没有提供更新字段"
@@ -99,7 +104,11 @@ async def update_profile(
             user_id=current_user.id,
             username=request.username,
             email=request.email,
-            travel_preferences=request.travel_preferences
+            travel_preferences=request.travel_preferences,
+            full_name=request.full_name,
+            gender=request.gender,
+            birth_date=request.birth_date,
+            location=request.location
         )
 
         if not success:

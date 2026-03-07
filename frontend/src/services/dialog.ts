@@ -34,21 +34,21 @@ interface Message {
 
 export const dialogService = {
   async createSession(): Promise<CreateSessionResponse> {
-    const response = await axios.post('/api/dialog/sessions', { initial_context: {} })
-    return response.data
+    const response = await axios.post('/dialog/sessions', { initial_context: {} })
+    return response.data.data
   },
 
   async chat(sessionId: string, data: ChatRequest): Promise<ChatResponse> {
-    const response = await axios.post('/api/dialog/chat', {
+    const response = await axios.post('/dialog/chat', {
       session_id: sessionId,
       message: data.message
     })
-    return response.data
+    return response.data.data
   },
 
   async getSessions(): Promise<Session[]> {
-    const response = await axios.get('/api/dialog/sessions')
-    const raw: any[] = response.data.sessions || []
+    const response = await axios.get('/dialog/sessions')
+    const raw: any[] = response.data.data?.sessions || []
     return raw.map(s => ({
       ...s,
       id: s.id ?? s.session_id,
@@ -56,21 +56,21 @@ export const dialogService = {
   },
 
   async getSession(sessionId: string): Promise<{ messages: Message[] }> {
-    const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
-    return response.data
+    const response = await axios.get(`/dialog/sessions/${sessionId}`)
+    return response.data.data
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    await axios.delete(`/api/dialog/sessions/${sessionId}`)
+    await axios.delete(`/dialog/sessions/${sessionId}`)
   },
 
   async updateSessionTitle(sessionId: string, title: string): Promise<void> {
-    await axios.patch(`/api/dialog/sessions/${sessionId}`, { title })
+    await axios.patch(`/dialog/sessions/${sessionId}`, { title })
   },
 
   async getMessages(sessionId: string): Promise<Message[]> {
-    const response = await axios.get(`/api/dialog/sessions/${sessionId}`)
-    return response.data.messages || []
+    const response = await axios.get(`/dialog/sessions/${sessionId}`)
+    return response.data.data?.messages || []
   },
 
   /**
@@ -78,7 +78,7 @@ export const dialogService = {
    */
   createSSE(sessionId: string, token: string): EventSource {
     const baseUrl = (axios.defaults.baseURL || '').replace(/\/$/, '')
-    const url = `${baseUrl}/api/dialog/sse/${sessionId}?token=${encodeURIComponent(token)}`
+    const url = `${baseUrl}/dialog/sse/${sessionId}?token=${encodeURIComponent(token)}`
     return new EventSource(url)
   }
 }

@@ -1,131 +1,86 @@
 # 智能旅行助手 🌍✈️
 
-基于HelloAgents框架构建的智能旅行规划助手,集成高德地图MCP服务,提供个性化的旅行计划生成。
+> 基于AI大模型的智能旅行规划助手，一键生成个性化旅行计划
 
-## ✨ 功能特点
+[![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![Vue Version](https://img.shields.io/badge/vue-3.5+-green.svg)](https://vuejs.org/)
+[![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+[![Docker](https://img.shields.io/badge/docker-supported-blue.svg)](https://www.docker.com/)
 
-- 🤖 **AI驱动的旅行规划**: 基于HelloAgents框架的SimpleAgent,智能生成详细的多日旅程
-- 🗺️ **高德地图集成**: 通过MCP协议接入高德地图服务,支持景点搜索、路线规划、天气查询
-- 🧠 **智能工具调用**: Agent自动调用高德地图MCP工具,获取实时POI、路线和天气信息
-- 🎨 **现代化前端**: Vue3 + TypeScript + Vite,响应式设计,流畅的用户体验
-- 📱 **完整功能**: 包含住宿、交通、餐饮和景点游览时间推荐
+---
 
-## 🏗️ 技术栈
+## 📖 项目简介
 
-### 后端
-- **框架**: HelloAgents (基于SimpleAgent)
-- **API**: FastAPI
-- **MCP工具**: amap-mcp-server (高德地图)
-- **LLM**: 支持多种LLM提供商(OpenAI, DeepSeek等)
-- **数据库**: MySQL, MongoDB
-- **缓存**: Redis
-- **队列**: Redis Stream
+**智能旅行助手**是一个基于AI大模型的旅行规划应用，通过自然语言交互，为用户自动生成详细的旅行计划。系统集成了高德地图、天气服务、景点推荐等多种功能，让旅行规划变得简单而智能。
 
+### ✨ 核心亮点
 
-### 前端
-- **框架**: Vue 3 + TypeScript
-- **构建工具**: Vite
-- **UI组件库**: Ant Design Vue
-- **地图服务**: 高德地图 JavaScript API
-- **HTTP客户端**: Axios
+- 🤖 **AI智能规划**：基于大语言模型，理解用户需求，自动生成个性化旅行计划
+- 🗺️ **地图深度集成**：集成高德地图服务，提供景点搜索、路线规划、天气查询
+- 💬 **多轮对话交互**：支持自然语言对话，随时调整旅行计划
+- 📱 **全平台支持**：Web端响应式设计，支持PC和移动端访问
+- 🔒 **安全可靠**：完整的用户认证、数据加密、防刷机制
+- 🌐 **一键部署**：Docker容器化部署，支持云服务器快速上线
+- 📊 **数据可视化**：丰富的图表展示，直观了解旅行统计
+- 🎯 **智能推荐**：基于用户偏好，推荐景点、餐厅、酒店
 
-## 📁 项目结构
+### 🎯 适用人群
 
-```
-helloagents-trip-planner/
-├── backend/                    # 后端服务
-│   ├── app/
-│   │   ├── agents/            # Agent实现
-│   │   │   └── trip_planner_agent.py
-│   │   ├── api/               # FastAPI路由
-│   │   │   ├── main.py
-│   │   │   └── routes/
-│   │   │       ├── trip.py
-│   │   │       └── map.py
-│   │   ├── services/          # 服务层
-│   │   │   ├── amap_service.py
-│   │   │   └── llm_service.py
-│   │   ├── models/            # 数据模型
-│   │   │   └── schemas.py
-│   │   └── config.py          # 配置管理
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── .gitignore
-├── frontend/                   # 前端应用
-│   ├── src/
-│   │   ├── components/        # Vue组件
-│   │   ├── services/          # API服务
-│   │   ├── types/             # TypeScript类型
-│   │   └── views/             # 页面视图
-│   ├── package.json
-│   └── vite.config.ts
-└── README.md
-```
+- **旅行爱好者**：想要快速规划旅行行程，不想花时间做攻略
+- **新手旅行者**：对目的地不熟悉，需要专业建议和路线规划
+- **自由行用户**：喜欢自由安排行程，但需要参考和建议
+- **商务出差**：需要快速了解目的地，安排住宿和交通
+- **技术开发者**：学习AI应用开发、前后端分离架构、Docker部署
 
-## 🚀 快速开始
+---
 
-### 前提条件
+## 🛠️ 技术选型
 
-- Python 3.10+
-- Node.js 16+
-- 高德地图API密钥 (Web服务API和Web端(JS API))
-- LLM API密钥 (OpenAI/DeepSeek等)
+### 后端技术栈
 
-### 后端安装
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Python** | 3.14+ | 主要开发语言 |
+| **FastAPI** | Latest | 高性能Web框架，提供RESTful API |
+| **HelloAgents** | Latest | AI智能体框架，实现对话和规划 |
+| **MySQL** | 8.0+ | 关系型数据库，存储用户数据 |
+| **MongoDB** | 7.0+ | 文档数据库，存储旅行计划和对话 |
+| **Redis** | 7.0+ | 缓存和会话管理 |
+| **Docker** | Latest | 容器化部署 |
 
-1. 进入后端目录
-```bash
-cd backend
-```
+### 前端技术栈
 
-2. 创建虚拟环境
-```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-```
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Vue.js** | 3.5+ | 渐进式JavaScript框架 |
+| **TypeScript** | 5.0+ | 类型安全的JavaScript超集 |
+| **Vite** | 5.0+ | 现代化构建工具 |
+| **Ant Design Vue** | 4.0+ | 企业级UI组件库 |
+| **ECharts** | 5.0+ | 数据可视化图表库 |
 
-3. 安装依赖
-```bash
-pip install -r requirements.txt
-```
+### 第三方服务
 
-4. 配置环境变量
-```bash
-cp .env.example .env
-# 编辑.env文件,填入你的API密钥
-```
+- **高德地图**：地图服务、POI搜索、路线规划
+- **OpenAI/DeepSeek**：大语言模型API
+- **阿里云OSS**：对象存储服务
+- **飞书开放平台**：第三方登录
 
-5. 启动后端服务
-```bash
-uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
-```
+---
 
-### 前端安装
+## 🚀 快速上手
 
-1. 进入前端目录
-```bash
-cd frontend
-```
+### 方式一：Docker一键部署（推荐）
 
-2. 安装依赖
-```bash
-npm install
-```
+**适合人群**：想要快速体验项目，不想配置复杂环境的用户
 
-3. 配置环境变量
-```bash
-# 创建.env文件, 填入高德地图Web API Key 和 Web端JS API Key
-cp .env.example .env
-```
+#### 前提条件
 
-4. 启动开发服务器
-```bash
-npm run dev
-```
+- Docker 20.10+
+- Docker Compose 2.0+
+- 2GB+ 可用内存
 
-5. 打开浏览器访问 `http://localhost:5173`
+#### 部署步骤
 
-6. 生产环境部署
 # 安装Docker
 ```bash
 sudo apt-get update
@@ -139,132 +94,465 @@ sudo chmod +x /usr/local/bin/docker-compose
 docker --version
 docker-compose --version
 ```
-# 上传项目文件
+1. **克隆项目**
 ```bash
-sudo mkdir -p /opt/travel-agent
-
-# 上传文件（可以使用scp、rsync等工具）
-scp -r ./frontend /opt/travel-agent/
-scp -r ./backend /opt/travel-agent/
-scp docker-compose.yml /opt/travel-agent/
+git clone https://github.com/yourusername/travel-agent.git
+cd travel-agent
 ```
 
-# 进入项目目录
+2. **配置环境变量**
 ```bash
-cd /opt/travel-agent
+# 复制环境变量模板
+cp .env.example .env
 
+# 编辑.env文件，填入必要的API密钥
+# 环境变量设置
+```bash
+echo "export FEISHU_APP_SECRET=YOUR_SECRET" >> ~/.bashrc  # 飞书开发者平台密钥
+echo "export DASHSCOPE_API_KEY=您的API密钥" >> ~/.bashrc  # DashScope API密钥
+echo "export AMAP_API_KEY=您的API密钥" >> ~/.bashrc # 高德地图API密钥
+echo "export UNSPLASH_SECRET_KEY=您的API密钥" >> ~/.bashrc # Unsplash API密钥
+echo "export OSS_ACCESS_KEY_SECRET=您的API密钥" >> ~/.bashrc  # 阿里云OSS密钥
+echo "export NGROK_AUTHTOKEN=你的ngrok的授权令牌" >> ~/.bashrc
+
+source ~/.bashrc
+```
+
+3. **启动服务**
+```bash
 # 构建并启动所有服务
 docker-compose up -d --build
+
 # 查看服务状态
 docker-compose ps
-# 查看服务日志（可选）
+
+# 查看服务日志
 docker-compose logs -f
 ```
 
-# 初始化数据库
+4. **访问应用**
+- 前端：http://服务器地址
+- 后端API：http://服务器地址:8000
+- API文档：http://服务器地址:8000/docs
+
+5. **初始化数据库**
 ```bash
 # 进入后端容器
 docker exec -it travel-agent-backend-1 bash
 
-# 运行MongoDB初始化脚本
+# 运行初始化脚本
 python scripts/init_mongodb.py
+
 # 退出容器
 exit
 ```
-
-# 验证服务
+6. **验证服务**
 ```bash
 # 检查前端服务
-curl http://localhost
+curl http://服务器地址
 # 检查后端API
-curl http://localhost/api/health
-```
-## 📝 使用指南
-
-1. 在首页填写旅行信息:
-   - 目的地城市
-   - 旅行日期和天数
-   - 交通方式偏好
-   - 住宿偏好
-   - 旅行风格标签
-
-2. 点击"生成旅行计划"按钮
-
-3. 系统将:
-   - 调用HelloAgents Agent生成初步计划
-   - Agent自动调用高德地图MCP工具搜索景点
-   - Agent获取天气信息和路线规划
-   - 整合所有信息生成完整行程
-
-4. 查看结果:
-   - 每日详细行程
-   - 景点信息与地图标记
-   - 交通路线规划
-   - 天气预报
-   - 餐饮推荐
-
-## 🔧 核心实现
-
-### HelloAgents Agent集成
-
-```python
-from hello_agents import SimpleAgent, HelloAgentsLLM
-from hello_agents.tools import MCPTool
-
-# 创建高德地图MCP工具
-amap_tool = MCPTool(
-    name="amap",
-    server_command=["uvx", "amap-mcp-server"],
-    env={"AMAP_MAPS_API_KEY": "your_api_key"},
-    auto_expand=True
-)
-
-# 创建旅行规划Agent
-agent = SimpleAgent(
-    name="旅行规划助手",
-    llm=HelloAgentsLLM(),
-    system_prompt="你是一个专业的旅行规划助手..."
-)
-
-# 添加工具
-agent.add_tool(amap_tool)
+curl http://服务器地址/api/health
 ```
 
-### MCP工具调用
-
-Agent可以自动调用以下高德地图MCP工具:
-- `maps_text_search`: 搜索景点POI
-- `maps_weather`: 查询天气
-- `maps_direction_walking_by_address`: 步行路线规划
-- `maps_direction_driving_by_address`: 驾车路线规划
-- `maps_direction_transit_integrated_by_address`: 公共交通路线规划
-
-## 📄 API文档
-
-启动后端服务后,访问 `http://localhost:8000/docs` 查看完整的API文档。
-
-主要端点:
-- `POST /api/trip/plan` - 生成旅行计划
-- `GET /api/map/poi` - 搜索POI
-- `GET /api/map/weather` - 查询天气
-- `POST /api/map/route` - 规划路线
-
-## 🤝 贡献指南
-
-欢迎提交Pull Request或Issue!
-
-## 📜 开源协议
-
-CC BY-NC-SA 4.0
-
-## 🙏 致谢
-
-- [HelloAgents](https://github.com/datawhalechina/Hello-Agents) - 智能体教程
-- [HelloAgents框架](https://github.com/jjyaoao/HelloAgents) - 智能体框架
-- [高德地图开放平台](https://lbs.amap.com/) - 地图服务
-- [amap-mcp-server](https://github.com/sugarforever/amap-mcp-server) - 高德地图MCP服务器
+7. **内网穿透**
+是指通过网络将内网服务暴露给外网，使得外网用户可以访问内网服务。若构建过程中ngrok启动成功，但是地址没映射，可手动执行。
+# 7.1 手动脚本运行
+```bash
+cd /opt/travel-agent
+./scripts/ngrok.sh
+```
+# 7.2 手动命令行运行
+```bash
+docker run -it --rm \
+    --network travel-agent_travel-network \
+    -e NGROK_AUTHTOKEN=YOUR_TOKEN \   # 替换为ngrok的授权令牌（需要先注册）
+    -p 4040:4040 \
+    ngrok/ngrok:latest http frontend:80
+```
+8. **数据备份**
+# 系统已配置定时任务每周天2点执行备份
+```bash
+# 手动执行
+python scripts/backup/backup_databases.py
+```
 
 ---
 
-**HelloAgents智能旅行助手** - 让旅行计划变得简单而智能 🌈
+### 方式二：本地开发环境
 
+**适合人群**：想要二次开发、学习源码的开发者
+
+#### 前提条件
+
+- Python 3.14+
+- Node.js 18+
+- MySQL 8.0+
+- MongoDB 7.0+
+- Redis 7.0+
+
+#### 后端开发
+
+1. **进入后端目录**
+```bash
+cd backend
+```
+
+2. **创建虚拟环境**
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# Linux/Mac
+python -m venv venv
+source venv/bin/activate
+```
+
+3. **安装依赖**
+```bash
+pip install -r requirements.txt
+```
+
+4. **配置环境变量**
+```bash
+cp .env.example .env
+# 编辑.env文件，填入必要的配置
+backend\app\config.py  # 配置文件，包含数据库连接信息、API密钥等
+```
+
+5. **启动数据库服务**
+```bash
+# 方式一：使用Docker Compose（推荐）
+docker-compose up -d mysql mongodb redis
+
+# 方式二：使用Docker单独启动各个服务
+# Redis（使用Redis Stack Server，支持RedisBloom/RedisSearch/RedisJSON模块）
+docker run -d --name redis \
+  -p 6379:6379 \
+  -v redis-data:/data \
+  -v ./redis.conf:/opt/redis/redis.conf:ro \  # /opt/redis/redis.conf需要替换自己的本地文件配置地址
+  redis/redis-stack-server:latest \
+  redis-stack-server /opt/redis/redis.conf --requirepass "123456"
+
+# MongoDB
+docker run -d --name mongodb \
+  -p 27017:27017 \
+  -v mongodb-data:/data/db \
+  -e MONGO_INITDB_ROOT_USERNAME=travel_agent_user \
+  -e MONGO_INITDB_ROOT_PASSWORD=123456 \
+  -e MONGO_INITDB_DATABASE=travel_agent \
+  mongo:7.0
+
+# MySQL
+docker run -d --name mysql \
+  -p 3306:3306 \
+  -v mysql-data:/var/lib/mysql \
+  -v ./backend/scripts/init_mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro \
+  -e MYSQL_ROOT_PASSWORD=123456 \
+  -e MYSQL_DATABASE=travel_agent \
+  -e MYSQL_USER=travel_agent_user \
+  -e MYSQL_PASSWORD=123456 \
+  mysql:8.0 \
+  --default-authentication-plugin=mysql_native_password \
+  --character-set-server=utf8mb4 \
+  --collation-server=utf8mb4_unicode_ci
+
+# 方式三：本地自行安装MySQL、MongoDB、Redis
+下载地址：
+- MySQL：https://dev.mysql.com/downloads/installer/
+- MongoDB：https://www.mongodb.com/try/download/community
+- Redis：https://github.com/redis-windows/redis-windows/releases
+```
+
+6. **初始化数据库**
+```bash
+# 初始化MongoDB数据库
+python scripts/init_mongodb.py
+
+# 初始化MySQL数据库
+mysql -u root -p < backend/scripts/init_data/travel_agent.sql
+```
+
+7. **启动后端服务**
+```bash
+uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### 前端开发
+
+1. **进入前端目录**
+```bash
+cd frontend
+```
+
+2. **安装依赖**
+```bash
+npm install
+```
+
+3. **配置环境变量**
+```bash
+cp .env.example .env
+# 编辑.env文件，配置API地址
+```
+
+4. **启动开发服务器**
+```bash
+npm run dev
+```
+
+5. **访问应用**
+打开浏览器访问 http://localhost:5173
+
+---
+
+#### 本地内网穿透
+应用下载地址： https://ngrok.com/download  （根据操作系统下载对应版本）
+注册地址：https://ngrok.com/
+# 1. 配置ngrok
+```bash
+cd D:\JavaEnv\ngrok-v3-stable # 进入本地ngrok目录
+ngrok config add-authtoken $NGROK_AUTHTOKEN # 替换为ngrok的授权令牌（需要先注册）
+```
+# 2. 启动ngrok
+```bash
+ngrok http 5173
+```
+
+
+## 📖 使用指南
+
+### 第一次使用
+
+1. **注册账号**
+   - 访问应用首页
+   - 点击"注册"按钮
+   - 填写用户名、邮箱、密码
+   - 完成邮箱验证
+
+2. **生成旅行计划**
+   - 在首页输入目的地城市
+   - 选择旅行日期和天数
+   - 选择交通方式和住宿偏好
+   - 点击"生成旅行计划"
+
+3. **查看和调整**
+   - 查看生成的详细行程
+   - 点击景点查看详情
+   - 使用对话功能调整计划
+   - 保存喜欢的计划
+
+### 高级功能
+
+- **多轮对话**：在对话页面与AI助手交互，调整旅行计划
+- **社交分享**：发布旅行计划到社区，与其他用户交流
+- **数据统计**：查看个人旅行统计和趋势分析
+- **离线使用**：下载旅行计划到本地，离线查看
+
+---
+
+## 🏗️ 项目结构
+
+```
+travel-agent/
+├── backend/                    # 后端服务
+│   ├── app/
+│   │   ├── agents/            # AI智能体实现
+│   │   ├── api/               # FastAPI路由
+│   │   │   └── routes/       # 各功能模块路由
+│   │   ├── services/          # 业务逻辑层
+│   │   ├── models/            # 数据模型
+│   │   ├── middleware/        # 中间件
+│   │   └── utils/             # 工具函数
+│   ├── scripts/               # 脚本工具
+│   ├── requirements.txt        # Python依赖
+│   └── .env.example          # 环境变量模板
+├── frontend/                  # 前端应用
+│   ├── src/
+│   │   ├── components/        # Vue组件
+│   │   ├── views/            # 页面视图
+│   │   ├── services/          # API服务
+│   │   ├── stores/           # 状态管理
+│   │   └── types/            # TypeScript类型
+│   ├── package.json           # Node依赖
+│   └── vite.config.ts        # Vite配置
+├── docs/                     # 项目文档
+│   └── API接口文档设计v2.0.md
+├── docker-compose.yml          # Docker编排文件
+└── README.md                  # 项目说明
+```
+
+---
+
+## 🔧 核心功能实现
+
+### AI智能规划
+
+系统使用HelloAgents框架构建智能体，通过大语言模型理解用户需求：
+
+```python
+from hello_agents import SimpleAgent
+
+agent = SimpleAgent(
+    name="旅行规划助手",
+    system_prompt="你是一个专业的旅行规划助手...",
+    tools=[amap_tool, weather_tool, poi_tool]
+)
+
+# 生成旅行计划
+plan = agent.plan_trip(
+    city="北京",
+    days=3,
+    preferences=["历史文化", "美食"]
+)
+```
+
+### 地图服务集成
+
+通过高德地图MCP服务提供地图功能：
+
+- 景点搜索和推荐
+- 路线规划（步行、驾车、公交）
+- 天气查询
+- 地图展示和标记
+
+### 对话系统
+
+支持多轮对话，用户可以：
+
+- 调整旅行计划
+- 询问景点信息
+- 获取旅行建议
+- 修改行程安排
+
+---
+
+## 📚 API文档
+
+启动后端服务后，访问以下地址查看完整API文档：
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+主要API端点：
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/auth/register` | POST | 用户注册 |
+| `/api/auth/login` | POST | 用户登录 |
+| `/api/trip/plan` | POST | 生成旅行计划 |
+| `/api/plans` | GET | 获取旅行计划列表 |
+| `/api/dialog/chat` | POST | 对话交互 |
+| `/api/map/poi` | GET | 搜索景点 |
+| `/api/map/weather` | GET | 查询天气 |
+
+详细API文档请查看 [docs/API接口文档设计v2.0.md](docs/API接口文档设计v2.0.md)
+
+---
+
+## ❓ 常见问题
+
+### Q1: Docker启动失败怎么办？
+
+**A**: 检查以下几点：
+1. 确认Docker和Docker Compose已正确安装
+2. 检查端口是否被占用（80、8000、3306、27017、6379）
+3. 查看Docker日志：`docker-compose logs`
+4. 确保有足够的内存和磁盘空间
+
+### Q2: 如何获取高德地图API密钥？
+
+**A**: 
+1. 访问 [高德开放平台](https://lbs.amap.com/)
+2. 注册账号并登录
+3. 进入控制台，创建应用
+4. 添加Key，选择Web服务API
+5. 复制API Key到.env文件
+
+### Q3: 如何获取OpenAI API密钥？
+
+**A**:
+1. 访问 [OpenAI官网](https://openai.com/)
+2. 注册账号并登录
+3. 进入API Keys页面
+4. 创建新的API Key
+5. 复制Key到.env文件
+
+### Q4: 前端无法连接后端怎么办？
+
+**A**:
+1. 检查后端服务是否正常运行
+2. 检查前端.env文件中的API地址配置
+3. 检查防火墙设置
+4. 查看浏览器控制台的错误信息
+
+### Q5: 如何部署到云服务器？
+
+**A**: 参考项目中的 [CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md) 文档，包含详细的云服务器部署步骤。
+
+### Q6: 数据库初始化失败怎么办？
+
+**A**:
+1. 检查数据库服务是否正常运行
+2. 检查数据库连接配置是否正确
+3. 查看初始化脚本的错误日志
+4. 确保数据库用户有足够的权限
+
+---
+
+## 🤝 参与贡献
+
+欢迎贡献代码、提出建议或报告问题！
+
+### 贡献方式
+
+1. Fork本项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 提交Pull Request
+
+### 开发规范
+
+- 遵循PEP 8代码规范
+- 添加必要的注释和文档
+- 编写单元测试
+- 更新相关文档
+
+---
+
+## 📄 开源协议
+
+本项目采用 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) 协议。
+
+---
+
+## 🙏 致谢
+
+感谢以下开源项目和服务：
+
+- [HelloAgents](https://github.com/jjyaoao/HelloAgents) - 智能体框架
+- [FastAPI](https://fastapi.tiangolo.com/) - 现代化Web框架
+- [Vue.js](https://vuejs.org/) - 渐进式JavaScript框架
+- [高德地图](https://lbs.amap.com/) - 地图服务
+- [Ant Design Vue](https://antdv.com/) - Vue组件库
+
+---
+
+## 📮 联系方式
+
+- **项目地址**: [GitHub Repository](https://github.com/yourusername/travel-agent)
+- **问题反馈**: [Issues](https://github.com/yourusername/travel-agent/issues)
+- **邮箱**: your.email@example.com
+
+---
+
+## 🌟 Star History
+
+如果这个项目对你有帮助，请给我们一个Star ⭐️
+
+---
+
+**智能旅行助手** - 让旅行规划变得简单而智能 🌈
+
+Made with ❤️ by Travel Agent Team

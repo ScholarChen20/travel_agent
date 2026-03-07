@@ -13,6 +13,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://43.138.139.21:8000',

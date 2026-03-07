@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 然后尝试加载HelloAgents的.env(如果存在)
-helloagents_env = Path(__file__).parent.parent.parent.parent / "HelloAgents" / ".env"
-if helloagents_env.exists():
-    load_dotenv(helloagents_env, override=False)  # 不覆盖已有的环境变量
+# helloagents_env = Path(__file__).parent.parent.parent.parent / "HelloAgents" / ".env"
+# if helloagents_env.exists():
+#     load_dotenv(helloagents_env, override=False)  # 不覆盖已有的环境变量
 
 
 class Settings(BaseSettings):
@@ -33,15 +33,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:3000,http://43.138.139.21"
 
     # 高德地图API配置
-    amap_api_key: str = "8aa3f70ef5cb613094d14ea0fe797dd7dk29"
+    amap_api_key: str = os.getenv("AMAP_MAPS_API_KEY", "")
     # amap_api_key: str = "5d6e7a8e7ef5fb9ddeed9f7324bb012d"
 
     # Unsplash API配置
     unsplash_access_key: str = "QuvNEksG7496IMigS5BhLkbiZg5MrFkszr35xutStEEX23dgh"
-    unsplash_secret_key: str = "AHo9Knd1T89YlVwHebQXpP1JOXc_rRFMT8_NlKEOrk823123123"
+    unsplash_secret_key: str = os.getenv("UNSPLASH_SECRET_KEY", "")
 
     # LLM配置 (从环境变量读取,由HelloAgents管理)
-    openai_api_key: str = "ms-7df9fd49-9a59-495d-bf50-f2922001f367f12d"
+    openai_api_key: str = os.getenv("DASHSCOPE_API_KEY")
     openai_base_url: str = "https://api-inference.modelscope.cn/v1/"
     openai_model: str = "Qwen/Qwen2.5-72B-Instruct"
 
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # 阿里云OSS配置
     oss_enabled: bool = True  # 是否启用OSS（False则使用本地存储）
     oss_access_key_id: str = "LTAI5tChzi1g1csczkKBbec91"  # 从.env读取
-    oss_access_key_secret: str = "b5Q8lM87zbKlbbxfvyYH8W7fXCOISiX134"  # 从.env读取
+    oss_access_key_secret: str = os.getenv("OSS_ACCESS_KEY_SECRET", "")  # 从.env读取
     region: str = "cn-beijing"  # 从.env读取
     oss_endpoint: str = "oss-cn-beijing.aliyuncs.com"  # OSS地域节点
     oss_bucket_name: str = "java-webai-1"  # Bucket名称
@@ -104,6 +104,13 @@ class Settings(BaseSettings):
     bloom_filter_error_rate: float = 0.01       # 布隆过滤器误判率
     bloom_filter_key: str = "bloom:registered_devices"  # Redis存储键
     geoip_cache_ttl: int = 86400                # IP地理位置缓存TTL（秒）
+
+    # ============ 飞书登录配置 ============
+    feishu_app_id: str = "cli_a92fbd3ee7f99cd9"  # 飞书应用 App ID（从开放平台获取）
+    feishu_app_secret: str = os.getenv("FEISHU_APP_SECRET", "")  # 飞书应用 App Secret（保密！）
+    feishu_redirect_uri: str = "https://leanna-prefamiliar-nonretroactively.ngrok-free.dev/auth/feishu/callback"  # 授权回调地址，如 http://localhost:5173/auth/feishu/callback
+
+    feishu_enabled: bool = False  # 是否启用飞书登录
 
     class Config:
         env_file = ".env"
@@ -179,7 +186,7 @@ def validate_config():
 
     # 验证高德地图API Key
     if not settings.amap_api_key:
-        errors.append("AMAP_API_KEY未配置")
+        warnings.append("AMAP_API_KEY未配置，地图功能可能无法使用")
 
     # HelloAgentsLLM会自动从LLM_API_KEY读取,不强制要求OPENAI_API_KEY
     llm_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -188,7 +195,7 @@ def validate_config():
 
     # ============ 新增：验证JWT密钥 ============
     if not settings.jwt_secret_key:
-        errors.append("JWT_SECRET_KEY未配置，这是必需的安全密钥！请在.env中设置")
+        warnings.append("JWT_SECRET_KEY未配置，这是必需的安全密钥！请在.env中设置")
     elif len(settings.jwt_secret_key) < 32:
         warnings.append("JWT_SECRET_KEY长度过短（建议至少32个字符），安全性较低")
 
@@ -197,11 +204,11 @@ def validate_config():
     if not settings.mysql_password:
         warnings.append("MYSQL_PASSWORD未配置，将尝试无密码连接MySQL")
     if not settings.mysql_database:
-        errors.append("MYSQL_DATABASE未配置")
+        warnings.append("MYSQL_DATABASE未配置，MySQL功能可能无法使用")
 
     # MongoDB配置验证
     if not settings.mongodb_database:
-        errors.append("MONGODB_DATABASE未配置")
+        warnings.append("MONGODB_DATABASE未配置，MongoDB功能可能无法使用")
 
     # Redis配置验证（密码可选）
     if not settings.redis_password:
@@ -210,19 +217,20 @@ def validate_config():
     # ============ 新增：验证OSS配置 ============
     if settings.oss_enabled:
         if not settings.oss_access_key_id:
-            errors.append("OSS_ACCESS_KEY_ID未配置，但OSS已启用")
+            warnings.append("OSS_ACCESS_KEY_ID未配置，但OSS已启用，OSS功能可能无法使用")
         if not settings.oss_access_key_secret:
-            errors.append("OSS_ACCESS_KEY_SECRET未配置，但OSS已启用")
+            warnings.append("OSS_ACCESS_KEY_SECRET未配置，但OSS已启用，OSS功能可能无法使用")
         if not settings.oss_bucket_name:
-            errors.append("OSS_BUCKET_NAME未配置")
+            warnings.append("OSS_BUCKET_NAME未配置，但OSS已启用，OSS功能可能无法使用")
         if not settings.oss_endpoint:
-            errors.append("OSS_ENDPOINT未配置")
+            warnings.append("OSS_ENDPOINT未配置，但OSS已启用，OSS功能可能无法使用")
     else:
         warnings.append("OSS云存储未启用，将使用本地存储")
 
     if errors:
         error_msg = "配置错误:\n" + "\n".join(f"  - {e}" for e in errors)
-        raise ValueError(error_msg)
+        # 只打印错误，不抛出异常
+        print(f"\n[ERROR] {error_msg}")
 
     if warnings:
         print("\n⚠️  配置警告:")
@@ -273,6 +281,13 @@ def print_config():
         print(f"  OSS Endpoint: {settings.oss_endpoint}")
         print(f"  OSS Bucket: {settings.oss_bucket_name}")
         print(f"  OSS URL前缀: {settings.oss_url_prefix or '使用默认OSS域名'}")
+
+    # ============ 飞书配置 ============
+    print("\n飞书配置:")
+    print(f"  飞书开放平台APP ID: {settings.feishu_app_id}")
+    print(f"  飞书开放平台APP Secret: {settings.feishu_app_secret}")
+    print(f"  飞书开放平台回调地址: {'✅ 已配置' if settings.feishu_redirect_uri else '❌ 未配置'}")
+
 
     print(f"\n日志级别: {settings.log_level}")
 

@@ -16,6 +16,10 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     console.log('发送请求:', config.method?.toUpperCase(), config.url)
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => {
@@ -41,7 +45,7 @@ apiClient.interceptors.response.use(
  */
 export async function generateTripPlan(formData: TripFormData): Promise<TripPlanResponse> {
   try {
-    const response = await apiClient.post<TripPlanResponse>('/api/trip/plan', formData)
+    const response = await apiClient.post<TripPlanResponse>('/trip/plan', formData)
     return response.data
   } catch (error: any) {
     console.error('生成旅行计划失败:', error)

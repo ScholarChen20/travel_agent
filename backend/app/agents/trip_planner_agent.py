@@ -1,10 +1,12 @@
 """多智能体旅行规划系统"""
 
 import json
+import os
 import time
 import asyncio
 from typing import Dict, Any, List, Optional
-from hello_agents import SimpleAgent
+
+from hello_agents import SimpleAgent, ReActAgent
 from hello_agents.tools import MCPTool
 from ..services.llm_service import get_llm
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
@@ -171,7 +173,7 @@ class MultiAgentTripPlanner:
                 name="amap",
                 description="高德地图服务",
                 server_command=["uvx", "amap-mcp-server"],
-                env={"AMAP_MAPS_API_KEY": "8aa3f70ef5cb613094d14ea0fe797dd7"},
+                env={"AMAP_MAPS_API_KEY": os.getenv("AMAP_MAPS_API_KEY")},
                 auto_expand=True
             )
 
@@ -473,7 +475,7 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         """
         super().__init__()
         self.dialog_service = dialog_service
-
+        
         # 创建意图识别Agent
         self.intent_agent = SimpleAgent(
             name="意图识别专家",
@@ -482,13 +484,18 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         )
 
         # 创建通用对话Agent（处理景点介绍、旅行问答等）
-        self.general_chat_agent = SimpleAgent(
-            name="旅行问答专家",
-            llm=self.llm,
-            system_prompt=GENERAL_CHAT_PROMPT
-        )
-
-        print("✅ 对话式多智能体系统初始化成功")
+        try:
+            self.general_chat_agent = ReActAgent(
+                name="旅行问答专家",
+                llm=self.llm,
+                system_prompt=GENERAL_CHAT_PROMPT
+            )
+            print("✅ 对话式多智能体系统初始化成功")
+        except Exception as e:
+            print(f"❌ 创建通用对话Agent失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     async def chat(
         self,
@@ -520,6 +527,7 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
 
             # 3. 意图识别
             intent = await self._detect_intent(user_message, context)
+
 
             # 4. 根据意图路由到对应处理器
             if intent == "trip_planning":

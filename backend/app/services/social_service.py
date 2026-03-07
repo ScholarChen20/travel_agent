@@ -9,10 +9,12 @@
 5. 关注系统
 6. 标签管理
 """
-
+import random
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+import uuid
 from loguru import logger
 from sqlalchemy import text
 
@@ -36,7 +38,7 @@ class SocialService:
 
         # 内容审核黑名单
         self.blacklist_keywords = [
-            "广告", "spam", "诈骗", "违法", "色情", "赌博"
+            "广告", "spam", "诈骗", "违法", "色情", "赌博", "恐怖", "暴力"
         ]
 
         logger.info("社交服务已初始化")
@@ -70,7 +72,7 @@ class SocialService:
             # 内容审核
             moderation_result = await self.moderate_content(content)
 
-            post_id = f"post_{secrets.token_urlsafe(16)}"
+            post_id = f"post_{uuid.uuid4()}"
 
             post_doc = {
                 "post_id": post_id,
@@ -85,8 +87,8 @@ class SocialService:
                 "like_count": 0,
                 "comment_count": 0,
                 "view_count": 0,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow()
+                "created_at": datetime.now(),
+                "updated_at": datetime.now()
             }
 
             # 保存到MongoDB
@@ -235,7 +237,7 @@ class SocialService:
 
             # 2. 热门内容 (30%)
             # 时间衰减：只看最近7天的内容
-            week_ago = datetime.utcnow() - timedelta(days=7)
+            week_ago = datetime.now() - timedelta(days=7)
             popular_cursor = collection.find({
                 "moderation_status": "approved",
                 "created_at": {"$gte": week_ago}
@@ -322,7 +324,7 @@ class SocialService:
                     "like_id": f"like_{secrets.token_urlsafe(12)}",
                     "user_id": user_id,
                     "post_id": post_id,
-                    "created_at": datetime.utcnow()
+                    "created_at": datetime.now()
                 }
                 await likes_collection.insert_one(like_doc)
 
@@ -414,7 +416,7 @@ class SocialService:
                 "content": content,
                 "parent_id": parent_id,
                 "like_count": 0,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now()
             }
 
             # 保存评论
@@ -473,7 +475,7 @@ class SocialService:
                     "follow_id": f"follow_{secrets.token_urlsafe(12)}",
                     "follower_id": follower_id,
                     "following_id": following_id,
-                    "created_at": datetime.utcnow()
+                    "created_at": datetime.now()
                 }
                 await follows_collection.insert_one(follow_doc)
 
@@ -677,7 +679,7 @@ class SocialService:
         offset: int = 0
     ) -> List[Dict[str, Any]]:
         """
-        获取帖子评论列表
+        获取帖子评论列表（包含子评论）
 
         Args:
             post_id: 帖子ID
@@ -685,19 +687,25 @@ class SocialService:
             offset: 偏移量
 
         Returns:
-            List[Dict]: 评论列表
+            List[Dict]: 评论列表（每个评论包含replies字段）
         """
         try:
             collection = self.mongodb.get_collection(self.comments_collection)
 
             cursor = collection.find({
                 "post_id": post_id,
-                "parent_id": None  # 只获取顶级评论
+                "parent_id": None
             }).sort("created_at", -1).skip(offset).limit(limit)
 
             comments = []
             async for comment in cursor:
                 formatted_comment = await self._format_comment(comment)
+                
+                # 获取子评论
+                replies = await self.get_comment_replies(comment["comment_id"])
+                formatted_comment["replies"] = replies
+                formatted_comment["reply_count"] = len(replies)
+                
                 comments.append(formatted_comment)
 
             return comments
@@ -705,6 +713,39 @@ class SocialService:
         except Exception as e:
             logger.error(f"获取评论列表失败: {str(e)}")
             raise
+
+    async def get_comment_replies(
+        self,
+        parent_comment_id: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        获取评论的子评论
+
+        Args:
+            parent_comment_id: 父评论ID
+            limit: 返回数量
+
+        Returns:
+            List[Dict]: 子评论列表
+        """
+        try:
+            collection = self.mongodb.get_collection(self.comments_collection)
+
+            cursor = collection.find({
+                "parent_id": parent_comment_id
+            }).sort("created_at", 1).limit(limit)
+
+            replies = []
+            async for reply in cursor:
+                formatted_reply = await self._format_comment(reply)
+                replies.append(formatted_reply)
+
+            return replies
+
+        except Exception as e:
+            logger.error(f"获取子评论失败: {str(e)}")
+            return []
 
     async def get_posts_by_tag(
         self,

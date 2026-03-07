@@ -2,10 +2,20 @@
 
 from typing import Optional, Any, Union
 import json
+from datetime import datetime
 import redis.asyncio as redis
 from redis.asyncio import Redis
 from redis.exceptions import RedisError, ConnectionError
 from loguru import logger
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """自定义JSON编码器，支持datetime对象"""
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 class RedisClient:
@@ -62,7 +72,7 @@ class RedisClient:
         """
         try:
             if isinstance(value, (dict, list)):
-                value = json.dumps(value, ensure_ascii=False)
+                value = json.dumps(value, ensure_ascii=False, cls=DateTimeEncoder)
 
             await self.client.set(key, value, ex=ex)
             return True
@@ -165,12 +175,26 @@ class RedisClient:
 
     # ========== Hash操作 ==========
 
-    async def hset(self, name: str, key: str, value: str) -> int:
-        """Hash表设置字段"""
+    async def hset(self, name: str, key: str = None, value: str = None, mapping: dict = None) -> int:
+        """
+        Hash表设置字段
+        
+        Args:
+            name: Hash表名
+            key: 字段名（与value一起使用）
+            value: 字段值（与key一起使用）
+            mapping: 字典映射（批量设置，与key/value互斥）
+        
+        Returns:
+            设置的字段数量
+        """
         try:
-            return await self.client.hset(name, key, value)
+            if mapping is not None:
+                return await self.client.hset(name, mapping=mapping)
+            else:
+                return await self.client.hset(name, key, value)
         except Exception as e:
-            logger.error(f"Redis HSET失败 - name: {name}, key: {key}, error: {str(e)}")
+            logger.error(f"Redis HSET失败 - name: {name}, error: {str(e)}")
             return 0
 
     async def hget(self, name: str, key: str) -> Optional[str]:
@@ -299,6 +323,24 @@ class RedisClient:
 
     # ========== 连接管理 ==========
 
+    async def scan_iter(self, pattern: str = "*", count: int = 10):
+        """
+        扫描匹配的键（异步迭代器）
+
+        Args:
+            pattern: 键匹配模式，如 "user:*" 或 "admin:*"
+            count: 每次扫描返回的键数量
+
+        Yields:
+            匹配的键名
+        """
+        try:
+            async for key in self.client.scan_iter(match=pattern, count=count):
+                yield key
+        except Exception as e:
+            logger.error(f"Redis SCAN_ITER失败 - pattern: {pattern}, error: {str(e)}")
+            return
+
     async def close(self):
         """关闭Redis客户端"""
         if self.client:
@@ -327,6 +369,23 @@ class RedisClient:
         """清空当前数据库（危险操作！）"""
         logger.warning("Redis FLUSHDB: 清空当前数据库（危险操作）")
         await self.client.flushdb()
+
+    async def execute_command(self, command: str, *args):
+        """
+        执行Redis命令
+        
+        Args:
+            command: Redis命令（如 BF.ADD, BF.EXISTS 等）
+            *args: 命令参数
+            
+        Returns:
+            命令执行结果
+        """
+        try:
+            return await self.client.execute_command(command, *args)
+        except Exception as e:
+            logger.error(f"Redis命令执行失败 - command: {command}, args: {args}, error: {str(e)}")
+            return None
 
 
 # 全局Redis客户端实例（单例）

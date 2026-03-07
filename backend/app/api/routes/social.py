@@ -26,6 +26,7 @@ from ...services.storage_service import get_storage_service
 from ...services.douyin_service import get_douyin_service
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...utils.response import ApiResponse
+from ...utils.cache_invalidator import get_cache_invalidator
 
 
 router = APIRouter(prefix="/social", tags=["社交功能"])
@@ -68,6 +69,12 @@ async def create_post(
     """
     try:
         social_service = get_social_service()
+        cache_invalidator = get_cache_invalidator()
+
+        # 先失效缓存
+        await cache_invalidator.invalidate_content_stats_cache()
+        await cache_invalidator.invalidate_admin_visualization()
+        await cache_invalidator.invalidate_admin_system_stats()
 
         # Use first 50 chars of content as title if not provided
         title = request.title or request.content[:50]
@@ -278,6 +285,10 @@ async def create_comment(
     """
     try:
         social_service = get_social_service()
+        cache_invalidator = get_cache_invalidator()
+
+        # 先失效缓存
+        await cache_invalidator.invalidate_content_stats_cache()
 
         comment_id = await social_service.comment_on_post(
             user_id=current_user.id,
@@ -298,7 +309,7 @@ async def create_comment(
                 "user_avatar": current_user.avatar_url,
                 "post_id": post_id,
                 "parent_id": request.parent_id,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now().isoformat()
             },
             msg="评论发表成功"
         )

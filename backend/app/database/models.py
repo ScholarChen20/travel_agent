@@ -6,7 +6,7 @@
 from datetime import datetime
 from typing import List
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Text, Boolean, DateTime,
+    Column, Integer, BigInteger, SmallInteger, String, Text, Boolean, DateTime,
     Date, Enum, ForeignKey, Index, UniqueConstraint, JSON
 )
 from sqlalchemy.orm import relationship
@@ -22,16 +22,21 @@ class User(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(100), unique=True, nullable=False, index=True)
-    password_hash = Column(String(500), nullable=False)
+    password_hash = Column(String(500), nullable=True)   # 飞书用户无密码，允许为空
     phone = Column(String(20), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     bio = Column(Text, nullable=True)
     role = Column(Enum('user', 'admin', name='user_role'), default='user', nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
+    # 飞书账号绑定
+    feishu_open_id = Column(String(100), unique=True, nullable=True, index=True,
+                            comment='飞书用户 open_id (ou_xxx)')
+    feishu_union_id = Column(String(100), unique=True, nullable=True,
+                             comment='飞书用户 union_id (on_xxx)')
 
     # 关系
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -65,8 +70,8 @@ class UserProfile(Base):
     travel_preferences = Column(JSON, nullable=True, comment='旅行偏好标签数组')
     visited_cities = Column(JSON, nullable=True, comment='访问过的城市数组')
     travel_stats = Column(JSON, nullable=True, comment='旅行统计信息')
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
     # 关系
     user = relationship("User", back_populates="profile")
@@ -84,7 +89,7 @@ class Role(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), unique=True, nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
 
     # 关系
     permissions = relationship("Permission", secondary="role_permissions", back_populates="roles")
@@ -103,7 +108,7 @@ class Permission(Base):
     resource = Column(String(50), nullable=False, comment='API资源')
     action = Column(String(50), nullable=False, comment='操作：create, read, update, delete')
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
 
     # 关系
     roles = relationship("Role", secondary="role_permissions", back_populates="permissions")
@@ -155,8 +160,8 @@ class Post(Base):
     is_moderated = Column(Boolean, default=False, nullable=False)
     moderation_status = Column(Enum('pending', 'approved', 'rejected', name='moderation_status'), default='pending', nullable=False)
     moderation_reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
     published_at = Column(DateTime, nullable=True)
 
     # 关系
@@ -186,8 +191,8 @@ class Comment(Base):
     content = Column(Text, nullable=False)
     like_count = Column(Integer, default=0, nullable=False)
     is_deleted = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
     # 关系
     post = relationship("Post", back_populates="comments")
@@ -212,7 +217,7 @@ class Like(Base):
     user_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     target_type = Column(Enum('post', 'comment', name='like_target_type'), nullable=False)
     target_id = Column(BigInteger, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
 
     # 关系
     user = relationship("User", back_populates="likes")
@@ -234,7 +239,7 @@ class Follow(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     follower_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     following_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
 
     # 关系
     follower = relationship("User", foreign_keys=[follower_id], back_populates="following")
@@ -259,7 +264,7 @@ class Tag(Base):
     name = Column(String(50), unique=True, nullable=False)
     category = Column(String(50), nullable=True)
     use_count = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
 
     # 关系
     post_tags = relationship("PostTag", back_populates="tag", cascade="all, delete-orphan")
@@ -297,7 +302,7 @@ class CaptchaRecord(Base):
     captcha_code = Column(String(10), nullable=False)
     attempt_count = Column(Integer, default=0, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
 
     # 索引
@@ -318,19 +323,71 @@ class AuditLog(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=True, comment='操作用户ID，NULL表示系统操作')
+    username = Column(String(100), nullable=True, comment='用户名（冗余，避免JOIN）')
     action = Column(String(100), nullable=False, comment='操作类型')
     resource = Column(String(100), nullable=False, comment='操作资源')
     resource_id = Column(String(100), nullable=True, comment='资源ID')
     details = Column(JSON, nullable=True, comment='操作详情')
     ip_address = Column(String(45), nullable=True, comment='IP地址')
     user_agent = Column(Text, nullable=True, comment='User-Agent')
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    method = Column(String(10), nullable=True, comment='HTTP方法 (GET/POST/PUT/DELETE)')
+    path = Column(String(255), nullable=True, comment='请求路径')
+    status_code = Column(SmallInteger, nullable=True, comment='HTTP响应状态码')
+    duration_ms = Column(Integer, nullable=True, comment='请求耗时(ms)')
+    response_status = Column(String(20), nullable=True, comment='响应结果 (success/error)')
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
 
     # 索引
     __table_args__ = (
         Index('idx_user_action', 'user_id', 'action'),
         Index('idx_created_at', 'created_at'),
+        Index('idx_method_path', 'method', 'path'),
+        Index('idx_status_code', 'status_code'),
     )
 
     def __repr__(self):
         return f"<AuditLog(id={self.id}, user_id={self.user_id}, action='{self.action}', resource='{self.resource}')>"
+
+
+# ========== 反垃圾邮件模型 ==========
+
+class DeviceBlacklist(Base):
+    """设备黑名单表"""
+    __tablename__ = "device_blacklist"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    device_id = Column(String(200), unique=True, nullable=False, index=True, comment='设备ID')
+    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, comment='关联用户ID')
+    reason = Column(String(500), nullable=True, comment='拉黑原因')
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    expires_at = Column(DateTime, nullable=True, comment='过期时间，NULL表示永久')
+
+    # 索引
+    __table_args__ = (
+        Index('idx_device_id', 'device_id'),
+        Index('idx_expires', 'expires_at'),
+    )
+
+    def __repr__(self):
+        return f"<DeviceBlacklist(id={self.id}, device_id='{self.device_id}', user_id={self.user_id})>"
+
+
+class IPBlacklist(Base):
+    """IP黑名单表"""
+    __tablename__ = "ip_blacklist"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    ip_address = Column(String(45), unique=True, nullable=False, index=True, comment='IP地址')
+    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, comment='关联用户ID')
+    reason = Column(String(500), nullable=True, comment='拉黑原因')
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    expires_at = Column(DateTime, nullable=True, comment='过期时间，NULL表示永久')
+
+    # 索引
+    __table_args__ = (
+        Index('idx_ip_address', 'ip_address'),
+        Index('idx_expires', 'expires_at'),
+    )
+
+    def __repr__(self):
+        return f"<IPBlacklist(id={self.id}, ip_address='{self.ip_address}', user_id={self.user_id})>"

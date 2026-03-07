@@ -209,7 +209,30 @@
                 <div class="comment-content">
                   <div class="comment-username">{{ comment.username || '未知用户' }}</div>
                   <div class="comment-text">{{ comment.content }}</div>
-                  <div class="comment-time">{{ formatTime(comment.created_at) }}</div>
+                  <div class="comment-actions">
+                    <span class="comment-time">{{ formatTime(comment.created_at) }}</span>
+                    <a-button type="link" size="small" @click="startReply(comment)">
+                      回复
+                    </a-button>
+                  </div>
+                  
+                  <!-- 子评论 -->
+                  <div v-if="comment.replies && comment.replies.length > 0" class="replies-list">
+                    <div
+                      v-for="reply in comment.replies"
+                      :key="reply.id"
+                      class="reply-item"
+                    >
+                      <a-avatar :size="32" :src="reply.user_avatar">
+                        {{ reply.username?.[0] || '?' }}
+                      </a-avatar>
+                      <div class="reply-content">
+                        <div class="reply-username">{{ reply.username || '未知用户' }}</div>
+                        <div class="reply-text">{{ reply.content }}</div>
+                        <div class="reply-time">{{ formatTime(reply.created_at) }}</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -217,9 +240,16 @@
 
           <!-- 发表评论 -->
           <div class="comment-input-area">
+            <!-- 正在回复的提示 -->
+            <div v-if="replyingTo" class="replying-hint">
+              <span>回复 @{{ replyingTo.username }}</span>
+              <a-button type="link" size="small" @click="cancelReply">
+                取消
+              </a-button>
+            </div>
             <a-textarea
               v-model:value="commentContent"
-              placeholder="写下你的评论..."
+              :placeholder="replyingTo ? `回复 @${replyingTo.username}...` : '写下你的评论...'"
               :rows="3"
               :maxlength="500"
               show-count
@@ -230,7 +260,7 @@
               @click="submitComment"
               class="comment-submit-btn"
             >
-              发表评论
+              {{ replyingTo ? '回复' : '发表评论' }}
             </a-button>
           </div>
         </a-spin>
@@ -276,6 +306,7 @@ const comments = ref<any[]>([])
 const loadingComments = ref(false)
 const commentContent = ref('')
 const submittingComment = ref(false)
+const replyingTo = ref<any>(null)  // 正在回复的评论
 
 // 热门话题相关
 const hotTopics = ref<any[]>([])
@@ -373,18 +404,39 @@ async function submitComment() {
 
   submittingComment.value = true
   try {
+    const isReply = !!replyingTo.value
+    
     const newComment = await socialService.addComment(
       currentPost.value.id,
-      commentContent.value
+      commentContent.value,
+      replyingTo.value?.id || null
     )
 
     console.log('新评论数据:', newComment)
 
-    // 添加新评论到列表（后端已返回完整数据，直接添加到开头）
-    comments.value.unshift({
-      ...newComment,
-      id: newComment.id || newComment.comment_id
-    })
+    if (isReply) {
+      // 如果是回复，添加到对应评论的回复列表
+      const parentComment = comments.value.find((c: any) => c.id === replyingTo.value.id)
+      if (parentComment) {
+        if (!parentComment.replies) {
+          parentComment.replies = []
+        }
+        parentComment.replies.push({
+          ...newComment,
+          id: newComment.id || newComment.comment_id
+        })
+        parentComment.reply_count = (parentComment.reply_count || 0) + 1
+      }
+      replyingTo.value = null
+    } else {
+      // 如果是顶级评论，添加到列表开头
+      comments.value.unshift({
+        ...newComment,
+        id: newComment.id || newComment.comment_id,
+        replies: [],
+        reply_count: 0
+      })
+    }
 
     // 更新帖子的评论数
     const feedList = socialStore.feed
@@ -397,13 +449,25 @@ async function submitComment() {
     }
 
     commentContent.value = ''
-    message.success('评论发表成功')
+    message.success(isReply ? '回复成功' : '评论发表成功')
   } catch (error) {
     console.error('发表评论失败:', error)
     message.error('发表评论失败')
   } finally {
     submittingComment.value = false
   }
+}
+
+// 开始回复
+function startReply(comment: any) {
+  replyingTo.value = comment
+  commentContent.value = ''
+}
+
+// 取消回复
+function cancelReply() {
+  replyingTo.value = null
+  commentContent.value = ''
 }
 
 // 上传前校验
@@ -875,9 +939,69 @@ function formatTime(time: string) {
   margin-bottom: 8px;
 }
 
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .comment-time {
   font-size: 12px;
   color: #8c8c8c;
+}
+
+/* 子评论列表 */
+.replies-list {
+  margin-top: 12px;
+  padding-left: 12px;
+  border-left: 2px solid #f0f0f0;
+}
+
+.reply-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #fafafa;
+}
+
+.reply-item:last-child {
+  border-bottom: none;
+}
+
+.reply-content {
+  flex: 1;
+}
+
+.reply-username {
+  font-size: 13px;
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 2px;
+}
+
+.reply-text {
+  font-size: 13px;
+  color: #595959;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.reply-time {
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+/* 回复提示 */
+.replying-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #e6f7ff;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #1890ff;
 }
 
 .comment-input-area {

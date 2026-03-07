@@ -4,6 +4,8 @@
 提供以下API（需要admin角色）：
 - GET /api/admin/users - 用户列表
 - PUT /api/admin/users/{user_id}/status - 激活/禁用用户
+- GET /api/admin/comments - 评论列表
+- DELETE /api/admin/comments/{comment_id} - 删除评论
 - GET /api/admin/posts/moderation - 待审核内容
 - PUT /api/admin/posts/{post_id}/moderate - 审核内容
 - GET /api/admin/stats - 系统统计
@@ -16,7 +18,7 @@
 """
 
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi import APIRouter, HTTPException, status, Depends, Query, Request
 from pydantic import BaseModel, Field
 from loguru import logger
 import subprocess
@@ -25,6 +27,8 @@ from ...services.admin_service import get_admin_service
 from ...services.monitoring_service import get_monitoring_service
 from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...utils.response import ApiResponse
+from ...utils.audit_logger import save_audit_log
+from ...utils.cache_invalidator import get_cache_invalidator
 
 
 router = APIRouter(prefix="/admin", tags=["管理后台"])
@@ -70,7 +74,9 @@ class ModeratePostRequest(BaseModel):
 
 @router.get("/users")
 async def list_users(
-    role: Optional[str] = Query(None, description="角色筛选"),
+    username: Optional[str] = Query(None, description="用户名搜索"),
+    email: Optional[str] = Query(None, description="邮箱搜索"),
+    role: Optional[str] = Query(None, description="角色筛选(admin/user)"),
     is_active: Optional[bool] = Query(None, description="激活状态筛选"),
     is_verified: Optional[bool] = Query(None, description="验证状态筛选"),
     limit: int = Query(50, ge=1, le=100, description="返回数量"),
@@ -86,6 +92,8 @@ async def list_users(
         admin_service = get_admin_service()
 
         result = admin_service.list_users(
+            username=username,
+            email=email,
             role=role,
             is_active=is_active,
             is_verified=is_verified,
@@ -107,6 +115,7 @@ async def list_users(
 async def update_user_status(
     user_id: int,
     request: UpdateUserStatusRequest,
+    http_request: Request,
     admin_user: CurrentUser = Depends(require_admin)
 ):
     """
@@ -131,6 +140,18 @@ async def update_user_status(
         action = "激活" if request.is_active else "禁用"
         logger.info(f"用户已{action}: {user_id} (操作者: {admin_user.username})")
 
+        cache_invalidator = get_cache_invalidator()
+        await cache_invalidator.invalidate_admin_system_stats()
+
+        await save_audit_log(
+            user_id=admin_user.id,
+            action=action,
+            resource="用户",
+            resource_id=str(user_id),
+            details={"is_active": request.is_active},
+            request=http_request
+        )
+
         return ApiResponse.success(data={}, msg=f"用户已{action}")
 
     except HTTPException:
@@ -143,8 +164,91 @@ async def update_user_status(
         )
 
 
+@router.get("/comments")
+async def list_comments(
+    content: Optional[str] = Query(None, description="评论内容搜索"),
+    post_id: Optional[str] = Query(None, description="帖子ID筛选"),
+    user_id: Optional[int] = Query(None, description="用户ID筛选"),
+    limit: int = Query(50, ge=1, le=100, description="返回数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+    admin_user: CurrentUser = Depends(require_admin)
+):
+    """
+    获取评论列表
+
+    需要admin角色
+    """
+    try:
+        admin_service = get_admin_service()
+
+        result = await admin_service.list_comments(
+            content=content,
+            post_id=post_id,
+            user_id=user_id,
+            limit=limit,
+            offset=offset
+        )
+
+        return ApiResponse.success(data=result, msg="获取成功")
+
+    except Exception as e:
+        logger.error(f"获取评论列表失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取评论列表失败"
+        )
+
+
+@router.delete("/comments/{comment_id}")
+async def delete_comment(
+    comment_id: str,
+    http_request: Request,
+    admin_user: CurrentUser = Depends(require_admin)
+):
+    """
+    删除评论
+
+    需要admin角色
+    """
+    try:
+        admin_service = get_admin_service()
+
+        success = await admin_service.delete_comment(comment_id)
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="评论不存在"
+            )
+
+        logger.info(f"评论已删除: {comment_id} (操作者: {admin_user.username})")
+
+        cache_invalidator = get_cache_invalidator()
+        await cache_invalidator.invalidate_admin_visualization()
+
+        await save_audit_log(
+            user_id=admin_user.id,
+            action="删除",
+            resource="评论",
+            resource_id=comment_id,
+            request=http_request
+        )
+
+        return ApiResponse.success(data={}, msg="评论已删除")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除评论失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="删除评论失败"
+        )
+
+
 @router.get("/posts/moderation")
 async def get_posts_for_moderation(
+    keyword: Optional[str] = Query(None, description="关键词搜索（标题/内容）"),
     status: str = Query("pending", description="审核状态"),
     limit: int = Query(50, ge=1, le=100, description="返回数量"),
     offset: int = Query(0, ge=0, description="偏移量"),
@@ -159,6 +263,7 @@ async def get_posts_for_moderation(
         admin_service = get_admin_service()
 
         result = await admin_service.get_posts_for_moderation(
+            keyword=keyword,
             status=status,
             limit=limit,
             offset=offset
@@ -208,6 +313,10 @@ async def moderate_post(
 
         logger.info(f"帖子已审核: {post_id} -> {request.status} (操作者: {admin_user.username})")
 
+        cache_invalidator = get_cache_invalidator()
+        await cache_invalidator.invalidate_admin_visualization()
+        await cache_invalidator.invalidate_admin_system_stats()
+
         return ApiResponse.success(data={}, msg=f"帖子已{request.status}")
 
     except HTTPException:
@@ -244,10 +353,89 @@ async def get_system_stats(
         )
 
 
+@router.get("/stats/visualization")
+async def get_visualization_data(
+    admin_user: CurrentUser = Depends(require_admin)
+):
+    """
+    获取可视化图表数据
+
+    需要admin角色
+    返回：
+    - user_trend: 最近7天用户注册趋势
+    - post_trend: 最近7天帖子发布趋势
+    - moderation_distribution: 内容审核状态分布
+    - user_activity: 用户活跃度分布
+    - content_type_distribution: 内容类型分布
+    - top_content: Top热门内容
+    - interaction_stats: 互动统计数据
+    """
+    try:
+        admin_service = get_admin_service()
+
+        data = await admin_service.get_visualization_data()
+
+        return ApiResponse.success(data=data, msg="获取成功")
+
+    except Exception as e:
+        logger.error(f"获取可视化数据失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取可视化数据失败"
+        )
+
+
+@router.get("/stats/user-trend")
+async def get_user_trend(
+    period: str = Query("week", description="预设周期: week=最近一周, month=最近一月, year=最近一年"),
+    start_date: Optional[str] = Query(None, description="自定义开始日期 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="自定义结束日期 (YYYY-MM-DD)"),
+    admin_user: CurrentUser = Depends(require_admin)
+):
+    """
+    获取用户注册趋势（支持自定义时间范围）
+    
+    支持两种查询方式：
+    1. 预设周期：week(一周)/month(一月)/year(一年)
+    2. 自定义日期范围：传入 start_date 和 end_date
+    
+    返回：
+    - start_date: 开始日期
+    - end_date: 结束日期
+    - period_type: 聚合类型 (day=按天, month=按月)
+    - period: 使用的周期预设
+    - total: 总注册用户数
+    - trend: 趋势数据列表
+    """
+    try:
+        admin_service = get_admin_service()
+
+        data = await admin_service.get_user_trend_by_date(
+            start_date=start_date,
+            end_date=end_date,
+            period=period
+        )
+
+        return ApiResponse.success(data=data, msg="获取成功")
+
+    except Exception as e:
+        logger.error(f"获取用户趋势失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取用户趋势失败"
+        )
+
+
 @router.get("/logs/audit")
 async def get_audit_logs(
+    resource_id: Optional[str] = Query(None, description="资源ID搜索"),
     user_id: Optional[int] = Query(None, description="用户ID筛选"),
     action: Optional[str] = Query(None, description="操作类型筛选"),
+    resource: Optional[str] = Query(None, description="资源类型筛选"),
+    method: Optional[str] = Query(None, description="HTTP方法筛选 (GET/POST/PUT/DELETE)"),
+    path_keyword: Optional[str] = Query(None, description="请求路径模糊匹配"),
+    status_code: Optional[int] = Query(None, description="响应状态码筛选（传入 2/4/5 匹配 2xx/4xx/5xx）"),
+    response_status: Optional[str] = Query(None, description="响应结果筛选 (success/error)"),
     limit: int = Query(100, ge=1, le=500, description="返回数量"),
     offset: int = Query(0, ge=0, description="偏移量"),
     admin_user: CurrentUser = Depends(require_admin)
@@ -261,8 +449,14 @@ async def get_audit_logs(
         admin_service = get_admin_service()
 
         result = admin_service.get_audit_logs(
+            resource_id=resource_id,
             user_id=user_id,
             action=action,
+            resource=resource,
+            method=method,
+            path_keyword=path_keyword,
+            status_code=status_code,
+            response_status=response_status,
             limit=limit,
             offset=offset
         )

@@ -140,10 +140,11 @@ class AuthService:
                 "expires_at": str (ISO格式)
             }
         """
+        now = datetime.utcnow()  # 使用 UTC 时间，而不是本地时间
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = now + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(days=self.settings.jwt_access_token_expire_days)
+            expire = now + timedelta(days=self.settings.jwt_access_token_expire_days)
 
         # 生成唯一的JWT ID（用于黑名单）
         jti = secrets.token_urlsafe(32)
@@ -156,8 +157,8 @@ class AuthService:
             "device_id": device_id,
             "jti": jti,  # JWT ID
             "exp": expire,  # Expiration time
-            "iat": datetime.utcnow(),  # Issued at
-            "nbf": datetime.utcnow()  # Not before
+            "iat": now,  # Issued at
+            "nbf": now  # Not before
         }
 
         # 生成Token
@@ -192,7 +193,8 @@ class AuthService:
             payload = jwt.decode(
                 token,
                 self.settings.jwt_secret_key,
-                algorithms=[self.settings.jwt_algorithm]
+                algorithms=[self.settings.jwt_algorithm],
+                leeway=timedelta(seconds=10)
             )
             return payload
         except jwt.ExpiredSignatureError:
