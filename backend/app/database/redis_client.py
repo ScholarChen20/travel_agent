@@ -323,6 +323,24 @@ class RedisClient:
 
     # ========== 连接管理 ==========
 
+    async def scan_iter(self, pattern: str = "*", count: int = 10):
+        """
+        扫描匹配的键（异步迭代器）
+
+        Args:
+            pattern: 键匹配模式，如 "user:*" 或 "admin:*"
+            count: 每次扫描返回的键数量
+
+        Yields:
+            匹配的键名
+        """
+        try:
+            async for key in self.client.scan_iter(match=pattern, count=count):
+                yield key
+        except Exception as e:
+            logger.error(f"Redis SCAN_ITER失败 - pattern: {pattern}, error: {str(e)}")
+            return
+
     async def close(self):
         """关闭Redis客户端"""
         if self.client:
