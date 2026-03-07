@@ -183,7 +183,7 @@ async def register(request: RegisterRequest, http_request: Request):
 
     # 获取客户端信息（需要在防刷检查之前获取）
     ip = _get_client_ip(http_request)
-    device_id = get_device_id() or "unknown"
+    device_id = get_device_id() or "unknown:" + request.username
 
     try:
         # 0. 防刷检查（在验证码验证之前，避免消耗验证码）
@@ -296,7 +296,7 @@ async def register(request: RegisterRequest, http_request: Request):
         logger.info(f"存储JWT Token到Redis: {user_id}")
         await redis_client.hset(
             f"jwt:user:{user_id}",
-            "default",
+            "account",
             token_data["access_token"]
         )
         logger.info(f"JWT Token存储成功: {user_id}")
@@ -375,7 +375,7 @@ async def login(request: LoginRequest, http_request: Request):
 
     # 获取客户端信息
     ip = _get_client_ip(http_request)
-    device_id = get_device_id() or "unknown"
+    device_id = get_device_id() or "unknown:" + request.username
 
     try:
         # 0. 校验设备id是否在黑名单中
