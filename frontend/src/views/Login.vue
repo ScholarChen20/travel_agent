@@ -82,6 +82,7 @@ import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authService } from '@/services/auth'
+import { initDeviceId, deviceId } from '@/utils/deviceId'
 
 const router = useRouter()
 const route = useRoute()
@@ -91,14 +92,17 @@ const form = ref({
   username: '',
   password: '',
   captcha_code: '',
-  captcha_session_id: ''
+  captcha_session_id: '',
+  device_id: ''
 })
 
 const loading = ref(false)
 const feishuLoading = ref(false)
 const captchaImage = ref('')
 
-onMounted(() => {
+onMounted(async () => {
+  await initDeviceId()
+  form.value.device_id = deviceId.value
   loadCaptcha()
 })
 

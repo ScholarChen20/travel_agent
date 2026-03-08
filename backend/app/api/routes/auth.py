@@ -10,7 +10,6 @@
 - POST /api/auth/forgot-password - 忘记密码
 - POST /api/auth/reset-password - 重置密码
 """
-import subprocess
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, status, Depends
@@ -42,6 +41,7 @@ class RegisterRequest(BaseModel):
     nickname: str = Field(..., description="昵称")
     captcha_code: str = Field(..., min_length=4, max_length=10, description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
+    device_id: str = Field(..., min_length=10, description="设备唯一标识（由前端生成）")
 
 
 class LoginRequest(BaseModel):
@@ -50,7 +50,7 @@ class LoginRequest(BaseModel):
     password: str = Field(..., description="密码")
     captcha_code: str = Field(..., description="验证码")
     captcha_session_id: str = Field(..., description="验证码会话ID")
-    # device_id: str = Field(default="default", description="设备ID")
+    device_id: str = Field(..., min_length=10, description="设备唯一标识（由前端生成）")
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -84,19 +84,6 @@ def _get_client_ip(request: Request) -> str:
         return request.client.host
 
     return "127.0.0.1"
-
-def get_device_id():
-    """获取设备ID"""
-    try:
-        command = "wmic csproduct get uuid"   # Windows 获取主板id
-        # command = "sudo dmidecode -s system-uuid"   # Linux 获取主板id
-        result = subprocess.check_output(command, shell=True).decode().strip()
-
-        device_id = result.split("\n")[1].strip()
-        return device_id
-    except Exception as e:
-        print(f"Error: {e}")
-    return None
 
 async def verify_captcha(session_id: str, code: str) -> bool:
     """
@@ -183,7 +170,7 @@ async def register(request: RegisterRequest, http_request: Request):
 
     # 获取客户端信息（需要在防刷检查之前获取）
     ip = _get_client_ip(http_request)
-    device_id = get_device_id() or "unknown:" + request.username
+    device_id = request.device_id  # 从请求参数中获取设备ID（由前端生成）
 
     try:
         # 0. 防刷检查（在验证码验证之前，避免消耗验证码）
@@ -375,7 +362,7 @@ async def login(request: LoginRequest, http_request: Request):
 
     # 获取客户端信息
     ip = _get_client_ip(http_request)
-    device_id = get_device_id() or "unknown:" + request.username
+    device_id = request.device_id  # 从请求参数中获取设备ID（由前端生成）
 
     try:
         # 0. 校验设备id是否在黑名单中
