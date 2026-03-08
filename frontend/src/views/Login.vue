@@ -82,7 +82,7 @@ import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authService } from '@/services/auth'
-import { initDeviceId, deviceId } from '@/utils/deviceId'
+import { initDeviceId, deviceId } from '@/utils/deviceId.js'
 
 const router = useRouter()
 const route = useRoute()
