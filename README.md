@@ -4,14 +4,18 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![Vue Version](https://img.shields.io/badge/vue-3.5+-green.svg)](https://vuejs.org/)
-[![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+[![node Version]( https://img.shields.io/npm/v/npm.svg?logo=nodedotjs)](https://nodejs.org/en/)
 [![Docker](https://img.shields.io/badge/docker-supported-blue.svg)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
 
 ---
 
 ## 📖 项目简介
 
 **智能旅行助手**是一个基于AI大模型的旅行规划应用，通过自然语言交互，为用户自动生成详细的旅行计划。系统集成了高德地图、天气服务、景点推荐等多种功能，让旅行规划变得简单而智能。
+
+[体验网站](https://leanna-prefamiliar-nonretroactively.ngrok-free.dev)
 
 ### ✨ 核心亮点
 
@@ -38,15 +42,15 @@
 
 ### 后端技术栈
 
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| **Python** | 3.14+ | 主要开发语言 |
+| 技术 | 版本 | 用途                     |
+|------|------|------------------------|
+| **Python** | 3.14+ | 主要开发语言                 |
 | **FastAPI** | Latest | 高性能Web框架，提供RESTful API |
-| **HelloAgents** | Latest | AI智能体框架，实现对话和规划 |
-| **MySQL** | 8.0+ | 关系型数据库，存储用户数据 |
-| **MongoDB** | 7.0+ | 文档数据库，存储旅行计划和对话 |
-| **Redis** | 7.0+ | 缓存和会话管理 |
-| **Docker** | Latest | 容器化部署 |
+| **HelloAgents** | Latest | AI智能体框架，实现智能对话和规划      |
+| **MySQL** | 8.0+ | 关系型数据库，存储用户数据、日志       |
+| **MongoDB** | 7.0+ | 文档数据库，存储旅行计划和对话        |
+| **Redis** | 7.0+ | 缓存和会话管理                |
+| **Docker** | Latest | 容器化部署                  |
 
 ### 前端技术栈
 
@@ -57,11 +61,12 @@
 | **Vite** | 5.0+ | 现代化构建工具 |
 | **Ant Design Vue** | 4.0+ | 企业级UI组件库 |
 | **ECharts** | 5.0+ | 数据可视化图表库 |
+| **Nginx** | 1.25+ | 负载均衡和静态文件服务 |
 
 ### 第三方服务
 
 - **高德地图**：地图服务、POI搜索、路线规划
-- **OpenAI/DeepSeek**：大语言模型API
+- **DashScope/DeepSeek**：大语言模型API
 - **阿里云OSS**：对象存储服务
 - **飞书开放平台**：第三方登录
 
@@ -155,14 +160,13 @@ curl http://服务器地址/api/health
 ```
 
 7. **内网穿透**
-是指通过网络将内网服务暴露给外网，使得外网用户可以访问内网服务。若构建过程中ngrok启动成功，但是地址没映射，可手动执行。
-# 7.1 手动脚本运行
+通过网络将内网服务暴露给外网，使得外网用户可以访问内网服务。若构建过程中ngrok启动成功，但是地址没映射，可手动执行。
 ```bash
+# 手动脚本运行
 cd /opt/travel-agent
 ./scripts/ngrok.sh
-```
-# 7.2 手动命令行运行
-```bash
+
+# 或者手动命令行运行
 docker run -it --rm \
     --network travel-agent_travel-network \
     -e NGROK_AUTHTOKEN=YOUR_TOKEN \   # 替换为ngrok的授权令牌（需要先注册）
@@ -314,9 +318,9 @@ npm run dev
 cd D:\JavaEnv\ngrok-v3-stable # 进入本地ngrok目录
 ngrok config add-authtoken $NGROK_AUTHTOKEN # 替换为ngrok的授权令牌（需要先注册）
 ```
-# 2. 启动ngrok
+# 2. 本地启动ngrok
 ```bash
-ngrok http 5173
+ngrok http 5173   # 等待几秒即可查看到分配的随机域名
 ```
 
 
@@ -456,29 +460,45 @@ plan = agent.plan_trip(
 
 **A**: 检查以下几点：
 1. 确认Docker和Docker Compose已正确安装
-2. 检查端口是否被占用（80、8000、3306、27017、6379）
+2. 检查端口是否被占用（80、8000、3306、27017、6379、4040）
 3. 查看Docker日志：`docker-compose logs`
 4. 确保有足够的内存和磁盘空间
 
-### Q2: 如何获取高德地图API密钥？
+### Q2: 如何获取unsplash API密钥？
+
+**A**: 
+1. 访问 [unsplash平台](https://unsplash.com/developers)
+2. 注册账号并登录
+3. 进入控制台，创建应用
+4. 添加Key
+5. 复制API Key到.env文件并放入系统环境变量
+
+### Q3: 如何获取高德地图API密钥？
 
 **A**: 
 1. 访问 [高德开放平台](https://lbs.amap.com/)
 2. 注册账号并登录
 3. 进入控制台，创建应用
-4. 添加Key，选择Web服务API
-5. 复制API Key到.env文件
+4. 复制API Key到.env文件并放入系统环境变量
 
-### Q3: 如何获取OpenAI API密钥？
+### Q4: 如何获取DashScope API密钥？
 
 **A**:
-1. 访问 [OpenAI官网](https://openai.com/)
+1. 访问 [阿里云百炼官网](https://www.aliyun.com/product/bailian)
 2. 注册账号并登录
 3. 进入API Keys页面
 4. 创建新的API Key
-5. 复制Key到.env文件
+5. 复制Key到.env文件并放入系统环境变量
 
-### Q4: 前端无法连接后端怎么办？
+### Q5: 如何获取ngrok 权限令牌？
+
+**A**:
+1. 访问 [ngrok官网](https://ngrok.com/)
+2. 注册账号并登录
+3. 进入AUTHTOKEN页面
+4. 复制NGROK_AUTHTOKEN到.env文件并放入系统环境变量
+
+### Q6: 前端无法连接后端怎么办？
 
 **A**:
 1. 检查后端服务是否正常运行
@@ -486,11 +506,11 @@ plan = agent.plan_trip(
 3. 检查防火墙设置
 4. 查看浏览器控制台的错误信息
 
-### Q5: 如何部署到云服务器？
+### Q7: 如何部署到云服务器？
 
-**A**: 参考项目中的 [CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md) 文档，包含详细的云服务器部署步骤。
+**A**: 参考项目中的 [部署文档.md](docs/%E9%83%A8%E7%BD%B2%E6%96%87%E6%A1%A3.md) 文档，包含详细的云服务器部署步骤。
 
-### Q6: 数据库初始化失败怎么办？
+### Q8: 数据库初始化失败怎么办？
 
 **A**:
 1. 检查数据库服务是否正常运行
@@ -507,9 +527,9 @@ plan = agent.plan_trip(
 ### 贡献方式
 
 1. Fork本项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
+2. 创建特性分支 (`git checkout -b feature/travelai`)
+3. 提交更改 (`git commit -m 'Add some travelai'`)
+4. 推送到分支 (`git push origin feature/travelai`)
 5. 提交Pull Request
 
 ### 开发规范
@@ -541,9 +561,9 @@ plan = agent.plan_trip(
 
 ## 📮 联系方式
 
-- **项目地址**: [GitHub Repository](https://github.com/yourusername/travel-agent)
-- **问题反馈**: [Issues](https://github.com/yourusername/travel-agent/issues)
-- **邮箱**: your.email@example.com
+- **项目地址**: [GitHub Repository](https://github.com/ScholarChen20/travel_agent)
+- **问题反馈**: [Issues](https://github.com/ScholarChen20/travel_agent/issues)
+- **邮箱**: 1523910137@qq.com
 
 ---
 
@@ -555,4 +575,4 @@ plan = agent.plan_trip(
 
 **智能旅行助手** - 让旅行规划变得简单而智能 🌈
 
-Made with ❤️ by Travel Agent Team
+Made with ❤️ by Team

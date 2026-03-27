@@ -111,8 +111,8 @@ class StorageService:
             image = Image.open(io.BytesIO(content))
             logger.info(f"打开图片成功，格式: {image.format}, 尺寸: {image.size}, 模式: {image.mode}")
 
-            # 调整图片大小（头像最大200x200）
-            max_size = (200, 200)
+            # 调整图片大小（头像最大1024x1024）
+            max_size = (1024, 1024)
             image.thumbnail(max_size, Image.Resampling.LANCZOS)
 
             # 转换为RGB（如果是RGBA）
@@ -133,7 +133,7 @@ class StorageService:
                 url = await self._upload_to_oss(
                     output,
                     f"{self.settings.oss_avatar_dir}/{filename}",
-                    "image/jpeg"
+                    "image/jpeg/png"
                 )
             else:
                 # 本地存储
