@@ -11,6 +11,7 @@ from hello_agents.tools import MCPTool
 from ..services.llm_service import get_llm
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
 from ..config import get_settings
+from ..services.rag import RAGService, get_rag_service
 
 # ============ Agent提示词 ============
 
@@ -166,6 +167,8 @@ class MultiAgentTripPlanner:
         try:
             settings = get_settings()
             self.llm = get_llm()
+            
+            self._rag_service: Optional[RAGService] = None
 
             # 创建共享的MCP工具(只创建一次)
             print("  - 创建共享MCP工具...")
@@ -179,7 +182,7 @@ class MultiAgentTripPlanner:
 
             # 创建景点搜索Agent
             print("  - 创建景点搜索Agent...")
-            self.attraction_agent = SimpleAgent(
+            self.attraction_agent = ReActAgent(
                 name="景点搜索专家",
                 llm=self.llm,
                 system_prompt=ATTRACTION_AGENT_PROMPT
@@ -223,7 +226,40 @@ class MultiAgentTripPlanner:
             traceback.print_exc()
             raise
     
-    def plan_trip(self, request: TripRequest) -> TripPlan:
+    async def _get_rag_service(self) -> Optional[RAGService]:
+        """获取RAG服务实例（延迟初始化）"""
+        if self._rag_service is None:
+            try:
+                self._rag_service = await get_rag_service()
+                print("✅ RAG服务初始化成功")
+            except Exception as e:
+                print(f"⚠️ RAG服务初始化失败: {str(e)}")
+                return None
+        return self._rag_service
+    
+    async def _get_rag_context(self, city: str, preferences: List[str] = None) -> str:
+        """
+        从RAG获取旅行上下文
+        
+        Args:
+            city: 城市名称
+            preferences: 用户偏好
+            
+        Returns:
+            RAG上下文文本
+        """
+        try:
+            rag_service = await self._get_rag_service()
+            if rag_service is None:
+                return ""
+            
+            context = await rag_service.get_travel_context(city, preferences)
+            return context
+        except Exception as e:
+            print(f"⚠️ 获取RAG上下文失败: {str(e)}")
+            return ""
+    
+    async def plan_trip(self, request: TripRequest) -> TripPlan:
         """
         使用多智能体协作生成旅行计划
 
@@ -242,28 +278,36 @@ class MultiAgentTripPlanner:
             print(f"偏好: {', '.join(request.preferences) if request.preferences else '无'}")
             print(f"{'='*60}\n")
 
+            # 步骤0: 从RAG获取旅行上下文（新增）
+            print("📚 步骤0: 获取RAG旅行上下文...")
+            rag_context = await self._get_rag_context(request.city, request.preferences)
+            if rag_context:
+                print(f"RAG上下文获取成功，长度: {len(rag_context)}")
+            else:
+                print("RAG上下文获取失败或为空，将使用基础规划")
+
             # 步骤1: 景点搜索Agent搜索景点
             print("📍 步骤1: 搜索景点...")
             attraction_query = self._build_attraction_query(request)
-            attraction_response = self.attraction_agent.run(attraction_query)
+            attraction_response = await asyncio.to_thread(self.attraction_agent.run, attraction_query)
             print(f"景点搜索结果: {attraction_response[:200]}...\n")
 
             # 步骤2: 天气查询Agent查询天气
             print("🌤️  步骤2: 查询天气...")
             weather_query = f"请查询{request.city}的天气信息"
-            weather_response = self.weather_agent.run(weather_query)
+            weather_response = await asyncio.to_thread(self.weather_agent.run, weather_query)
             print(f"天气查询结果: {weather_response[:200]}...\n")
 
             # 步骤3: 酒店推荐Agent搜索酒店
             print("🏨 步骤3: 搜索酒店...")
             hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
-            hotel_response = self.hotel_agent.run(hotel_query)
+            hotel_response = await asyncio.to_thread(self.hotel_agent.run, hotel_query)
             print(f"酒店搜索结果: {hotel_response[:200]}...\n")
 
             # 步骤4: 行程规划Agent整合信息生成计划
             print("📋 步骤4: 生成行程计划...")
-            planner_query = self._build_planner_query(request, attraction_response, weather_response, hotel_response)
-            planner_response = self.planner_agent.run(planner_query)
+            planner_query = self._build_planner_query(request, attraction_response, weather_response, hotel_response, rag_context)
+            planner_response = await asyncio.to_thread(self.planner_agent.run, planner_query)
             print(f"行程规划结果: {planner_response[:300]}...\n")
 
             # 解析最终计划
@@ -294,7 +338,7 @@ class MultiAgentTripPlanner:
         query = f"请使用amap_maps_text_search工具搜索{request.city}的{keywords}相关景点。\n[TOOL_CALL:amap_maps_text_search:keywords={keywords},city={request.city}]"
         return query
 
-    def _build_planner_query(self, request: TripRequest, attractions: str, weather: str, hotels: str = "") -> str:
+    def _build_planner_query(self, request: TripRequest, attractions: str, weather: str, hotels: str = "", rag_context: str = "") -> str:
         """构建行程规划查询"""
         query = f"""请根据以下信息生成{request.city}的{request.travel_days}天旅行计划:
 
@@ -314,14 +358,27 @@ class MultiAgentTripPlanner:
 
 **酒店信息:**
 {hotels}
+"""
+        if rag_context:
+            query += f"""
+**RAG参考信息（来自小红书真实游记）:**
+{rag_context}
 
+**RAG信息使用说明:**
+1. 参考RAG中的热门景点推荐，优先安排评分高的景点
+2. 参考RAG中的美食推荐，安排当地特色美食
+3. 参考RAG中的酒店推荐，选择性价比高的住宿
+4. 结合RAG中的旅行贴士，提供实用建议
+"""
+
+        query += """
 **要求:**
 1. 每天安排2-3个景点
 2. 每天必须包含早中晚三餐
 3. 每天推荐一个具体的酒店(从酒店信息中选择)
-3. 考虑景点之间的距离和交通方式
-4. 返回完整的JSON格式数据
-5. 景点的经纬度坐标要真实准确
+4. 考虑景点之间的距离和交通方式
+5. 返回完整的JSON格式数据
+6. 景点的经纬度坐标要真实准确
 """
         if request.free_text_input:
             query += f"\n**额外要求:** {request.free_text_input}"

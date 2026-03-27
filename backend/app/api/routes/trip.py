@@ -57,7 +57,7 @@ async def plan_trip(
         agent = get_trip_planner_agent()
 
         logger.info("🚀 开始生成旅行计划...")
-        trip_plan = agent.plan_trip(request)
+        trip_plan = await agent.plan_trip(request)
 
         logger.info("✅ 旅行计划生成成功")
 

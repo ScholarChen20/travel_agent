@@ -22,7 +22,7 @@
           </a-form-item>
 
           <a-form-item name="password" :rules="[{ required: true, min: 8, message: '密码至少8位' }]">
-            <a-input-password v-model:value="form.password" placeholder="密码 (至少8位)" size="large" class="custom-input">
+            <a-input-password v-model:value="form.password" placeholder="密码至少八位，必须包含大小写字母、数字和特殊字符中的至少3种" size="large" class="custom-input">
               <template #prefix><LockOutlined class="input-icon" /></template>
             </a-input-password>
           </a-form-item>
