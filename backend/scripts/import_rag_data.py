@@ -1,15 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-RAG数据导入脚本
+RAG数据导入脚本（新版）
 功能：将小红书爬取的旅行数据导入到Qdrant向量数据库
+
+数据格式（5个核心字段）：
+- id: 帖子ID
+- title: 标题
+- desc: 正文描述（包含标签）
+- image_urls: 图片URL数组（可选）
+- tags: 标签（从desc中提取，可选）
 
 使用方法:
     python scripts/import_rag_data.py [--data-dir DATA_DIR] [--batch-size BATCH_SIZE]
 
 示例:
     python scripts/import_rag_data.py
-    python scripts/import_rag_data.py --data-dir backend/data/rag_data --batch-size 20
+    python scripts/import_rag_data.py --data-dir data/rag_data --batch-size 20
 """
 
 import asyncio
@@ -18,6 +25,7 @@ import json
 import os
 import sys
 import time
+import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
@@ -44,7 +52,7 @@ logger.add(
 
 class RAGDataImporter:
     """RAG数据导入器"""
-    
+
     def __init__(
         self,
         data_dir: str,
@@ -53,7 +61,7 @@ class RAGDataImporter:
     ):
         """
         初始化导入器
-        
+
         Args:
             data_dir: 数据目录路径
             batch_size: 批处理大小
@@ -62,10 +70,10 @@ class RAGDataImporter:
         self.data_dir = Path(data_dir)
         self.batch_size = batch_size
         self.max_concurrent = max_concurrent
-        
+
         self.rag_service = None
         self.data_processor = None
-        
+
         self.stats = {
             'total_files': 0,
             'processed_files': 0,
@@ -77,98 +85,107 @@ class RAGDataImporter:
             'end_time': None,
             'errors': []
         }
-    
+
     async def initialize(self):
         """初始化服务"""
         logger.info("正在初始化RAG服务...")
-        
+
         try:
-            from app.services.rag import (
-                RAGService,
-                RAGConfig,
-                DataProcessor
-            )
-            
+            from app.services.rag.rag_service import RAGService, RAGConfig
+            from app.services.rag.data_processor import DataProcessor
+
             config = RAGConfig(
                 batch_index_size=self.batch_size,
                 max_concurrent_indexing=self.max_concurrent
             )
-            
+
             self.rag_service = await RAGService.get_instance(config)
             self.data_processor = DataProcessor()
-            
+
             health = await self.rag_service.health_check()
             logger.info(f"RAG服务健康状态: {health['status']}")
-            
+
             if health['status'] == 'error':
                 raise RuntimeError(f"RAG服务初始化失败: {health.get('errors', [])}")
-            
+
             logger.info("RAG服务初始化成功")
-            
+
         except Exception as e:
             logger.error(f"初始化RAG服务失败: {e}")
             raise
-    
+
     def scan_data_files(self) -> List[Path]:
         """扫描数据文件"""
         if not self.data_dir.exists():
             raise FileNotFoundError(f"数据目录不存在: {self.data_dir}")
-        
+
+        # 扫描所有 JSON 文件
         json_files = list(self.data_dir.glob("*.json"))
-        
+
         valid_files = []
         for f in json_files:
             if f.stat().st_size > 0:
                 valid_files.append(f)
             else:
                 logger.warning(f"跳过空文件: {f.name}")
-        
+
         self.stats['total_files'] = len(valid_files)
         logger.info(f"发现 {len(valid_files)} 个有效JSON文件")
-        
+
         return valid_files
-    
-    def load_json_file(self, file_path: Path) -> List[Dict[str, Any]]:
-        """加载JSON文件"""
+
+    def parse_json_file(self, file_path: Path) -> List[Dict[str, Any]]:
+        """解析JSON文件，返回帖子列表"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
-            if isinstance(data, list):
-                return data
-            elif isinstance(data, dict):
-                if 'posts' in data:
-                    return data['posts']
-                elif 'data' in data:
-                    return data['data']
-                else:
-                    return [data]
-            else:
-                logger.warning(f"未知数据格式: {file_path.name}")
+
+            if not isinstance(data, list):
+                logger.warning(f"JSON格式错误，不是数组: {file_path.name}")
                 return []
-                
+
+            posts = []
+            for item in data:
+                # 提取5个核心字段
+                post = {
+                    'id': item.get('id', ''),
+                    'title': item.get('title', ''),
+                    'desc': item.get('desc', ''),
+                    'image_urls': item.get('image_urls', []),
+                    'tags': self._extract_tags(item.get('desc', ''))
+                }
+
+                # 验证必需字段
+                if not post['id'] or not post['title']:
+                    continue
+
+                posts.append(post)
+
+            return posts
+
         except json.JSONDecodeError as e:
             logger.error(f"JSON解析失败: {file_path.name}, 错误: {e}")
-            self.stats['errors'].append({
-                'file': str(file_path),
-                'error': f"JSON解析失败: {e}"
-            })
             return []
         except Exception as e:
             logger.error(f"读取文件失败: {file_path.name}, 错误: {e}")
-            self.stats['errors'].append({
-                'file': str(file_path),
-                'error': str(e)
-            })
             return []
-    
+
+    def _extract_tags(self, desc: str) -> List[str]:
+        """从描述中提取标签"""
+        if not desc:
+            return []
+
+        # 提取 #话题 格式的标签
+        tags = re.findall(r'#([^#\s]+)', desc)
+        return tags
+
     async def import_file(self, file_path: Path) -> Dict[str, Any]:
         """
         导入单个文件
-        
+
         Args:
             file_path: 文件路径
-            
+
         Returns:
             导入结果
         """
@@ -180,45 +197,71 @@ class RAGDataImporter:
             'failed_count': 0,
             'errors': []
         }
-        
+
         logger.info(f"开始处理文件: {file_path.name}")
-        
-        raw_posts = self.load_json_file(file_path)
-        result['raw_count'] = len(raw_posts)
-        
-        if not raw_posts:
+
+        # 解析 JSON 文件
+        posts = self.parse_json_file(file_path)
+        result['raw_count'] = len(posts)
+
+        if not posts:
             logger.warning(f"文件无有效数据: {file_path.name}")
             return result
-        
-        self.stats['total_posts'] += len(raw_posts)
-        
-        cleaned_posts = self.data_processor.clean_posts_batch(raw_posts)
-        result['cleaned_count'] = len(cleaned_posts)
-        self.stats['cleaned_posts'] += len(cleaned_posts)
-        
-        if not cleaned_posts:
-            logger.warning(f"清洗后无有效数据: {file_path.name}")
+
+        self.stats['total_posts'] += len(posts)
+
+        # 构建向量化数据
+        vector_data = []
+        for post in posts:
+            # 合并标题和描述作为文本内容
+            content = f"{post['title']}\n{post['desc']}"
+
+            # 提取关键词作为话题标签
+            keyword = file_path.stem  # 文件名作为关键词
+
+            metadata = {
+                'post_id': post['id'],
+                'title': post['title'],
+                'desc': post['desc'],
+                'tags': ','.join(post['tags']) if post['tags'] else '',
+                'image_count': len(post.get('image_urls', [])),
+                'image_urls': json.dumps(post.get('image_urls', [])),
+                'keyword': keyword
+            }
+
+            vector_data.append({
+                'content': content,
+                'metadata': metadata
+            })
+
+        result['cleaned_count'] = len(vector_data)
+        self.stats['cleaned_posts'] += len(vector_data)
+
+        if not vector_data:
+            logger.warning(f"处理后无有效数据: {file_path.name}")
             return result
-        
-        logger.info(f"清洗完成: {len(cleaned_posts)}/{len(raw_posts)} 条有效")
-        
+
+        logger.info(f"数据处理完成: {len(vector_data)}/{len(posts)} 条有效")
+
+        # 批量索引到向量数据库
         try:
-            index_result = await self.rag_service.index_posts_batch(
-                cleaned_posts,
-                progress_callback=lambda p: logger.debug(f"索引进度: {p['progress_percent']:.1f}%")
-            )
-            
-            result['indexed_count'] = index_result['success']
-            result['failed_count'] = index_result['failed']
-            
-            self.stats['indexed_posts'] += index_result['success']
-            self.stats['failed_posts'] += index_result['failed']
-            
+            # 使用 RAGService 的批量索引功能
+            index_result = await self.rag_service.index_posts_batch(vector_data)
+
+            success_count = index_result['success']
+            failed_count = index_result['failed']
+
+            result['indexed_count'] = success_count
+            result['failed_count'] = failed_count
+
+            self.stats['indexed_posts'] += success_count
+            self.stats['failed_posts'] += failed_count
+
             logger.info(
-                f"索引完成: 成功 {index_result['success']}, "
-                f"失败 {index_result['failed']}"
+                f"索引完成: 成功 {success_count}, "
+                f"失败 {failed_count}"
             )
-            
+
         except Exception as e:
             logger.error(f"索引失败: {file_path.name}, 错误: {e}")
             result['errors'].append(str(e))
@@ -226,13 +269,13 @@ class RAGDataImporter:
                 'file': file_path.name,
                 'error': str(e)
             })
-        
+
         return result
-    
+
     async def import_all(self) -> Dict[str, Any]:
         """
         导入所有数据
-        
+
         Returns:
             导入结果汇总
         """
@@ -243,64 +286,64 @@ class RAGDataImporter:
         logger.info(f"批处理大小: {self.batch_size}")
         logger.info(f"最大并发数: {self.max_concurrent}")
         logger.info("=" * 60)
-        
+
         await self.initialize()
-        
+
         files = self.scan_data_files()
-        
+
         if not files:
             logger.warning("没有找到可导入的数据文件")
             return self.stats
-        
+
         file_results = []
-        
+
         for i, file_path in enumerate(files, 1):
             logger.info(f"\n处理进度: [{i}/{len(files)}] {file_path.name}")
-            
+
             try:
                 result = await self.import_file(file_path)
                 file_results.append(result)
                 self.stats['processed_files'] += 1
-                
+
             except Exception as e:
                 logger.error(f"处理文件失败: {file_path.name}, 错误: {e}")
                 self.stats['errors'].append({
                     'file': file_path.name,
                     'error': str(e)
                 })
-            
+
             if i < len(files):
                 await asyncio.sleep(1)
-        
+
         self.stats['end_time'] = datetime.now()
-        
+
         self._print_summary()
-        
+
         return self.stats
-    
+
     def _print_summary(self):
         """打印导入摘要"""
         duration = (self.stats['end_time'] - self.stats['start_time']).total_seconds()
-        
+
         logger.info("\n" + "=" * 60)
         logger.info("RAG数据导入完成")
         logger.info("=" * 60)
         logger.info(f"处理文件数: {self.stats['processed_files']}/{self.stats['total_files']}")
         logger.info(f"原始帖子数: {self.stats['total_posts']}")
-        logger.info(f"清洗后帖子数: {self.stats['cleaned_posts']}")
+        logger.info(f"处理后帖子数: {self.stats['cleaned_posts']}")
         logger.info(f"成功索引帖子数: {self.stats['indexed_posts']}")
         logger.info(f"失败帖子数: {self.stats['failed_posts']}")
         logger.info(f"总耗时: {duration:.2f} 秒")
-        
+
         if self.stats['indexed_posts'] > 0:
             avg_time = duration / self.stats['indexed_posts']
             logger.info(f"平均每条: {avg_time:.3f} 秒")
-        
+
         if self.stats['errors']:
             logger.warning(f"\n错误数: {len(self.stats['errors'])}")
             for error in self.stats['errors'][:5]:
                 logger.warning(f"  - {error}")
-        
+
         logger.info("=" * 60)
 
 
@@ -312,8 +355,8 @@ async def main():
     parser.add_argument(
         "--data-dir",
         type=str,
-        default="backend/data/rag_data",
-        help="数据目录路径 (默认: backend/data/rag_data)"
+        default="data/rag_data",
+        help="数据目录路径 (默认: data/rag_data)"
     )
     parser.add_argument(
         "--batch-size",
@@ -327,20 +370,20 @@ async def main():
         default=5,
         help="最大并发数 (默认: 5)"
     )
-    
+
     args = parser.parse_args()
-    
+
     data_dir = Path(project_root) / args.data_dir
-    
+
     logs_dir = project_root / "logs"
     logs_dir.mkdir(exist_ok=True)
-    
+
     importer = RAGDataImporter(
         data_dir=str(data_dir),
         batch_size=args.batch_size,
         max_concurrent=args.max_concurrent
     )
-    
+
     try:
         await importer.import_all()
     except KeyboardInterrupt:

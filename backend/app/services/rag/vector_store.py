@@ -35,7 +35,7 @@ from qdrant_client.models import (
 )
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-from ..config import get_settings
+from app.config import get_settings
 
 
 class VectorStoreError(Exception):
@@ -74,7 +74,7 @@ class VectorConfig:
     """向量数据库配置"""
     documents_collection: str = "travel_documents"
     images_collection: str = "travel_images"
-    documents_vector_size: int = 1024
+    documents_vector_size: int = 4096
     images_vector_size: int = 1024
     distance: str = "Cosine"
     max_retries: int = 3
@@ -133,22 +133,33 @@ class InputValidator:
     
     @staticmethod
     def validate_id(id_value: str) -> str:
-        """验证ID"""
+        """验证ID，转换为Qdrant可接受的格式"""
+        import uuid as uuid_module
+
         if not isinstance(id_value, str):
             raise ValidationError(f"ID类型错误: 期望str，实际{type(id_value)}")
-        
+
         id_value = id_value.strip()
-        
+
         if not id_value:
             raise ValidationError("ID不能为空")
-        
+
         if len(id_value) > InputValidator.MAX_ID_LENGTH:
             raise ValidationError(f"ID长度超过限制: {len(id_value)} > {InputValidator.MAX_ID_LENGTH}")
-        
-        if not re.match(r'^[\w\-:.]+$', id_value):
-            raise ValidationError(f"ID包含非法字符: {id_value}")
-        
-        return id_value
+
+        # 检查是否符合UUID格式 (32位十六进制或带横线的标准UUID)
+        uuid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        hex_pattern = r'^[0-9a-fA-F]+$'
+
+        if re.match(uuid_pattern, id_value):
+            # 已经是标准UUID格式
+            return id_value
+        elif re.match(hex_pattern, id_value) and len(id_value) == 32:
+            # 32位十六进制，转换为带横线的UUID
+            return f"{id_value[0:8]}-{id_value[8:12]}-{id_value[12:16]}-{id_value[16:20]}-{id_value[20:32]}"
+        else:
+            # 其他格式，使用UUID5基于原始ID生成
+            return str(uuid_module.uuid5(uuid_module.NAMESPACE_DNS, id_value))
     
     @staticmethod
     def validate_content(content: str) -> str:
@@ -280,40 +291,48 @@ class VectorStore:
         try:
             collections = self._client.get_collections().collections
             collection_names = [c.name for c in collections]
-            
-            if self.config.documents_collection not in collection_names:
-                self._client.create_collection(
-                    collection_name=self.config.documents_collection,
-                    vectors_config=VectorParams(
-                        size=self.config.documents_vector_size,
-                        distance=Distance.COSINE
-                    ),
-                    optimizers_config=OptimizersConfigDiff(
-                        indexing_threshold=10000,
-                    ),
-                    hnsw_config=HnswConfigDiff(
-                        m=16,
-                        ef_construct=100,
-                    )
+
+            # 删除已存在的文档集合（重新创建以确保维度正确）
+            if self.config.documents_collection in collection_names:
+                self._client.delete_collection(self.config.documents_collection)
+                logger.info(f"删除旧文档集合: {self.config.documents_collection}")
+
+            self._client.create_collection(
+                collection_name=self.config.documents_collection,
+                vectors_config=VectorParams(
+                    size=self.config.documents_vector_size,
+                    distance=Distance.COSINE
+                ),
+                optimizers_config=OptimizersConfigDiff(
+                    indexing_threshold=10000,
+                ),
+                hnsw_config=HnswConfigDiff(
+                    m=16,
+                    ef_construct=100,
                 )
-                logger.info(f"创建文档集合: {self.config.documents_collection}")
-            
-            if self.config.images_collection not in collection_names:
-                self._client.create_collection(
-                    collection_name=self.config.images_collection,
-                    vectors_config=VectorParams(
-                        size=self.config.images_vector_size,
-                        distance=Distance.COSINE
-                    ),
-                    optimizers_config=OptimizersConfigDiff(
-                        indexing_threshold=10000,
-                    ),
-                    hnsw_config=HnswConfigDiff(
-                        m=16,
-                        ef_construct=100,
-                    )
+            )
+            logger.info(f"创建文档集合: {self.config.documents_collection}, 向量维度: {self.config.documents_vector_size}")
+
+            # 删除已存在的图片集合（重新创建以确保维度正确）
+            if self.config.images_collection in collection_names:
+                self._client.delete_collection(self.config.images_collection)
+                logger.info(f"删除旧图片集合: {self.config.images_collection}")
+
+            self._client.create_collection(
+                collection_name=self.config.images_collection,
+                vectors_config=VectorParams(
+                    size=self.config.images_vector_size,
+                    distance=Distance.COSINE
+                ),
+                optimizers_config=OptimizersConfigDiff(
+                    indexing_threshold=10000,
+                ),
+                hnsw_config=HnswConfigDiff(
+                    m=16,
+                    ef_construct=100,
                 )
-                logger.info(f"创建图片集合: {self.config.images_collection}")
+            )
+            logger.info(f"创建图片集合: {self.config.images_collection}, 向量维度: {self.config.images_vector_size}")
                 
         except Exception as e:
             logger.error(f"初始化集合失败: {e}")

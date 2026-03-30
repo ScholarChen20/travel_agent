@@ -15,12 +15,8 @@ from .vector_store import (
     VectorConfig,
     get_vector_store
 )
-from .rag_service import (
-    RAGService,
-    RAGSearchResult,
-    RAGConfig,
-    get_rag_service
-)
+
+# RAGService 暂时从 rag_service.py 中移除（该文件需要重新实现）
 
 __all__ = [
     "DataProcessor",
@@ -34,8 +30,4 @@ __all__ = [
     "SearchResult",
     "VectorConfig",
     "get_vector_store",
-    "RAGService",
-    "RAGSearchResult",
-    "RAGConfig",
-    "get_rag_service",
 ]

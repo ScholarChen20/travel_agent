@@ -21,7 +21,7 @@ from enum import Enum
 from functools import wraps
 import dashscope
 
-from ..config import get_settings
+from app.config import get_settings
 
 
 class EmbeddingError(Exception):
@@ -77,7 +77,7 @@ class EmbeddingConfig:
     """向量化配置"""
     text_model: str = "Qwen/Qwen3-Embedding-8B"
     image_model: str = "tongyi-embedding-vision-plus"
-    text_embedding_dim: int = 1024
+    text_embedding_dim: int = 4096
     image_embedding_dim: int = 1024
     max_retries: int = 3
     retry_delay: float = 1.0

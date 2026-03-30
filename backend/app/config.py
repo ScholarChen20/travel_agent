@@ -92,6 +92,13 @@ class Settings(BaseSettings):
     oss_avatar_dir: str = "travel_avatars"  # 头像存储目录
     oss_media_dir: str = "travel_media"  # 媒体文件存储目录
 
+    # MiniO 文件存储
+    minio_enabled: bool = True
+    minio_endpoint: str = "http://127.0.0.1:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket_name: str = "travel-agent"
+
     # 日志配置
     log_level: str = "INFO"
 
