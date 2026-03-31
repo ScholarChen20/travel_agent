@@ -97,6 +97,12 @@ ALLOWED_IMAGE_DOMAINS = [
     'qdrant.io',
 ]
 
+# 本地存储服务白名单（用于MinIO等本地服务）
+LOCAL_STORAGE_WHITELIST = [
+    '127.0.0.1',
+    'localhost',
+]
+
 DANGEROUS_PATTERNS = [
     r'javascript:',
     r'data:',
@@ -173,50 +179,60 @@ class InputValidator:
     def validate_image_url(url: str) -> str:
         """
         验证图片URL安全性
-        
+
         Args:
             url: 图片URL
-            
+
         Returns:
             验证后的URL
-            
+
         Raises:
             SecurityError: 安全性错误
             ValidationError: 验证错误
         """
         if not isinstance(url, str):
             raise ValidationError(f"URL类型错误: 期望str，实际{type(url)}")
-        
+
         url = url.strip()
-        
+
         if not url:
             raise ValidationError("URL为空")
-        
+
         for pattern in DANGEROUS_PATTERNS:
             if re.match(pattern, url, re.IGNORECASE):
                 raise SecurityError(f"检测到危险协议: {pattern}")
-        
+
         try:
             parsed = urlparse(url)
-            
+
             if parsed.scheme not in ['http', 'https']:
                 raise SecurityError(f"不支持的协议: {parsed.scheme}")
-            
+
             hostname = parsed.hostname
             if not hostname:
                 raise ValidationError("URL缺少主机名")
-            
+
+            # 检查是否在本地存储白名单中（用于MinIO等本地服务）
+            # 白名单端口限制：只允许特定端口（如9000）
+            if hostname in LOCAL_STORAGE_WHITELIST:
+                port = parsed.port
+                # MinIO 默认端口9000，允许本地存储服务访问
+                if port and port in [9000, 9001]:
+                    return url
+                else:
+                    raise SecurityError(f"本地地址端口不在白名单: {hostname}:{port}")
+
             if hostname in ['localhost', '127.0.0.1', '0.0.0.0', '::1']:
                 raise SecurityError("禁止访问本地地址")
-            
+
             if re.match(r'^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)', hostname):
                 raise SecurityError("禁止访问私有网络地址")
-            
+
         except Exception as e:
             if isinstance(e, (SecurityError, ValidationError)):
                 raise
             raise ValidationError(f"URL解析失败: {e}")
-        
+
         return url
 
 

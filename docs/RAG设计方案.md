@@ -1333,7 +1333,7 @@ class Settings(BaseSettings):
         alias="QDRANT_URL"
     )
     qdrant_api_key: str = Field(
-        default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.CyAJ5UYbkn4bbL-BxE7zmqmW_uqZPf59DaOmO-4mOws",
+        default="",
         alias="QDRANT_API_KEY"
     )
     
@@ -1355,7 +1355,7 @@ class Settings(BaseSettings):
 ```bash
 # Qdrant配置
 QDRANT_URL=https://f0322c03-b3f8-423e-a3cb-2f160f26d25a.us-east4-0.gcp.cloud.qdrant.io:6333
-QDRANT_API_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.CyAJ5UYbkn4bbL-BxE7zmqmW_uqZPf59DaOmO-4mOws
+QDRANT_API_KEY=
 
 # ModelScope配置
 MODELSCOPE_API_KEY=ms-7df9fd49-9a59-495d-bf50-f2922001f367

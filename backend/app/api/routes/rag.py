@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from loguru import logger
-
+from pyrate_limiter import Duration, Limiter, Rate
+from fastapi_limiter.depends import RateLimiter
 from ...services.rag import (
     HybridRAGService,
     RAGSearchResult,
@@ -68,7 +69,8 @@ async def health_check(
         return ApiResponse.internal_error(msg=str(e))
 
 
-@router.get("/stats", summary="获取RAG统计信息")
+@router.get("/stats", summary="获取RAG统计信息",
+            dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(5, Duration.SECOND))))])
 async def get_stats(
     rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
@@ -151,7 +153,8 @@ async def search_food(
         return ApiResponse.internal_error(msg=f"搜索失败: {str(e)}")
 
 
-@router.get("/search/hotels", summary="搜索酒店")
+@router.get("/search/hotels", summary="搜索酒店",
+            dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(5, Duration.SECOND))))])
 async def search_hotels(
     city: str = Query(..., description="城市名称", min_length=1, max_length=50),
     query: str = Query("", description="搜索关键词", max_length=200),
@@ -181,7 +184,8 @@ async def search_hotels(
         return ApiResponse.internal_error(msg=f"搜索失败: {str(e)}")
 
 
-@router.get("/search/images", summary="搜索景点图片")
+@router.get("/search/images", summary="搜索景点图片",
+            dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(5, Duration.SECOND))))])
 async def search_attraction_images(
     attraction_name: str = Query(..., description="景点名称", min_length=1, max_length=100),
     city: str = Query("", description="城市名称", max_length=50),
@@ -211,7 +215,8 @@ async def search_attraction_images(
         return ApiResponse.internal_error(msg=f"搜索失败: {str(e)}")
 
 
-@router.get("/context", summary="获取旅行上下文")
+@router.get("/context", summary="获取旅行上下文",
+            dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(5, Duration.SECOND))))])
 async def get_travel_context(
     city: str = Query(..., description="城市名称", min_length=1, max_length=50),
     preferences: str = Query("", description="用户偏好，逗号分隔", max_length=500),

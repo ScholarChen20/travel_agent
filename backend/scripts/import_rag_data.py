@@ -170,7 +170,6 @@ class RAGDataImporter:
                     'content': item.get('content', item.get('desc', '')),
                     'image_urls': image_urls,
                     'tags': tags,
-                    'keyword': item.get('keyword', ''),
                     'image_count': len(image_urls)
                 }
 
@@ -284,8 +283,7 @@ class RAGDataImporter:
                     'tags': post['tags'],
                     'credibility': credibility,
                     'image_count': post['image_count'],
-                    'image_urls': post['image_urls'][:10],  # 限制存储
-                    'keyword': post['keyword'],
+                    'image_urls': post['image_urls'],  # 限制存储
                     'city': city
                 }
 

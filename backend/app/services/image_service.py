@@ -46,12 +46,12 @@ class ImageService:
         city: str = ""
     ) -> List[str]:
         """
-        从RAG获取景点图片作为兜底方案
-        
+        从RAG向量库检索景点图片（直接搜索图片向量库）
+
         Args:
             attraction_name: 景点名称
             city: 城市名称
-            
+
         Returns:
             图片URL列表
         """
@@ -59,18 +59,30 @@ class ImageService:
             rag_service = await self._get_rag_service()
             if rag_service is None:
                 return []
-            
-            image_urls = await rag_service.search_attraction_images(
-                attraction_name=attraction_name,
-                city=city,
-                n_results=3
+
+            # 构建查询：景点名称 + 城市
+            query = f"{city} {attraction_name}" if city else attraction_name
+
+            # 直接从图片向量库检索（使用多模态嵌入）
+            results = await rag_service.search_images_by_text(
+                query=query,
+                n_results=10
             )
-            
+
+            # 提取图片URL
+            image_urls = []
+            for result in results:
+                if result.image_urls:
+                    for img_url in result.image_urls:
+                        if img_url and img_url.startswith(('http://', 'https://')):
+                            if img_url not in image_urls:
+                                image_urls.append(img_url)
+
             if image_urls:
-                logger.info(f"从RAG获取到 {len(image_urls)} 张图片: {attraction_name}")
-            
-            return image_urls
-            
+                logger.info(f"从图片向量库检索到 {len(image_urls)} 张图片: {attraction_name}")
+
+            return image_urls[:5]  # 最多返回5张
+
         except Exception as e:
             logger.warning(f"从RAG获取图片失败: {str(e)}")
             return []

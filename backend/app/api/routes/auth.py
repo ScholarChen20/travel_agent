@@ -26,7 +26,8 @@ from ...middleware.auth_middleware import get_current_user, CurrentUser
 from ...config import get_settings
 from ...utils.response import ApiResponse
 from ...utils.cache_invalidator import get_cache_invalidator
-
+from pyrate_limiter import Duration, Limiter, Rate
+from fastapi_limiter.depends import RateLimiter
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -139,7 +140,8 @@ def serialize_user(user: User) -> dict:
 
 # ========== API端点 ==========
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=ApiResponse,
+             dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(50, Duration.SECOND * 1))))] )
 async def register(request: RegisterRequest, http_request: Request):
     """
     用户注册
@@ -342,7 +344,8 @@ async def register(request: RegisterRequest, http_request: Request):
         ) from e
 
 
-@router.post("/login")
+@router.post("/login", response_model=ApiResponse,
+             dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(50, Duration.SECOND * 1))))])
 async def login(request: LoginRequest, http_request: Request):
     """
     用户登录
@@ -564,7 +567,7 @@ async def refresh_token(current_user: CurrentUser = Depends(get_current_user)):
         )
 
 
-@router.get("/captcha")
+@router.get("/captcha", dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(100, Duration.SECOND * 1))))])
 async def get_captcha():
     """
     获取验证码
@@ -711,7 +714,7 @@ class FeishuCallbackRequest(BaseModel):
     state: str = Field(..., description="CSRF 防护随机串")
 
 
-@router.get("/feishu/authorize")
+@router.get("/feishu/authorize", dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(100, Duration.SECOND * 1))))])
 async def feishu_authorize():
     """
     获取飞书授权跳转 URL
@@ -752,7 +755,7 @@ async def feishu_authorize():
     )
 
 
-@router.post("/feishu/callback")
+@router.post("/feishu/callback", dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(100, Duration.SECOND * 1))))])
 async def feishu_callback(request: FeishuCallbackRequest):
     """
     飞书授权回调处理
