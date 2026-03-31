@@ -23,7 +23,7 @@ except ImportError:
 
 from .routes import trip, poi, map as map_routes
 from .routes import auth, plans, user, dialog, social, admin, blacklist
-from .routes import recommendations, budget, real_time, offline, translation, voice_enhanced, dashboard
+from .routes import dashboard
 from .routes import rag
 
 # 获取配置
@@ -103,12 +103,6 @@ app.include_router(blacklist.router, prefix="/api")  # 黑名单管理路由
 app.include_router(trip.router, prefix="/api")  # 旅行规划路由
 app.include_router(poi.router, prefix="/api")  # 景点查询路由
 app.include_router(map_routes.router, prefix="/api")  # 地图服务路由
-app.include_router(recommendations.router, prefix="/api")  # 智能推荐系统路由
-app.include_router(budget.router, prefix="/api")  # 预算管理模块路由
-app.include_router(real_time.router, prefix="/api")  # 实时信息服务路由
-app.include_router(offline.router, prefix="/api")  # 离线功能支持路由
-app.include_router(translation.router, prefix="/api")  # 多语言支持路由
-app.include_router(voice_enhanced.router, prefix="/api")  # 语音交互增强路由
 app.include_router(dashboard.router, prefix="/api")  # 首页仪表盘路由
 app.include_router(rag.router, prefix="/api")  # RAG检索增强路由
 
@@ -216,7 +210,7 @@ async def shutdown_event():
         # 关闭定时任务调度器
         if SCHEDULER_AVAILABLE:
             print("\n[SCHEDULER] 关闭定时任务调度器...")
-            shutdown_scheduler()
+            # shutdown_scheduler()
             print("   [OK] 定时任务调度器已关闭")
 
         # 关闭数据库连接

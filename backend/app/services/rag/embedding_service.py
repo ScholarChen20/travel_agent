@@ -78,7 +78,7 @@ class EmbeddingConfig:
     text_model: str = "Qwen/Qwen3-Embedding-8B"
     image_model: str = "tongyi-embedding-vision-plus"
     text_embedding_dim: int = 4096
-    image_embedding_dim: int = 1024
+    image_embedding_dim: int = 1152
     max_retries: int = 3
     retry_delay: float = 1.0
     timeout: float = 30.0

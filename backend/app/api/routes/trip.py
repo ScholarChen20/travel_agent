@@ -3,7 +3,7 @@
 import secrets
 import asyncio
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, requests
 from loguru import logger
 
 from ...models.schemas import TripRequest
@@ -13,14 +13,15 @@ from ...services.travel_plan_service import get_travel_plan_service
 from ...services.image_service import get_image_service
 from ...utils.response import ApiResponse
 from ...utils.cache_invalidator import get_cache_invalidator
-
+from pyrate_limiter import Duration, Limiter, Rate
+from fastapi_limiter.depends import RateLimiter
 router = APIRouter(prefix="/trip", tags=["旅行规划"])
-
 
 @router.post(
     "/plan",
     summary="生成旅行计划",
-    description="根据用户输入的旅行需求,生成详细的旅行计划。支持匿名和登录用户。"
+    description="根据用户输入的旅行需求,生成详细的旅行计划。支持匿名和登录用户。",
+    dependencies=[Depends(RateLimiter(limiter=Limiter(Rate(2, Duration.SECOND * 10))))]  # 10秒内最多请求2次
 )
 async def plan_trip(
     request: TripRequest,

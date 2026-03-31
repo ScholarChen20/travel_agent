@@ -13,9 +13,9 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from ...services.rag import (
-    RAGService,
+    HybridRAGService,
     RAGSearchResult,
-    get_rag_service
+    get_hybrid_rag_service
 )
 from ...utils.response import ApiResponse, ResponseCode
 
@@ -43,14 +43,14 @@ class IndexResult(BaseModel):
     data: Optional[dict] = None
 
 
-async def get_rag_service_instance() -> RAGService:
+async def get_hybrid_rag_service_instance() -> HybridRAGService:
     """获取RAG服务实例"""
-    return await get_rag_service()
+    return await get_hybrid_rag_service()
 
 
 @router.get("/health", summary="RAG服务健康检查")
 async def health_check(
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     检查RAG服务健康状态
@@ -70,7 +70,7 @@ async def health_check(
 
 @router.get("/stats", summary="获取RAG统计信息")
 async def get_stats(
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     获取RAG向量库统计信息
@@ -94,7 +94,7 @@ async def search_attractions(
     city: str = Query(..., description="城市名称", min_length=1, max_length=50),
     query: str = Query("", description="搜索关键词", max_length=200),
     n_results: int = Query(5, description="返回结果数量", ge=1, le=20),
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     搜索景点信息
@@ -126,7 +126,7 @@ async def search_food(
     city: str = Query(..., description="城市名称", min_length=1, max_length=50),
     query: str = Query("", description="搜索关键词", max_length=200),
     n_results: int = Query(5, description="返回结果数量", ge=1, le=20),
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     搜索美食推荐
@@ -156,7 +156,7 @@ async def search_hotels(
     city: str = Query(..., description="城市名称", min_length=1, max_length=50),
     query: str = Query("", description="搜索关键词", max_length=200),
     n_results: int = Query(5, description="返回结果数量", ge=1, le=20),
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     搜索酒店推荐
@@ -186,7 +186,7 @@ async def search_attraction_images(
     attraction_name: str = Query(..., description="景点名称", min_length=1, max_length=100),
     city: str = Query("", description="城市名称", max_length=50),
     n_results: int = Query(3, description="返回结果数量", ge=1, le=10),
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     搜索景点图片（Unsplash兜底方案）
@@ -215,7 +215,7 @@ async def search_attraction_images(
 async def get_travel_context(
     city: str = Query(..., description="城市名称", min_length=1, max_length=50),
     preferences: str = Query("", description="用户偏好，逗号分隔", max_length=500),
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     获取旅行上下文（用于LLM增强）
@@ -242,7 +242,7 @@ async def get_travel_context(
 
 @router.post("/cache/clear", summary="清空RAG缓存")
 async def clear_cache(
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     清空RAG服务缓存
@@ -260,7 +260,7 @@ async def clear_cache(
 @router.post("/search/multi", summary="综合搜索")
 async def multi_search(
     request: SearchRequest,
-    rag_service: RAGService = Depends(get_rag_service_instance)
+    rag_service: HybridRAGService = Depends(get_hybrid_rag_service_instance)
 ):
     """
     综合搜索景点、美食、酒店

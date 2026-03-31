@@ -16,7 +16,7 @@ from io import BytesIO
 
 from ..services.unsplash_service import get_unsplash_service
 from ..services.storage_service import get_storage_service
-from ..services.rag import RAGService, get_rag_service
+from ..services.rag import HybridRAGService, get_hybrid_rag_service
 
 
 class ImageService:
@@ -26,14 +26,14 @@ class ImageService:
         """初始化服务"""
         self.unsplash_service = get_unsplash_service()
         self.storage_service = get_storage_service()
-        self._rag_service: Optional[RAGService] = None
+        self._rag_service: Optional[HybridRAGService] = None
         logger.info("图片处理服务已初始化")
-    
-    async def _get_rag_service(self) -> Optional[RAGService]:
+
+    async def _get_rag_service(self) -> Optional[HybridRAGService]:
         """获取RAG服务实例（延迟初始化）"""
         if self._rag_service is None:
             try:
-                self._rag_service = await get_rag_service()
+                self._rag_service = await get_hybrid_rag_service()
                 logger.debug("RAG服务初始化成功")
             except Exception as e:
                 logger.warning(f"RAG服务初始化失败: {str(e)}")

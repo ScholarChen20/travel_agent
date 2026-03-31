@@ -1559,27 +1559,3 @@ class RAGMonitor:
 2. [ModelScope Embedding API](https://www.modelscope.cn/docs)
 3. [通义千问多模态嵌入](https://help.aliyun.com/document_detail/2712575.html)
 4. [RAG最佳实践](https://www.pinecone.io/learn/retrieval-augmented-generation/)
-
----
-
-## 💡 未来扩展
-
-### 1. 多模态检索
-- 支持图片搜索图片
-- 支持图片搜索文本
-- 支持文本搜索图片
-
-### 2. 个性化推荐
-- 基于用户历史检索
-- 基于用户偏好学习
-- 基于协同过滤
-
-### 3. 知识图谱
-- 构建景点关系图谱
-- 构建美食知识图谱
-- 支持复杂推理
-
-### 4. 实时更新
-- 定时爬取最新数据
-- 增量更新向量库
-- 热点数据优先处理

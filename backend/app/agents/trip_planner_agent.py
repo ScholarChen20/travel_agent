@@ -1,9 +1,10 @@
-"""多智能体旅行规划系统"""
+""""""
 
 import json
 import os
 import time
 import asyncio
+import re
 from typing import Dict, Any, List, Optional
 
 from hello_agents import SimpleAgent, ReActAgent
@@ -11,127 +12,127 @@ from hello_agents.tools import MCPTool
 from ..services.llm_service import get_llm
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
 from ..config import get_settings
-from ..services.rag import RAGService, get_rag_service
+from ..services.rag import HybridRAGService, RAGSearchResult, get_hybrid_rag_service
 
-# ============ Agent提示词 ============
+# ============ Agent ============
 
-ATTRACTION_AGENT_PROMPT = """你是景点搜索专家。你的任务是根据城市和用户偏好搜索合适的景点。
+ATTRACTION_AGENT_PROMPT = """
 
-**重要提示:**
-你必须使用工具来搜索景点!不要自己编造景点信息!
+**:**
+!!
 
-**工具调用格式:**
-使用maps_text_search工具时,必须严格按照以下格式:
-`[TOOL_CALL:amap_maps_text_search:keywords=景点关键词,city=城市名]`
+**:**
+maps_text_search,:
+`[TOOL_CALL:amap_maps_text_search:keywords=,city=]`
 
-**示例:**
-用户: "搜索北京的历史文化景点"
-你的回复: [TOOL_CALL:amap_maps_text_search:keywords=历史文化,city=北京]
+**:**
+: ""
+: [TOOL_CALL:amap_maps_text_search:keywords=,city=]
 
-用户: "搜索上海的公园"
-你的回复: [TOOL_CALL:amap_maps_text_search:keywords=公园,city=上海]
+: ""
+: [TOOL_CALL:amap_maps_text_search:keywords=,city=]
 
-**注意:**
-1. 必须使用工具,不要直接回答
-2. 格式必须完全正确,包括方括号和冒号
-3. 参数用逗号分隔
+**:**
+1. ,
+2. ,
+3. 
 """
 
-WEATHER_AGENT_PROMPT = """你是天气查询专家。你的任务是查询指定城市的天气信息。
+WEATHER_AGENT_PROMPT = """
 
-**重要提示:**
-你必须使用工具来查询天气!不要自己编造天气信息!
+**:**
+!!
 
-**工具调用格式:**
-使用maps_weather工具时,必须严格按照以下格式:
-`[TOOL_CALL:amap_maps_weather:city=城市名]`
+**:**
+maps_weather,:
+`[TOOL_CALL:amap_maps_weather:city=]`
 
-**示例:**
-用户: "查询北京天气"
-你的回复: [TOOL_CALL:amap_maps_weather:city=北京]
+**:**
+: ""
+: [TOOL_CALL:amap_maps_weather:city=]
 
-用户: "上海的天气怎么样"
-你的回复: [TOOL_CALL:amap_maps_weather:city=上海]
+: ""
+: [TOOL_CALL:amap_maps_weather:city=]
 
-**注意:**
-1. 必须使用工具,不要直接回答
-2. 格式必须完全正确,包括方括号和冒号
+**:**
+1. ,
+2. ,
 """
 
-HOTEL_AGENT_PROMPT = """你是酒店推荐专家。你的任务是根据城市和景点位置推荐合适的酒店。
+HOTEL_AGENT_PROMPT = """
 
-**重要提示:**
-你必须使用工具来搜索酒店!不要自己编造酒店信息!
+**:**
+!!
 
-**工具调用格式:**
-使用maps_text_search工具搜索酒店时,必须严格按照以下格式:
-`[TOOL_CALL:amap_maps_text_search:keywords=酒店,city=城市名]`
+**:**
+maps_text_search,:
+`[TOOL_CALL:amap_maps_text_search:keywords=,city=]`
 
-**示例:**
-用户: "搜索北京的酒店"
-你的回复: [TOOL_CALL:amap_maps_text_search:keywords=酒店,city=北京]
+**:**
+: ""
+: [TOOL_CALL:amap_maps_text_search:keywords=,city=]
 
-**注意:**
-1. 必须使用工具,不要直接回答
-2. 格式必须完全正确,包括方括号和冒号
-3. 关键词使用"酒店"或"宾馆"
+**:**
+1. ,
+2. ,
+3. """"
 """
 
-PLANNER_AGENT_PROMPT = """你是行程规划专家。你的任务是根据景点信息和天气信息,生成详细的旅行计划。
+PLANNER_AGENT_PROMPT = """,
 
-请严格按照以下JSON格式返回旅行计划:
+JSON:
 ```json
 {
-  "city": "城市名称",
+  "city": "",
   "start_date": "YYYY-MM-DD",
   "end_date": "YYYY-MM-DD",
   "days": [
     {
       "date": "YYYY-MM-DD",
       "day_index": 0,
-      "description": "第1天行程概述",
-      "transportation": "交通方式",
-      "accommodation": "住宿类型",
+      "description": "1",
+      "transportation": "",
+      "accommodation": "",
       "hotel": {
-        "name": "酒店名称",
-        "address": "酒店地址",
+        "name": "",
+        "address": "",
         "location": {"longitude": 116.397128, "latitude": 39.916527},
-        "price_range": "300-500元",
+        "price_range": "300-500",
         "rating": "4.5",
-        "distance": "距离景点2公里",
-        "type": "经济型酒店",
+        "distance": "2",
+        "type": "",
         "estimated_cost": 400
       },
       "attractions": [
         {
-          "name": "景点名称",
-          "address": "详细地址",
+          "name": "",
+          "address": "",
           "location": {"longitude": 116.397128, "latitude": 39.916527},
           "visit_duration": 120,
-          "description": "景点详细描述",
-          "category": "景点类别",
+          "description": "",
+          "category": "",
           "ticket_price": 60
         }
       ],
       "meals": [
-        {"type": "breakfast", "name": "早餐推荐", "description": "早餐描述", "estimated_cost": 30},
-        {"type": "lunch", "name": "午餐推荐", "description": "午餐描述", "estimated_cost": 50},
-        {"type": "dinner", "name": "晚餐推荐", "description": "晚餐描述", "estimated_cost": 80}
+        {"type": "breakfast", "name": "", "description": "", "estimated_cost": 30},
+        {"type": "lunch", "name": "", "description": "", "estimated_cost": 50},
+        {"type": "dinner", "name": "", "description": "", "estimated_cost": 80}
       ]
     }
   ],
   "weather_info": [
     {
       "date": "YYYY-MM-DD",
-      "day_weather": "晴",
-      "night_weather": "多云",
+      "day_weather": "",
+      "night_weather": "",
       "day_temp": 25,
       "night_temp": 15,
-      "wind_direction": "南风",
-      "wind_power": "1-3级"
+      "wind_direction": "",
+      "wind_power": "1-3"
     }
   ],
-  "overall_suggestions": "总体建议",
+  "overall_suggestions": "",
   "budget": {
     "total_attractions": 180,
     "total_hotels": 1200,
@@ -142,263 +143,370 @@ PLANNER_AGENT_PROMPT = """你是行程规划专家。你的任务是根据景点
 }
 ```
 
-**重要提示:**
-1. weather_info数组必须包含每一天的天气信息
-2. 温度必须是纯数字(不要带°C等单位)
-3. 每天安排2-3个景点
-4. 考虑景点之间的距离和游览时间
-5. 每天必须包含早中晚三餐
-6. 提供实用的旅行建议
-7. **必须包含预算信息**:
-   - 景点门票价格(ticket_price)
-   - 餐饮预估费用(estimated_cost)
-   - 酒店预估费用(estimated_cost)
-   - 预算汇总(budget)包含各项总费用
+**:**
+1. weather_info
+2. (°C)
+3. 2-3
+4. 
+5. 
+6. 
+7. ****:
+   - (ticket_price)
+   - (estimated_cost)
+   - (estimated_cost)
+   - (budget)
 """
 
 
 class MultiAgentTripPlanner:
-    """多智能体旅行规划系统"""
+    """"""
 
     def __init__(self):
-        """初始化多智能体系统"""
-        print("🔄 开始初始化多智能体旅行规划系统...")
+        """"""
+        print("[INFO] ...")
 
         try:
             settings = get_settings()
             self.llm = get_llm()
-            
-            self._rag_service: Optional[RAGService] = None
 
-            # 创建共享的MCP工具(只创建一次)
-            print("  - 创建共享MCP工具...")
+            # RAG
+            self._rag_service: Optional[HybridRAGService] = None
+
+            # MCP()
+            print("  - MCP...")
             self.amap_tool = MCPTool(
                 name="amap",
-                description="高德地图服务",
+                description="",
                 server_command=["uvx", "amap-mcp-server"],
                 env={"AMAP_MAPS_API_KEY": os.getenv("AMAP_MAPS_API_KEY")},
                 auto_expand=True
             )
 
-            # 创建景点搜索Agent
-            print("  - 创建景点搜索Agent...")
+            # Agent
+            print("  - Agent...")
             self.attraction_agent = ReActAgent(
-                name="景点搜索专家",
+                name="",
                 llm=self.llm,
-                system_prompt=ATTRACTION_AGENT_PROMPT
+                system_prompt=ATTRACTION_AGENT_PROMPT,
             )
             self.attraction_agent.add_tool(self.amap_tool)
 
-            # 创建天气查询Agent
-            print("  - 创建天气查询Agent...")
+            # Agent
+            print("  - Agent...")
             self.weather_agent = SimpleAgent(
-                name="天气查询专家",
+                name="",
                 llm=self.llm,
                 system_prompt=WEATHER_AGENT_PROMPT
             )
             self.weather_agent.add_tool(self.amap_tool)
 
-            # 创建酒店推荐Agent
-            print("  - 创建酒店推荐Agent...")
+            # Agent
+            print("  - Agent...")
             self.hotel_agent = SimpleAgent(
-                name="酒店推荐专家",
+                name="",
                 llm=self.llm,
                 system_prompt=HOTEL_AGENT_PROMPT
             )
             self.hotel_agent.add_tool(self.amap_tool)
 
-            # 创建行程规划Agent(不需要工具)
-            print("  - 创建行程规划Agent...")
+            # Agent()
+            print("  - Agent...")
             self.planner_agent = SimpleAgent(
-                name="行程规划专家",
+                name="",
                 llm=self.llm,
                 system_prompt=PLANNER_AGENT_PROMPT
             )
 
-            print(f"✅ 多智能体系统初始化成功")
-            print(f"   景点搜索Agent: {len(self.attraction_agent.list_tools())} 个工具")
-            print(f"   天气查询Agent: {len(self.weather_agent.list_tools())} 个工具")
-            print(f"   酒店推荐Agent: {len(self.hotel_agent.list_tools())} 个工具")
+            print("[OK] ")
+            print(f"   Agent: {len(self.attraction_agent.list_tools())} ")
+            print(f"   Agent: {len(self.weather_agent.list_tools())} ")
+            print(f"   Agent: {len(self.hotel_agent.list_tools())} ")
 
         except Exception as e:
-            print(f"❌ 多智能体系统初始化失败: {str(e)}")
+            print(f"[ERROR] : {str(e)}")
             import traceback
             traceback.print_exc()
             raise
-    
-    async def _get_rag_service(self) -> Optional[RAGService]:
-        """获取RAG服务实例（延迟初始化）"""
+
+    async def _get_rag_service(self) -> Optional[HybridRAGService]:
+        """RAG"""
         if self._rag_service is None:
             try:
-                self._rag_service = await get_rag_service()
-                print("✅ RAG服务初始化成功")
+                self._rag_service = await get_hybrid_rag_service()
+                print("[OK] RAG")
             except Exception as e:
-                print(f"⚠️ RAG服务初始化失败: {str(e)}")
+                print(f"[WARN] RAG: {str(e)}")
                 return None
         return self._rag_service
-    
-    async def _get_rag_context(self, city: str, preferences: List[str] = None) -> str:
+
+    def _remove_emoji(self, text: str) -> str:
+        """emoji"""
+        emoji_pattern = re.compile(
+            "["
+            "\U0001F600-\U0001F64F"  # emoticons
+            "\U0001F300-\U0001F5FF"  # symbols & pictographs
+            "\U0001F680-\U0001F6FF"  # transport & map symbols
+            "\U0001F1E0-\U0001F1FF"  # flags
+            "\U00002702-\U000027B0"
+            "\U000024C2-\U0001F251"
+            "]+",
+            flags=re.UNICODE
+        )
+        return emoji_pattern.sub('', text)
+
+    async def _search_rag_posts(
+        self,
+        query: str,
+        city: Optional[str] = None,
+        n_results: int = 5,
+        credibility_threshold: float = 0.2
+    ) -> List[RAGSearchResult]:
         """
-        从RAG获取旅行上下文
-        
+        RAG
+
         Args:
-            city: 城市名称
-            preferences: 用户偏好
-            
+            query: 
+            city: 
+            n_results: 
+            credibility_threshold: 
+
         Returns:
-            RAG上下文文本
+            
         """
         try:
             rag_service = await self._get_rag_service()
             if rag_service is None:
-                return ""
-            
-            context = await rag_service.get_travel_context(city, preferences)
-            return context
+                return []
+
+            # 
+            if city:
+                results = await rag_service.search_by_city(query, city, n_results)
+            else:
+                results = await rag_service.search(
+                    query,
+                    n_results=n_results,
+                    credibility_threshold=credibility_threshold
+                )
+
+            return results
+
         except Exception as e:
-            print(f"⚠️ 获取RAG上下文失败: {str(e)}")
+            print(f"[WARN] RAG: {str(e)}")
+            return []
+
+    def _format_rag_results_for_context(self, results: List[RAGSearchResult]) -> str:
+        """
+        RAG
+
+        Args:
+            results: RAG
+
+        Returns:
+            
+        """
+        if not results:
+            return ""
+
+        context_parts = []
+        for i, result in enumerate(results, 1):
+            # emoji
+            title = self._remove_emoji(result.title)
+            content = self._remove_emoji(result.content)
+
+            # 
+            if len(content) > 500:
+                content = content[:500] + "..."
+
+            context_parts.append(f"""
+{i}(: {result.credibility:.2f})
+: {title}
+: {', '.join(result.tags[:5])}
+: {content}
+""")
+
+        return "\n".join(context_parts)
+
+    async def _get_rag_context(self, city: str, preferences: List[str] = None) -> str:
+        """
+        RAG
+
+        Args:
+            city: 
+            preferences: 
+
+        Returns:
+            RAG
+        """
+        try:
+            # 
+            query_parts = [city]
+            if preferences:
+                query_parts.extend(preferences[:3])  # 3
+
+            query = " ".join(query_parts)
+
+            # 
+            results = await self._search_rag_posts(
+                query=query,
+                city=city,
+                n_results=8,
+                credibility_threshold=0.2
+            )
+
+            if not results:
+                print(f"[WARN] RAG {city} ")
+                return ""
+
+            # 
+            context = self._format_rag_results_for_context(results)
+            print(f"[OK] RAG {len(results)} ")
+
+            return context
+
+        except Exception as e:
+            print(f"[WARN] RAG: {str(e)}")
             return ""
     
     async def plan_trip(self, request: TripRequest) -> TripPlan:
         """
-        使用多智能体协作生成旅行计划
+        
 
         Args:
-            request: 旅行请求
+            request: 
 
         Returns:
-            旅行计划
+            
         """
         try:
             print(f"\n{'='*60}")
-            print(f"🚀 开始多智能体协作规划旅行...")
-            print(f"目的地: {request.city}")
-            print(f"日期: {request.start_date} 至 {request.end_date}")
-            print(f"天数: {request.travel_days}天")
-            print(f"偏好: {', '.join(request.preferences) if request.preferences else '无'}")
+            print(f"[START] ...")
+            print(f": {request.city}")
+            print(f": {request.start_date}  {request.end_date}")
+            print(f": {request.travel_days}")
+            print(f": {', '.join(request.preferences) if request.preferences else ''}")
             print(f"{'='*60}\n")
 
-            # 步骤0: 从RAG获取旅行上下文（新增）
-            print("📚 步骤0: 获取RAG旅行上下文...")
+            # 0: RAG
+            print("[STEP0] RAG...")
             rag_context = await self._get_rag_context(request.city, request.preferences)
             if rag_context:
-                print(f"RAG上下文获取成功，长度: {len(rag_context)}")
+                print(f"RAG: {len(rag_context)}")
             else:
-                print("RAG上下文获取失败或为空，将使用基础规划")
+                print("RAG")
 
-            # 步骤1: 景点搜索Agent搜索景点
-            print("📍 步骤1: 搜索景点...")
+            # 1: Agent
+            print("[STEP1] ...")
             attraction_query = self._build_attraction_query(request)
             attraction_response = await asyncio.to_thread(self.attraction_agent.run, attraction_query)
-            print(f"景点搜索结果: {attraction_response[:200]}...\n")
+            print(f": {attraction_response[:200]}...\n")
 
-            # 步骤2: 天气查询Agent查询天气
-            print("🌤️  步骤2: 查询天气...")
-            weather_query = f"请查询{request.city}的天气信息"
+            # 2: Agent
+            print("[STEP2] ...")
+            weather_query = f"{request.city}"
             weather_response = await asyncio.to_thread(self.weather_agent.run, weather_query)
-            print(f"天气查询结果: {weather_response[:200]}...\n")
+            print(f": {weather_response[:200]}...\n")
 
-            # 步骤3: 酒店推荐Agent搜索酒店
-            print("🏨 步骤3: 搜索酒店...")
-            hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
+            # 3: Agent
+            print("[STEP3] ...")
+            hotel_query = f"{request.city}{request.accommodation}"
             hotel_response = await asyncio.to_thread(self.hotel_agent.run, hotel_query)
-            print(f"酒店搜索结果: {hotel_response[:200]}...\n")
+            print(f": {hotel_response[:200]}...\n")
 
-            # 步骤4: 行程规划Agent整合信息生成计划
-            print("📋 步骤4: 生成行程计划...")
+            # 4: Agent
+            print("[STEP4] ...")
             planner_query = self._build_planner_query(request, attraction_response, weather_response, hotel_response, rag_context)
             planner_response = await asyncio.to_thread(self.planner_agent.run, planner_query)
-            print(f"行程规划结果: {planner_response[:300]}...\n")
+            print(f": {planner_response[:300]}...\n")
 
-            # 解析最终计划
+            # 
             trip_plan = self._parse_response(planner_response, request)
 
             print(f"{'='*60}")
-            print(f"✅ 旅行计划生成完成!")
+            print(f"[OK] !")
             print(f"{'='*60}\n")
 
             return trip_plan
 
         except Exception as e:
-            print(f"❌ 生成旅行计划失败: {str(e)}")
+            print(f"[ERROR] : {str(e)}")
             import traceback
             traceback.print_exc()
             return self._create_fallback_plan(request)
     
     def _build_attraction_query(self, request: TripRequest) -> str:
-        """构建景点搜索查询 - 直接包含工具调用"""
+        """ - """
         keywords = []
         if request.preferences:
-            # 只取第一个偏好作为关键词
+            # 
             keywords = request.preferences[0]
         else:
-            keywords = "景点"
+            keywords = ""
 
-        # 直接返回工具调用格式
-        query = f"请使用amap_maps_text_search工具搜索{request.city}的{keywords}相关景点。\n[TOOL_CALL:amap_maps_text_search:keywords={keywords},city={request.city}]"
+        # 
+        query = f"amap_maps_text_search{request.city}{keywords}\n[TOOL_CALL:amap_maps_text_search:keywords={keywords},city={request.city}]"
         return query
 
     def _build_planner_query(self, request: TripRequest, attractions: str, weather: str, hotels: str = "", rag_context: str = "") -> str:
-        """构建行程规划查询"""
-        query = f"""请根据以下信息生成{request.city}的{request.travel_days}天旅行计划:
+        """"""
+        query = f"""{request.city}{request.travel_days}:
 
-**基本信息:**
-- 城市: {request.city}
-- 日期: {request.start_date} 至 {request.end_date}
-- 天数: {request.travel_days}天
-- 交通方式: {request.transportation}
-- 住宿: {request.accommodation}
-- 偏好: {', '.join(request.preferences) if request.preferences else '无'}
+**:**
+- : {request.city}
+- : {request.start_date}  {request.end_date}
+- : {request.travel_days}
+- : {request.transportation}
+- : {request.accommodation}
+- : {', '.join(request.preferences) if request.preferences else ''}
 
-**景点信息:**
+**:**
 {attractions}
 
-**天气信息:**
+**:**
 {weather}
 
-**酒店信息:**
+**:**
 {hotels}
 """
         if rag_context:
             query += f"""
-**RAG参考信息（来自小红书真实游记）:**
+**RAG:**
 {rag_context}
 
-**RAG信息使用说明:**
-1. 参考RAG中的热门景点推荐，优先安排评分高的景点
-2. 参考RAG中的美食推荐，安排当地特色美食
-3. 参考RAG中的酒店推荐，选择性价比高的住宿
-4. 结合RAG中的旅行贴士，提供实用建议
+**RAG:**
+1. RAG
+2. RAG
+3. RAG
+4. RAG
 """
 
         query += """
-**要求:**
-1. 每天安排2-3个景点
-2. 每天必须包含早中晚三餐
-3. 每天推荐一个具体的酒店(从酒店信息中选择)
-4. 考虑景点之间的距离和交通方式
-5. 返回完整的JSON格式数据
-6. 景点的经纬度坐标要真实准确
+**:**
+1. 2-3
+2. 
+3. ()
+4. 
+5. JSON
+6. 
 """
         if request.free_text_input:
-            query += f"\n**额外要求:** {request.free_text_input}"
+            query += f"\n**:** {request.free_text_input}"
 
         return query
     
     def _parse_response(self, response: str, request: TripRequest) -> TripPlan:
         """
-        解析Agent响应
+        Agent
         
         Args:
-            response: Agent响应文本
-            request: 原始请求
+            response: Agent
+            request: 
             
         Returns:
-            旅行计划
+            
         """
         try:
-            # 尝试从响应中提取JSON
-            # 查找JSON代码块
+            # JSON
+            # JSON
             if "```json" in response:
                 json_start = response.find("```json") + 7
                 json_end = response.find("```", json_start)
@@ -408,34 +516,34 @@ class MultiAgentTripPlanner:
                 json_end = response.find("```", json_start)
                 json_str = response[json_start:json_end].strip()
             elif "{" in response and "}" in response:
-                # 直接查找JSON对象
+                # JSON
                 json_start = response.find("{")
                 json_end = response.rfind("}") + 1
                 json_str = response[json_start:json_end]
             else:
-                raise ValueError("响应中未找到JSON数据")
+                raise ValueError("JSON")
             
-            # 解析JSON
+            # JSON
             data = json.loads(json_str)
             
-            # 转换为TripPlan对象
+            # TripPlan
             trip_plan = TripPlan(**data)
             
             return trip_plan
             
         except Exception as e:
-            print(f"⚠️  解析响应失败: {str(e)}")
-            print(f"   将使用备用方案生成计划")
+            print(f"[WARN] : {str(e)}")
+            print(f"   ")
             return self._create_fallback_plan(request)
     
     def _create_fallback_plan(self, request: TripRequest) -> TripPlan:
-        """创建备用计划(当Agent失败时)"""
+        """(Agent)"""
         from datetime import datetime, timedelta
         
-        # 解析日期
+        # 
         start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
         
-        # 创建每日行程
+        # 
         days = []
         for i in range(request.travel_days):
             current_date = start_date + timedelta(days=i)
@@ -443,24 +551,24 @@ class MultiAgentTripPlanner:
             day_plan = DayPlan(
                 date=current_date.strftime("%Y-%m-%d"),
                 day_index=i,
-                description=f"第{i+1}天行程",
+                description=f"{i+1}",
                 transportation=request.transportation,
                 accommodation=request.accommodation,
                 attractions=[
                     Attraction(
-                        name=f"{request.city}景点{j+1}",
-                        address=f"{request.city}市",
+                        name=f"{request.city}{j+1}",
+                        address=f"{request.city}",
                         location=Location(longitude=116.4 + i*0.01 + j*0.005, latitude=39.9 + i*0.01 + j*0.005),
                         visit_duration=120,
-                        description=f"这是{request.city}的著名景点",
-                        category="景点"
+                        description=f"{request.city}",
+                        category=""
                     )
                     for j in range(2)
                 ],
                 meals=[
-                    Meal(type="breakfast", name=f"第{i+1}天早餐", description="当地特色早餐"),
-                    Meal(type="lunch", name=f"第{i+1}天午餐", description="午餐推荐"),
-                    Meal(type="dinner", name=f"第{i+1}天晚餐", description="晚餐推荐")
+                    Meal(type="breakfast", name=f"{i+1}", description=""),
+                    Meal(type="lunch", name=f"{i+1}", description=""),
+                    Meal(type="dinner", name=f"{i+1}", description="")
                 ]
             )
             days.append(day_plan)
@@ -471,16 +579,16 @@ class MultiAgentTripPlanner:
             end_date=request.end_date,
             days=days,
             weather_info=[],
-            overall_suggestions=f"这是为您规划的{request.city}{request.travel_days}日游行程,建议提前查看各景点的开放时间。"
+            overall_suggestions=f"{request.city}{request.travel_days},"
         )
 
 
-# 全局多智能体系统实例
+# 
 _multi_agent_planner = None
 
 
 def get_trip_planner_agent() -> MultiAgentTripPlanner:
-    """获取多智能体旅行规划系统实例(单例模式)"""
+    """()"""
     global _multi_agent_planner
 
     if _multi_agent_planner is None:
@@ -489,67 +597,96 @@ def get_trip_planner_agent() -> MultiAgentTripPlanner:
     return _multi_agent_planner
 
 
-# ============ 对话式多智能体系统 ============
+# ============  ============
 
-INTENT_DETECTION_PROMPT = """你是意图识别专家。分析用户消息并识别意图类型。
+INTENT_DETECTION_PROMPT = """
 
-**意图类型:**
-1. trip_planning - 用户想要规划新的旅行
-2. info_query - 用户查询景点/天气/酒店/美食信息，或询问某个地方的介绍
-3. plan_modification - 用户想要修改已有计划
-4. general_chat - 一般对话
+**:**
+1. trip_planning - 
+2. info_query - ///
+3. plan_modification - 
+4. general_chat - 
 
-**示例:**
-用户: "我想去北京玩3天" -> trip_planning
-用户: "故宫的门票多少钱" -> info_query
-用户: "故宫有什么好玩的" -> info_query
-用户: "介绍一下西湖" -> info_query
-用户: "北京有哪些景点" -> info_query
-用户: "把第二天的行程改一下" -> plan_modification
-用户: "你好" -> general_chat
+**:**
+: "3" -> trip_planning
+: "" -> info_query
+: "" -> info_query
+: "" -> info_query
+: "" -> info_query
+: "" -> plan_modification
+: "" -> general_chat
 
-只返回意图类型,不要其他内容。"""
+,"""
 
 
-GENERAL_CHAT_PROMPT = """你是一个专业的智能旅行规划助手，拥有丰富的旅行知识。你能够：
-1. 介绍各地景点、文化、美食、风俗
-2. 解答旅行相关问题（签证、交通、住宿等）
-3. 提供旅行建议和攻略
-4. 进行友好的日常对话
+GENERAL_CHAT_PROMPT = """
+1. 
+2. 
+3. 
+4. 
 
-请根据用户的问题，给出详细、准确、实用的回答。语气友好自然，用中文回答。"""
+****
+RAG
+1. 
+2. 
+3. 
+4. 
+
+"""
+
+
+RAG_ENHANCED_INFO_PROMPT = """RAG
+
+****
+1. RAG
+2. 
+3. RAG""
+4. 
+5. """
 
 
 class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
-    """对话式多智能体旅行规划系统"""
+    """"""
 
     def __init__(self, dialog_service):
         """
-        初始化对话式系统
+        
 
         Args:
-            dialog_service: 对话服务实例
+            dialog_service: 
         """
         super().__init__()
         self.dialog_service = dialog_service
-        
-        # 创建意图识别Agent
+
+        # Agent
         self.intent_agent = SimpleAgent(
-            name="意图识别专家",
+            name="",
             llm=self.llm,
             system_prompt=INTENT_DETECTION_PROMPT
         )
 
-        # 创建通用对话Agent（处理景点介绍、旅行问答等）
+        # RAGAgent
+        try:
+            self.rag_info_agent = SimpleAgent(
+                name="RAG",
+                llm=self.llm,
+                system_prompt=RAG_ENHANCED_INFO_PROMPT
+            )
+            print("[OK] RAGAgent")
+        except Exception as e:
+            print(f"[WARN] RAGAgent: {str(e)}")
+            self.rag_info_agent = None
+
+        # Agent
         try:
             self.general_chat_agent = ReActAgent(
-                name="旅行问答专家",
+                name="",
                 llm=self.llm,
                 system_prompt=GENERAL_CHAT_PROMPT
             )
-            print("✅ 对话式多智能体系统初始化成功")
+            print("[OK] ")
         except Exception as e:
-            print(f"❌ 创建通用对话Agent失败: {str(e)}")
+            print(f"[ERROR] Agent: {str(e)}")
             import traceback
             traceback.print_exc()
             raise
@@ -561,32 +698,32 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         user_message: str
     ) -> Dict[str, Any]:
         """
-        处理多轮对话
+        
 
         Args:
-            session_id: 会话ID
-            user_id: 用户ID
-            user_message: 用户消息
+            session_id: ID
+            user_id: ID
+            user_message: 
 
         Returns:
-            Dict: 响应结果
+            Dict: 
         """
         try:
-            # 1. 保存用户消息
+            # 1. 
             await self.dialog_service.add_message(
                 session_id=session_id,
                 role="user",
                 content=user_message
             )
 
-            # 2. 获取会话上下文
+            # 2. 
             context = await self.dialog_service.get_session_context(session_id)
 
-            # 3. 意图识别
+            # 3. 
             intent = await self._detect_intent(user_message, context)
 
 
-            # 4. 根据意图路由到对应处理器
+            # 4. 
             if intent == "trip_planning":
                 response = await self._handle_trip_planning(session_id, user_id, user_message, context)
             elif intent == "info_query":
@@ -596,7 +733,7 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
             else:
                 response = await self._handle_general_chat(session_id, user_id, user_message, context)
 
-            # 5. 保存助手响应
+            # 5. 
             await self.dialog_service.add_message(
                 session_id=session_id,
                 role="assistant",
@@ -607,32 +744,32 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
             return response
 
         except Exception as e:
-            print(f"❌ 对话处理失败: {str(e)}")
+            print(f"[ERROR] : {str(e)}")
             import traceback
             traceback.print_exc()
             raise
 
     async def _detect_intent(self, user_message: str, context: Dict[str, Any]) -> str:
         """
-        检测用户意图
+        
 
         Args:
-            user_message: 用户消息
-            context: 会话上下文
+            user_message: 
+            context: 
 
         Returns:
-            str: 意图类型
+            str: 
         """
         try:
-            # 构建意图识别查询
-            query = f"用户消息: {user_message}"
+            # 
+            query = f": {user_message}"
 
-            # 使用 to_thread 避免阻塞事件循环
+            #  to_thread 
             start_time = time.time()
             intent_response = await asyncio.to_thread(self.intent_agent.run, query)
             execution_time = (time.time() - start_time) * 1000
 
-            # 记录工具调用
+            # 
             await self.dialog_service.log_tool_call(
                 session_id=context["session_id"],
                 tool_name="intent_detection",
@@ -642,7 +779,7 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
                 status="success"
             )
 
-            # 提取意图
+            # 
             intent = intent_response.strip().lower()
             if "trip_planning" in intent:
                 return "trip_planning"
@@ -654,29 +791,29 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
                 return "general_chat"
 
         except Exception as e:
-            print(f"⚠️  意图识别失败: {str(e)}")
+            print(f"[WARN] : {str(e)}")
             return "general_chat"
 
     def _extract_city_from_message(self, message: str) -> Optional[str]:
         """
-        从用户消息中提取城市名
+        
 
         Args:
-            message: 用户消息
+            message: 
 
         Returns:
-            Optional[str]: 城市名，如果未找到则返回None
+            Optional[str]: None
         """
-        # 常见城市列表
+        # 
         cities = [
-            "北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "成都",
-            "重庆", "武汉", "西安", "天津", "青岛", "大连", "厦门", "宁波",
-            "长沙", "郑州", "济南", "哈尔滨", "沈阳", "福州", "石家庄", "合肥",
-            "南昌", "昆明", "贵阳", "兰州", "太原", "乌鲁木齐", "拉萨", "呼和浩特",
-            "银川", "西宁", "海口", "三亚", "桂林", "丽江", "大理", "香格里拉"
+            "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", ""
         ]
 
-        # 在消息中查找城市名
+        # 
         for city in cities:
             if city in message:
                 return city
@@ -691,31 +828,67 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        处理旅行规划请求
+        RAG
 
         Args:
-            session_id: 会话ID
-            user_id: 用户ID
-            user_message: 用户消息
-            context: 会话上下文
+            session_id: ID
+            user_id: ID
+            user_message: 
+            context: 
 
         Returns:
-            Dict: 响应结果
+            Dict: 
         """
         try:
-            # 从消息中提取旅行参数（简化版，实际应该用更复杂的NLP）
-            # 这里返回引导用户提供完整信息
-            response_message = "好的，我来帮您规划旅行！请告诉我：\n1. 目的地城市\n2. 出发日期\n3. 旅行天数\n4. 您的偏好（如历史文化、自然风光等）"
+            start_time = time.time()
+
+            # 
+            city = self._extract_city_from_message(user_message)
+
+            # RAG
+            rag_context = ""
+            if city:
+                rag_results = await self._search_rag_posts(
+                    query=f"{city}  ",
+                    city=city,
+                    n_results=5,
+                    credibility_threshold=0.2
+                )
+                rag_context = self._format_rag_results_for_context(rag_results)
+
+                await self.dialog_service.log_tool_call(
+                    session_id=session_id,
+                    tool_name="rag_trip_planning",
+                    input_params={"city": city},
+                    output_result=f" {len(rag_results)} ",
+                    execution_time_ms=(time.time() - start_time) * 1000,
+                    status="success"
+                )
+
+            # 
+            if rag_context:
+                response_message = f"""{city if city else ''}
+
+
+
+{rag_context[:500] if len(rag_context) > 500 else rag_context}
+
+
+1. 
+2. 
+3. """
+            else:
+                response_message = "\n1. \n2. \n3. \n4. "
 
             return {
                 "session_id": session_id,
                 "message": response_message,
                 "intent": "trip_planning",
-                "suggestions": ["北京3日游", "上海2日游", "成都4日游"]
+                "suggestions": ["3", "2", "4"]
             }
 
         except Exception as e:
-            print(f"❌ 处理旅行规划失败: {str(e)}")
+            print(f"[ERROR] : {str(e)}")
             raise
 
     async def _handle_info_query(
@@ -726,36 +899,36 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        处理信息查询请求
+        RAG
 
         Args:
-            session_id: 会话ID
-            user_id: 用户ID
-            user_message: 用户消息
-            context: 会话上下文
+            session_id: ID
+            user_id: ID
+            user_message: 
+            context: 
 
         Returns:
-            Dict: 响应结果
+            Dict: 
         """
         try:
-            # 判断查询类型
-            if "天气" in user_message:
-                # 提取城市名
-                city = self._extract_city_from_message(user_message)
+            # 
+            city = self._extract_city_from_message(user_message)
+
+            # 
+            if "" in user_message:
                 if not city:
                     return {
                         "session_id": session_id,
-                        "message": "请告诉我您想查询哪个城市的天气？",
+                        "message": "",
                         "intent": "info_query",
-                        "suggestions": ["北京天气", "上海天气", "南京天气"]
+                        "suggestions": ["", "", ""]
                     }
 
                 start_time = time.time()
-                weather_query = f"请查询{city}的天气信息"
+                weather_query = f"{city}"
                 weather_response = await asyncio.to_thread(self.weather_agent.run, weather_query)
                 execution_time = (time.time() - start_time) * 1000
 
-                # 记录工具调用
                 await self.dialog_service.log_tool_call(
                     session_id=session_id,
                     tool_name="weather_query",
@@ -765,49 +938,112 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
                     status="success"
                 )
 
-                response_message = f"为您查询到{city}的天气信息：\n{weather_response}"
+                response_message = f"{city}\n{weather_response}"
 
-            elif any(kw in user_message for kw in ["景点", "门票", "好玩", "介绍", "推荐", "哪里好", "去哪", "参观"]):
-                # 景点/地点查询
-                city = self._extract_city_from_message(user_message)
-                if city:
-                    start_time = time.time()
-                    attraction_query = f"请搜索{city}的景点：\n[TOOL_CALL:amap_maps_text_search:keywords=景点,city={city}]"
-                    attraction_response = await asyncio.to_thread(self.attraction_agent.run, attraction_query)
-                    execution_time = (time.time() - start_time) * 1000
+            elif any(kw in user_message for kw in ["", "", "", "", "", "", "", "", "", "", ""]):
+                # // - RAG
+                start_time = time.time()
 
+                # 1. RAG
+                rag_results = await self._search_rag_posts(
+                    query=user_message,
+                    city=city,
+                    n_results=5,
+                    credibility_threshold=0.2
+                )
+
+                rag_context = self._format_rag_results_for_context(rag_results)
+
+                execution_time_rag = (time.time() - start_time) * 1000
+                await self.dialog_service.log_tool_call(
+                    session_id=session_id,
+                    tool_name="rag_search",
+                    input_params={"query": user_message, "city": city},
+                    output_result=f" {len(rag_results)} ",
+                    execution_time_ms=execution_time_rag,
+                    status="success"
+                )
+
+                # 2. 
+                if rag_context:
+                    # RAGRAGAgent
+                    enhanced_query = f"""
+{user_message}
+{city if city else ""}
+
+RAG
+{rag_context}
+
+
+"""
+                    if self.rag_info_agent:
+                        response_message = await asyncio.to_thread(
+                            self.rag_info_agent.run, enhanced_query
+                        )
+                    else:
+                        response_message = await asyncio.to_thread(
+                            self.general_chat_agent.run, enhanced_query
+                        )
+
+                    execution_time_llm = (time.time() - start_time) * 1000
                     await self.dialog_service.log_tool_call(
                         session_id=session_id,
-                        tool_name="attraction_query",
-                        input_params={"city": city, "query": user_message},
-                        output_result=attraction_response,
-                        execution_time_ms=execution_time,
+                        tool_name="rag_enhanced_llm",
+                        input_params={"query": user_message},
+                        output_result=response_message[:200],
+                        execution_time_ms=execution_time_llm,
                         status="success"
                     )
-                    response_message = f"为您查询到{city}的景点信息：\n{attraction_response}"
                 else:
-                    # 没有提取到城市，用通用Agent回答
-                    response_message = await asyncio.to_thread(
-                        self.general_chat_agent.run,
-                        f"用户问题：{user_message}\n请详细回答。"
-                    )
+                    # RAG
+                    if city and any(kw in user_message for kw in ["", "", "", ""]):
+                        attraction_query = f"{city}\n[TOOL_CALL:amap_maps_text_search:keywords=,city={city}]"
+                        attraction_response = await asyncio.to_thread(self.attraction_agent.run, attraction_query)
+                        response_message = f"{city}\n{attraction_response}"
+                    else:
+                        response_message = await asyncio.to_thread(
+                            self.general_chat_agent.run,
+                            f"{user_message}\n"
+                        )
 
             else:
-                # 其他信息查询，用通用Agent回答
-                response_message = await asyncio.to_thread(
-                    self.general_chat_agent.run,
-                    f"用户问题：{user_message}\n请详细回答。"
+                # RAG
+                rag_results = await self._search_rag_posts(
+                    query=user_message,
+                    city=city,
+                    n_results=3,
+                    credibility_threshold=0.2
                 )
+
+                rag_context = self._format_rag_results_for_context(rag_results)
+
+                if rag_context:
+                    enhanced_query = f"""
+{user_message}
+
+RAG
+{rag_context}
+
+
+"""
+                    response_message = await asyncio.to_thread(
+                        self.general_chat_agent.run, enhanced_query
+                    )
+                else:
+                    response_message = await asyncio.to_thread(
+                        self.general_chat_agent.run,
+                        f"{user_message}\n"
+                    )
 
             return {
                 "session_id": session_id,
                 "message": response_message,
                 "intent": "info_query",
-                "suggestions": ["查询天气", "景点推荐", "酒店信息"]
+                "suggestions": ["", "", ""]
             }
 
         except Exception as e:
-            print(f"❌ 处理信息查询失败: {str(e)}")
+            print(f"[ERROR] : {str(e)}")
             raise
 
     async def _handle_plan_modification(
@@ -818,29 +1054,29 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        处理计划修改请求
+        
 
         Args:
-            session_id: 会话ID
-            user_id: 用户ID
-            user_message: 用户消息
-            context: 会话上下文
+            session_id: ID
+            user_id: ID
+            user_message: 
+            context: 
 
         Returns:
-            Dict: 响应结果
+            Dict: 
         """
         try:
-            response_message = "好的，我来帮您修改计划。请告诉我您想修改哪一天的行程？"
+            response_message = ""
 
             return {
                 "session_id": session_id,
                 "message": response_message,
                 "intent": "plan_modification",
-                "suggestions": ["修改第一天", "修改第二天", "修改第三天"]
+                "suggestions": ["", "", ""]
             }
 
         except Exception as e:
-            print(f"❌ 处理计划修改失败: {str(e)}")
+            print(f"[ERROR] : {str(e)}")
             raise
 
     async def _handle_general_chat(
@@ -851,53 +1087,96 @@ class ConversationalMultiAgentTripPlanner(MultiAgentTripPlanner):
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        处理一般对话
+        RAG
 
         Args:
-            session_id: 会话ID
-            user_id: 用户ID
-            user_message: 用户消息
-            context: 会话上下文
+            session_id: ID
+            user_id: ID
+            user_message: 
+            context: 
 
         Returns:
-            Dict: 响应结果
+            Dict: 
         """
         try:
-            # 构建带对话历史的查询
-            history = context.get("messages", [])[-6:]  # 最近3轮对话
+            start_time = time.time()
+
+            # 
+            city = self._extract_city_from_message(user_message)
+
+            # RAG
+            rag_context = ""
+            travel_keywords = ["", "", "", "", "", "", "", "", "", ""]
+            if any(kw in user_message for kw in travel_keywords):
+                rag_results = await self._search_rag_posts(
+                    query=user_message,
+                    city=city,
+                    n_results=3,
+                    credibility_threshold=0.2
+                )
+                rag_context = self._format_rag_results_for_context(rag_results)
+
+                if rag_results:
+                    await self.dialog_service.log_tool_call(
+                        session_id=session_id,
+                        tool_name="rag_chat_search",
+                        input_params={"query": user_message, "city": city},
+                        output_result=f" {len(rag_results)} ",
+                        execution_time_ms=(time.time() - start_time) * 1000,
+                        status="success"
+                    )
+
+            # 
+            history = context.get("messages", [])[-6:]  # 3
             history_text = ""
             for msg in history:
-                role = "用户" if msg.get("role") == "user" else "助手"
-                history_text += f"{role}：{msg.get('content', '')}\n"
+                role = "" if msg.get("role") == "user" else ""
+                history_text += f"{role}{msg.get('content', '')}\n"
 
-            query = f"对话历史：\n{history_text}\n当前用户消息：{user_message}\n\n请回答用户的问题。"
+            query = f"\n{history_text}\n{user_message}\n"
+
+            if rag_context:
+                query += f"\nRAG\n{rag_context}\n\n"
+
+            query += "\n"
+
             response_message = await asyncio.to_thread(self.general_chat_agent.run, query)
+
+            execution_time = (time.time() - start_time) * 1000
+            await self.dialog_service.log_tool_call(
+                session_id=session_id,
+                tool_name="general_chat_llm",
+                input_params={"message": user_message, "has_rag": bool(rag_context)},
+                output_result=response_message[:200],
+                execution_time_ms=execution_time,
+                status="success"
+            )
 
             return {
                 "session_id": session_id,
                 "message": response_message,
                 "intent": "general_chat",
-                "suggestions": ["规划旅行", "查询景点", "推荐酒店"]
+                "suggestions": ["", "", ""]
             }
 
         except Exception as e:
-            print(f"❌ 处理一般对话失败: {str(e)}")
+            print(f"[ERROR] : {str(e)}")
             raise
 
 
-# 全局对话式系统实例
+# 
 _conversational_planner = None
 
 
 def get_conversational_planner(dialog_service) -> ConversationalMultiAgentTripPlanner:
     """
-    获取对话式多智能体系统实例
+    
 
     Args:
-        dialog_service: 对话服务实例
+        dialog_service: 
 
     Returns:
-        ConversationalMultiAgentTripPlanner: 对话式系统实例
+        ConversationalMultiAgentTripPlanner: 
     """
     global _conversational_planner
 
