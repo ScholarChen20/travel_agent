@@ -80,3 +80,13 @@ apscheduler==3.11.2
 
 
 gtts==2.5.4
+
+# ============ 新增：RAG向量检索 ============
+# Qdrant向量数据库客户端
+qdrant-client>=1.12.0
+
+# 阿里云DashScope API（通义千问多模态嵌入）
+dashscope>=1.20.0
+
+# OpenAI客户端（用于ModelScope文本嵌入）
+openai>=1.50.0

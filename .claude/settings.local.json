@@ -9,7 +9,9 @@
       "Bash(python:*)",
       "Bash(dir:*)",
       "Bash(redis-cli ping:*)",
-      "Bash(redis-cli:*)"
+      "Bash(redis-cli:*)",
+      "Bash(pip show:*)",
+      "Bash(python -c \":*)"
     ]
   }
 }

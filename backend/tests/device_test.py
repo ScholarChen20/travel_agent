@@ -1,17 +1,27 @@
 import subprocess
+import platform
 
 def get_device_id():
     """获取设备ID"""
     try:
-        command = "wmic csproduct get uuid"   # Windows 获取主板id
-        # command = "sudo dmidecode -s system-uuid"   # Linux 获取主板id
-        result = subprocess.check_output(command, shell=True).decode().strip()
-
-        device_id = result.split("\n")[1].strip()
+        system = platform.system()
+        
+        if system == "Windows":
+            command = "wmic csproduct get uuid"
+            result = subprocess.check_output(command, shell=True).decode().strip()
+            device_id = result.split("\n")[1].strip()
+        elif system == "Linux":
+            command = "sudo dmidecode -s system-uuid"
+            result = subprocess.check_output(command, shell=True).decode().strip()
+            device_id = result.strip()
+        else:
+            print(f"不支持的操作系统: {system}")
+            return None
+        
         return device_id
     except Exception as e:
         print(f"Error: {e}")
-    return None
+        return None
 
 
 import socket
@@ -33,6 +43,6 @@ def get_device_id_old():
 
 
 if __name__ == "__main__":
-    # print(get_device_id())
+    print(get_device_id())
     # print(get_device_id_new())
-    print(get_device_id_old())
+    # print(get_device_id_old())

@@ -93,3 +93,9 @@ export interface TripPlanResponse {
   data?: TripPlan
 }
 
+export interface DeviceIdInfo {
+  deviceId: string
+  isGenerated: boolean
+  timestamp: number
+}
+

@@ -22,7 +22,7 @@
           </a-form-item>
 
           <a-form-item name="password" :rules="[{ required: true, min: 8, message: '密码至少8位' }]">
-            <a-input-password v-model:value="form.password" placeholder="密码 (至少8位)" size="large" class="custom-input">
+            <a-input-password v-model:value="form.password" placeholder="密码至少八位，必须包含大小写字母、数字和特殊字符中的至少3种" size="large" class="custom-input">
               <template #prefix><LockOutlined class="input-icon" /></template>
             </a-input-password>
           </a-form-item>
@@ -77,6 +77,7 @@ import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, MailOutlined, SmileOutlined, SafetyOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authService } from '@/services/auth'
+import { initDeviceId, deviceId } from '@/utils/deviceId.js'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -87,13 +88,16 @@ const form = ref({
   password: '',
   nickname: '',
   captcha_code: '',
-  captcha_session_id: ''
+  captcha_session_id: '',
+  device_id: ''
 })
 
 const loading = ref(false)
 const captchaImage = ref('')
 
-onMounted(() => {
+onMounted(async () => {
+  await initDeviceId()
+  form.value.device_id = deviceId.value
   loadCaptcha()
 })
 

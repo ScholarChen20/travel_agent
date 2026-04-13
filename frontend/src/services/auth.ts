@@ -5,6 +5,7 @@ interface LoginRequest {
   password: string
   captcha_code: string
   captcha_session_id: string
+  device_id: string
 }
 
 interface RegisterRequest {
@@ -14,6 +15,7 @@ interface RegisterRequest {
   nickname?: string
   captcha_code: string
   captcha_session_id: string
+  device_id: string
 }
 
 interface LoginResponse {

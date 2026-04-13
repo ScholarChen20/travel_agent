@@ -4,17 +4,19 @@
 功能：
 1. 从 Unsplash 下载景点图片
 2. 调用 storage_service 上传图片到 OSS
-3. 返回 OSS URL
+3. RAG图片兜底方案 - 当Unsplash无法获取时从向量库检索
+4. 返回 OSS URL
 """
 
 import httpx
 import secrets
-from typing import Optional
+from typing import Optional, List
 from loguru import logger
 from io import BytesIO
 
 from ..services.unsplash_service import get_unsplash_service
 from ..services.storage_service import get_storage_service
+from ..services.rag import HybridRAGService, get_hybrid_rag_service
 
 
 class ImageService:
@@ -24,7 +26,66 @@ class ImageService:
         """初始化服务"""
         self.unsplash_service = get_unsplash_service()
         self.storage_service = get_storage_service()
+        self._rag_service: Optional[HybridRAGService] = None
         logger.info("图片处理服务已初始化")
+
+    async def _get_rag_service(self) -> Optional[HybridRAGService]:
+        """获取RAG服务实例（延迟初始化）"""
+        if self._rag_service is None:
+            try:
+                self._rag_service = await get_hybrid_rag_service()
+                logger.debug("RAG服务初始化成功")
+            except Exception as e:
+                logger.warning(f"RAG服务初始化失败: {str(e)}")
+                return None
+        return self._rag_service
+    
+    async def _get_fallback_images_from_rag(
+        self,
+        attraction_name: str,
+        city: str = ""
+    ) -> List[str]:
+        """
+        从RAG向量库检索景点图片（直接搜索图片向量库）
+
+        Args:
+            attraction_name: 景点名称
+            city: 城市名称
+
+        Returns:
+            图片URL列表
+        """
+        try:
+            rag_service = await self._get_rag_service()
+            if rag_service is None:
+                return []
+
+            # 构建查询：景点名称 + 城市
+            query = f"{city} {attraction_name}" if city else attraction_name
+
+            # 直接从图片向量库检索（使用多模态嵌入）
+            results = await rag_service.search_images_by_text(
+                query=query,
+                n_results=10
+            )
+
+            # 提取图片URL
+            image_urls = []
+            for result in results:
+                if result.image_urls:
+                    for img_url in result.image_urls:
+                        if img_url and img_url.startswith(('http://', 'https://')):
+                            if img_url not in image_urls:
+                                image_urls.append(img_url)
+
+            if image_urls:
+                logger.info(f"从图片向量库检索到 {len(image_urls)} 张图片: {attraction_name}")
+
+            return image_urls[:5]  # 最多返回5张
+
+        except Exception as e:
+            logger.warning(f"从RAG获取图片失败: {str(e)}")
+            return []
 
     async def get_and_upload_attraction_image(
         self,
@@ -33,6 +94,10 @@ class ImageService:
     ) -> Optional[str]:
         """
         获取景点图片并上传到 OSS
+        
+        流程：
+        1. 优先从Unsplash获取图片
+        2. 如果Unsplash失败，从RAG向量库获取图片作为兜底
 
         Args:
             attraction_name: 景点名称
@@ -41,47 +106,122 @@ class ImageService:
         Returns:
             str: OSS 图片 URL，失败返回 None
         """
+        oss_url = None
+        
         try:
-            # 1. 从 Unsplash 搜索图片
             search_query = f"{attraction_name} {city} China landmark" if city else f"{attraction_name} China"
             logger.info(f"搜索景点图片: {search_query}")
 
             photo_url = self.unsplash_service.get_photo_url(search_query)
 
             if not photo_url:
-                # 如果没找到，尝试只用景点名称搜索
                 logger.warning(f"未找到图片，尝试简化搜索: {attraction_name}")
                 photo_url = self.unsplash_service.get_photo_url(attraction_name)
 
-            if not photo_url:
-                logger.warning(f"未找到景点图片: {attraction_name}")
-                return None
-
-            logger.info(f"找到图片 URL: {photo_url}")
-
-            # 2. 下载图片到内存
-            image_data = await self._download_image(photo_url)
-            if not image_data:
-                logger.error(f"下载图片失败: {photo_url}")
-                return None
-
-            # 3. 上传到 OSS（使用 storage_service）
-            oss_url = await self._upload_image(
-                image_data,
-                attraction_name,
-                city
-            )
-
-            if oss_url:
-                logger.info(f"图片已上传: {oss_url}")
+            if photo_url:
+                logger.info(f"Unsplash找到图片 URL: {photo_url}")
+                
+                image_data = await self._download_image(photo_url)
+                if image_data:
+                    oss_url = await self._upload_image(
+                        image_data,
+                        attraction_name,
+                        city
+                    )
+                    
+                    if oss_url:
+                        logger.info(f"图片已上传: {oss_url}")
+                        return oss_url
+                    else:
+                        logger.warning(f"上传图片失败，尝试RAG兜底: {attraction_name}")
+                else:
+                    logger.warning(f"下载图片失败，尝试RAG兜底: {attraction_name}")
             else:
-                logger.error(f"上传图片失败: {attraction_name}")
-
-            return oss_url
+                logger.warning(f"Unsplash未找到图片，尝试RAG兜底: {attraction_name}")
 
         except Exception as e:
-            logger.error(f"获取并上传景点图片失败: {attraction_name}, 错误: {str(e)}")
-            return None
+            logger.warning(f"Unsplash获取图片失败: {str(e)}，尝试RAG兜底")
+
+        if oss_url is None:
+            try:
+                logger.info(f"🔄 开始RAG图片兜底检索: {attraction_name}")
+                rag_images = await self._get_fallback_images_from_rag(attraction_name, city)
+                
+                if rag_images:
+                    first_image_url = rag_images[0]
+                    logger.info(f"RAG找到图片: {first_image_url}")
+                    
+                    if first_image_url.startswith(('http://', 'https://')):
+                        image_data = await self._download_image(first_image_url)
+                        if image_data:
+                            oss_url = await self._upload_image(
+                                image_data,
+                                attraction_name,
+                                city
+                            )
+                            if oss_url:
+                                logger.info(f"✅ RAG兜底图片上传成功: {oss_url}")
+                                return oss_url
+                    else:
+                        logger.info(f"RAG返回图片URL可直接使用: {first_image_url}")
+                        return first_image_url
+                        
+            except Exception as e:
+                logger.error(f"RAG图片兜底失败: {str(e)}")
+
+        if oss_url is None:
+            logger.error(f"❌ 所有图片获取方式均失败: {attraction_name}")
+            
+        return oss_url
+    
+    async def get_attraction_images_with_fallback(
+        self,
+        attraction_name: str,
+        city: str = "",
+        max_images: int = 3
+    ) -> List[str]:
+        """
+        获取景点图片列表（带RAG兜底）
+        
+        Args:
+            attraction_name: 景点名称
+            city: 城市名称
+            max_images: 最大图片数量
+            
+        Returns:
+            图片URL列表
+        """
+        images = []
+        
+        try:
+            search_query = f"{attraction_name} {city} China landmark" if city else f"{attraction_name} China"
+            
+            unsplash_urls = self.unsplash_service.get_photo_urls(search_query, count=max_images)
+            
+            if unsplash_urls:
+                images.extend(unsplash_urls[:max_images])
+                logger.info(f"Unsplash获取到 {len(unsplash_urls)} 张图片")
+                
+        except Exception as e:
+            logger.warning(f"Unsplash获取图片列表失败: {str(e)}")
+        
+        if len(images) < max_images:
+            try:
+                rag_images = await self._get_fallback_images_from_rag(attraction_name, city)
+                
+                for img_url in rag_images:
+                    if img_url not in images:
+                        images.append(img_url)
+                        if len(images) >= max_images:
+                            break
+                            
+                if rag_images:
+                    logger.info(f"RAG补充获取到 {len(rag_images)} 张图片")
+                    
+            except Exception as e:
+                logger.warning(f"RAG获取图片列表失败: {str(e)}")
+        
+        return images[:max_images]
 
     async def _download_image(self, url: str) -> Optional[bytes]:
         """

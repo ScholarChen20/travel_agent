@@ -9,7 +9,6 @@ from .unsplash_service import get_unsplash_service
 from .llm_service import get_llm
 from .admin_service import get_admin_service
 from .social_service import get_social_service
-from .voice_service import get_voice_service
 from .storage_service import get_storage_service
 from .monitoring_service import get_monitoring_service
 from .douyin_service import get_douyin_service
@@ -24,7 +23,6 @@ __all__ = [
     "get_llm",
     "get_admin_service",
     "get_social_service",
-    "get_voice_service",
     "get_storage_service",
     "get_monitoring_service",
     "get_douyin_service"

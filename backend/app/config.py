@@ -2,9 +2,10 @@
 
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from dotenv import load_dotenv
 
 # 加载环境变量
@@ -91,6 +92,13 @@ class Settings(BaseSettings):
     oss_avatar_dir: str = "travel_avatars"  # 头像存储目录
     oss_media_dir: str = "travel_media"  # 媒体文件存储目录
 
+    # MiniO 文件存储
+    minio_enabled: bool = True
+    minio_endpoint: str = "http://127.0.0.1:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket_name: str = "travel-agent"
+
     # 日志配置
     log_level: str = "INFO"
 
@@ -112,10 +120,33 @@ class Settings(BaseSettings):
 
     feishu_enabled: bool = False  # 是否启用飞书登录
 
+    # Qdrant配置
+    qdrant_url: str = Field(
+        default="https://f0322c03-b3f8-423e-a3cb-2f160f26d25a.us-east4-0.gcp.cloud.qdrant.io:6333",
+        alias="QDRANT_URL"
+    )
+    qdrant_api_key: str = Field(
+        default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.CyAJ5UYbkn4bbL-BxE7zmqmW_uqZPf59DaOmO-4mOws",
+        alias="QDRANT_API_KEY"
+    )
+    
+    # ModelScope配置
+    modelscope_api_key: str = Field(
+        default="ms-7df9fd49-9a59-495d-bf50-f2922001f367",
+        alias="MODELSCOPE_API_KEY"
+    )
+    
+    # 通义千问配置（已存在）
+    dashscope_api_key: str = Field(
+        default="",
+        alias="DASHSCOPE_API_KEY"
+    )
+
     class Config:
         env_file = ".env"
         case_sensitive = False
         extra = "ignore"  # 忽略额外的环境变量
+        
 
     def get_cors_origins_list(self) -> List[str]:
         """获取CORS origins列表"""
