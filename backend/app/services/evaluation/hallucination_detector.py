@@ -18,12 +18,16 @@
 import re
 import json
 import asyncio
+import os
 from typing import List, Dict, Optional, Any, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, timedelta
 from loguru import logger
 from pathlib import Path
+
+# 导入高德地图API工具
+from hello_agents.tools import MCPTool
 
 
 class HallucinationType(Enum):
@@ -184,6 +188,25 @@ class HallucinationDetector:
         """
         self.enable_api_validation = enable_api_validation
         self._validation_cache: Dict[str, bool] = {}
+        self._amap_tool = None
+        self._api_initialized = False
+        
+    def _init_amap_tool(self):
+        """初始化高德地图工具"""
+        if not self._api_initialized and self.enable_api_validation:
+            try:
+                self._amap_tool = MCPTool(
+                    name="amap",
+                    description="高德地图服务",
+                    server_command=["uvx", "amap-mcp-server"],
+                    env={"AMAP_MAPS_API_KEY": os.getenv("AMAP_MAPS_API_KEY")},
+                    auto_expand=False
+                )
+                self._api_initialized = True
+                logger.info("高德地图API工具初始化成功")
+            except Exception as e:
+                logger.warning(f"高德地图API工具初始化失败: {str(e)}")
+                self._api_initialized = False
 
     async def detect(
         self,
@@ -268,24 +291,37 @@ class HallucinationDetector:
                     suggestion="请使用真实存在的景点名称"
                 )
 
+        # 首先检查是否在已知景点列表中
         if known_attractions:
             is_known = any(
                 known in name or name in known
                 for known in known_attractions
             )
 
-            if not is_known and len(name) > 2:
-                similarity = self._calculate_similarity(name, known_attractions)
-                if similarity < 0.3:
-                    return HallucinationIssue(
-                        type=HallucinationType.FAKE_ATTRACTION,
-                        description=f"景点 '{name}' 不在已知景点列表中，可能是虚假景点",
-                        item_name=name,
-                        severity="medium",
-                        confidence=0.7,
-                        evidence=f"与已知景点相似度: {similarity:.2f}",
-                        suggestion=f"请验证该景点是否真实存在"
-                    )
+            if is_known:
+                # 已知景点，直接通过
+                return None
+
+        # 使用高德地图API验证
+        if self.enable_api_validation:
+            is_real = await self._validate_with_amap(name, city, "scenic")
+            if is_real:
+                # API验证通过，不是幻觉
+                return None
+
+        # 如果没有API验证或验证失败，使用相似度检查
+        if known_attractions and len(name) > 2:
+            similarity = self._calculate_similarity(name, known_attractions)
+            if similarity < 0.3:
+                return HallucinationIssue(
+                    type=HallucinationType.FAKE_ATTRACTION,
+                    description=f"景点 '{name}' 不在已知景点列表中，可能是虚假景点",
+                    item_name=name,
+                    severity="medium",
+                    confidence=0.7,
+                    evidence=f"与已知景点相似度: {similarity:.2f}",
+                    suggestion=f"请验证该景点是否真实存在"
+                )
 
         location = attraction.get("location", {})
         if location:
@@ -318,10 +354,19 @@ class HallucinationDetector:
                     suggestion="请使用真实存在的酒店名称"
                 )
 
+        # 检查是否是已知酒店连锁
         is_chain = any(chain in name for chain in self.KNOWN_HOTEL_CHAINS)
         if is_chain:
             return None
 
+        # 使用高德地图API验证
+        if self.enable_api_validation:
+            is_real = await self._validate_with_amap(name, city, "hotel")
+            if is_real:
+                # API验证通过，不是幻觉
+                return None
+
+        # 检查酒店名称格式
         if re.match(r".*(酒店|宾馆|旅馆|民宿|公寓)$", name):
             return None
 
@@ -357,6 +402,13 @@ class HallucinationDetector:
                     evidence=f"匹配模式: {pattern}",
                     suggestion="请使用真实存在的餐厅名称"
                 )
+
+        # 使用高德地图API验证
+        if self.enable_api_validation:
+            is_real = await self._validate_with_amap(name, city, "food")
+            if is_real:
+                # API验证通过，不是幻觉
+                return None
 
         return None
 
@@ -468,6 +520,66 @@ class HallucinationDetector:
             "厦门": (118.0, 118.3, 24.4, 24.6),
         }
         return city_bounds.get(city)
+
+    async def _validate_with_amap(self, name: str, city: str, query_type: str = "scenic") -> bool:
+        """
+        使用高德地图API验证地点是否存在
+
+        Args:
+            name: 地点名称
+            city: 城市名称
+            query_type: 查询类型 (scenic, hotel, food)
+
+        Returns:
+            bool: 地点是否真实存在
+        """
+        # 检查缓存
+        cache_key = f"{query_type}_{city}_{name}"
+        if cache_key in self._validation_cache:
+            return self._validation_cache[cache_key]
+
+        # 初始化API工具
+        self._init_amap_tool()
+        
+        if not self._amap_tool:
+            return False
+
+        try:
+            # 构建查询关键词
+            if query_type == "scenic":
+                keywords = name
+            elif query_type == "hotel":
+                keywords = f"{name} 酒店"
+            else:
+                keywords = name
+
+            # 调用高德地图文本搜索
+            response = self._amap_tool.run({
+                "action": "call_tool",
+                "tool_name": "maps_text_search",
+                "arguments": {
+                    "keywords": keywords,
+                    "city": city,
+                    "children": 1,
+                    "extensions": "base"
+                }
+            })
+
+            # 解析响应
+            try:
+                result = json.loads(response)
+                # 检查是否有结果
+                if result.get("status") == "1" and int(result.get("count", "0")) > 0:
+                    self._validation_cache[cache_key] = True
+                    return True
+            except json.JSONDecodeError:
+                pass
+
+        except Exception as e:
+            logger.warning(f"高德地图API验证失败: {str(e)}")
+
+        self._validation_cache[cache_key] = False
+        return False
 
     def _count_total_items(self, trip_plan: Dict[str, Any]) -> int:
         """计算旅行计划中的总项目数"""

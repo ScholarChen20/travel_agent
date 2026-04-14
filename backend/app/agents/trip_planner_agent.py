@@ -9,10 +9,40 @@ from typing import Dict, Any, List, Optional
 
 from hello_agents import SimpleAgent, ReActAgent
 from hello_agents.tools import MCPTool
+from hello_agents.tools.base import Tool, ToolParameter
+from hello_agents.tools.registry import ToolRegistry
 from ..services.llm_service import get_llm
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
 from ..config import get_settings
 from ..services.rag import HybridRAGService, RAGSearchResult, get_hybrid_rag_service
+
+
+class MCPToolWrapper(Tool):
+    """MCP工具包装器 - 解决hello_agents库中Tool抽象类实例化问题"""
+    
+    def __init__(self, name: str, description: str, mcp_tool, tool_name: str):
+        super().__init__(name=name, description=description)
+        self._mcp_tool = mcp_tool
+        self._tool_name = tool_name
+    
+    def run(self, parameters: Dict[str, Any]) -> str:
+        """执行工具"""
+        return self._mcp_tool.run({
+            "action": "call_tool",
+            "tool_name": self._tool_name,
+            "arguments": parameters
+        })
+    
+    def get_parameters(self) -> List[ToolParameter]:
+        """获取工具参数定义"""
+        return [
+            ToolParameter(
+                name="input",
+                type="string",
+                description="输入参数",
+                required=True
+            )
+        ]
 
 # ============ Agent提示词 ============
 
@@ -211,7 +241,7 @@ class MultiAgentTripPlanner:
                 description="高德地图服务",
                 server_command=["uvx", "amap-mcp-server"],
                 env={"AMAP_MAPS_API_KEY": os.getenv("AMAP_MAPS_API_KEY")},
-                auto_expand=True
+                auto_expand=False
             )
 
             print("  - 创建景点搜索Agent...")
@@ -220,23 +250,27 @@ class MultiAgentTripPlanner:
                 llm=self.llm,
                 system_prompt=ATTRACTION_AGENT_PROMPT
             )
-            self.attraction_agent.add_tool(self.amap_tool)
+            self._register_mcp_tools(self.attraction_agent, self.amap_tool)
 
             print("  - 创建天气查询Agent...")
+            weather_registry = ToolRegistry()
+            self._register_mcp_tools_to_registry(weather_registry, self.amap_tool)
             self.weather_agent = SimpleAgent(
                 name="天气查询专家",
                 llm=self.llm,
-                system_prompt=WEATHER_AGENT_PROMPT
+                system_prompt=WEATHER_AGENT_PROMPT,
+                tool_registry=weather_registry
             )
-            self.weather_agent.add_tool(self.amap_tool)
 
             print("  - 创建酒店推荐Agent...")
+            hotel_registry = ToolRegistry()
+            self._register_mcp_tools_to_registry(hotel_registry, self.amap_tool)
             self.hotel_agent = SimpleAgent(
                 name="酒店推荐专家",
                 llm=self.llm,
-                system_prompt=HOTEL_AGENT_PROMPT
+                system_prompt=HOTEL_AGENT_PROMPT,
+                tool_registry=hotel_registry
             )
-            self.hotel_agent.add_tool(self.amap_tool)
 
             print("  - 创建行程规划Agent...")
             self.planner_agent = SimpleAgent(
@@ -253,6 +287,46 @@ class MultiAgentTripPlanner:
             import traceback
             traceback.print_exc()
             raise
+    
+    def _register_mcp_tools_to_registry(self, registry: ToolRegistry, mcp_tool):
+        """注册MCP工具到ToolRegistry"""
+        try:
+            if hasattr(mcp_tool, '_available_tools') and mcp_tool._available_tools:
+                for tool_info in mcp_tool._available_tools:
+                    wrapped_tool = MCPToolWrapper(
+                        name=f"{mcp_tool.name}_{tool_info['name']}",
+                        description=tool_info.get('description', ''),
+                        mcp_tool=mcp_tool,
+                        tool_name=tool_info['name']
+                    )
+                    registry.register_tool(wrapped_tool)
+                print(f"    ✓ MCP工具 '{mcp_tool.name}' 已展开为 {len(mcp_tool._available_tools)} 个工具")
+            else:
+                registry.register_tool(mcp_tool)
+                print(f"    ✓ MCP工具 '{mcp_tool.name}' 已注册")
+        except Exception as e:
+            print(f"    ⚠ MCP工具注册失败: {str(e)}")
+            print("    → 将继续运行，但部分功能可能受限")
+    
+    def _register_mcp_tools(self, agent, mcp_tool):
+        """注册MCP工具到Agent"""
+        try:
+            if hasattr(mcp_tool, '_available_tools') and mcp_tool._available_tools:
+                for tool_info in mcp_tool._available_tools:
+                    wrapped_tool = MCPToolWrapper(
+                        name=f"{mcp_tool.name}_{tool_info['name']}",
+                        description=tool_info.get('description', ''),
+                        mcp_tool=mcp_tool,
+                        tool_name=tool_info['name']
+                    )
+                    agent.tool_registry.register_tool(wrapped_tool)
+                print(f"    ✓ MCP工具 '{mcp_tool.name}' 已展开为 {len(mcp_tool._available_tools)} 个工具")
+            else:
+                agent.tool_registry.register_tool(mcp_tool)
+                print(f"    ✓ MCP工具 '{mcp_tool.name}' 已注册")
+        except Exception as e:
+            print(f"    ⚠ MCP工具注册失败: {str(e)}")
+            print("    → 将继续运行，但部分功能可能受限")
     
     async def _get_rag_service(self) -> Optional[HybridRAGService]:
         """获取RAG服务实例（延迟初始化）"""

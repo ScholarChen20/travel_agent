@@ -178,7 +178,7 @@ class ABTestFramework:
 
     def __init__(self, config: ABTestConfig):
         self.config = config
-        self.detector = HallucinationDetector()
+        self.detector = HallucinationDetector(enable_api_validation=True)
 
         if config.random_seed is not None:
             random.seed(config.random_seed)

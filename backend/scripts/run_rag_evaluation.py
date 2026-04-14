@@ -147,7 +147,7 @@ async def generate_mock_plan(
     当真实Agent不可用时使用
     
     模拟策略：
-    - with_rag=True: 使用真实景点名称，坐标合理
+    - with_rag=True: 使用真实景点名称（与幻觉检测器已知列表匹配），坐标合理
     - with_rag=False: 包含虚假景点、模糊名称、不合理坐标
     """
     import random
@@ -156,8 +156,8 @@ async def generate_mock_plan(
         "北京": ["故宫博物院", "天安门广场", "颐和园", "圆明园", "天坛公园", "八达岭长城"],
         "上海": ["外滩", "东方明珠", "豫园", "城隍庙", "南京路步行街", "上海迪士尼乐园"],
         "杭州": ["西湖", "灵隐寺", "雷峰塔", "断桥残雪", "三潭印月", "西溪湿地"],
-        "厦门": ["厦门大学", "南普陀寺", "鼓浪屿", "白城沙滩", "曾厝垵", "环岛路"],
-        "香港": ["香港迪士尼", "维多利亚港", "太平山顶", "石澳半岛", "怪兽大厦", "星光大道"]
+        "厦门": ["鼓浪屿", "南普陀寺", "厦门大学", "曾厝垵", "环岛路", "日光岩"],
+        "香港": ["维多利亚港", "太平山顶", "迪士尼乐园", "海洋公园", "星光大道", "黄大仙祠"]
     }
 
     city_bounds = {
@@ -168,7 +168,16 @@ async def generate_mock_plan(
         "香港": (113.8, 114.5, 22.1, 22.6)
     }
 
+    known_hotels = {
+        "北京": ["北京希尔顿酒店", "北京万豪酒店", "北京香格里拉大酒店", "北京王府井希尔顿酒店"],
+        "上海": ["上海外滩华尔道夫酒店", "上海浦东丽思卡尔顿酒店", "上海和平饭店", "上海半岛酒店"],
+        "杭州": ["杭州西湖国宾馆", "杭州香格里拉饭店", "杭州西子湖四季酒店", "杭州泛海钓鱼台酒店"],
+        "厦门": ["厦门香格里拉大酒店", "厦门威斯汀酒店", "厦门国际会议中心酒店", "厦门日航酒店"],
+        "香港": ["香港半岛酒店", "香港文华东方酒店", "香港四季酒店", "香港丽思卡尔顿酒店"]
+    }
+
     city_attractions = mock_attractions.get(city, [f"{city}景点{i+1}" for i in range(6)])
+    city_hotels = known_hotels.get(city, [f"{city}市中心酒店{i+1}" for i in range(4)])
     bounds = city_bounds.get(city, (116.0, 117.0, 39.5, 40.5))
 
     if not with_rag:
@@ -180,6 +189,7 @@ async def generate_mock_plan(
             f"景点{random.randint(1, 100)}" for i in range(2)
         ]
         city_attractions = city_attractions[:2] + fake_patterns
+        city_hotels = [f"酒店{i+1}" for i in range(4)]
 
     days = []
     start = datetime.strptime(start_date, "%Y-%m-%d")
@@ -213,12 +223,8 @@ async def generate_mock_plan(
             }
             attractions.append(attraction)
 
-        if with_rag:
-            hotel_name = f"{city}市中心酒店{i+1}"
-            hotel_address = f"{city}市中心商业区"
-        else:
-            hotel_name = f"酒店{i+1}"
-            hotel_address = f"{city}"
+        hotel_name = city_hotels[i % len(city_hotels)]
+        hotel_address = f"{city}市中心商业区" if with_rag else f"{city}"
 
         day = {
             "date": current_date.strftime("%Y-%m-%d"),
